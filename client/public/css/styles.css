@@ -1,0 +1,235 @@
+@import url("https://fonts.googleapis.com/css2?family=Cantata+One&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&family=Sanchez&display=swap");
+
+:root {
+  --searchbar-color: rgb(223 225 253);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow-x: hidden;
+  /* background: linear-gradient(135deg, #fffaf2, #ffffff); */
+}
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+
+h1,
+h2 {
+  font-family: "EB Garamond", serif;
+}
+
+h3,
+h4 {
+  font-family: "STIX Two Text", serif;
+}
+
+h5,
+h6 {
+  font-family: "Sanchez", serif;
+}
+
+.Toastify__toast,
+a,
+p,
+span,
+label,
+input,
+select,
+textarea,
+button,
+small,
+.text-muted
+li {
+  font-family: "Sanchez", serif !important;
+}
+
+section {
+  /* width: 80vw; */
+  padding: 30px 20px;
+  display: flex;
+  margin: auto;
+  align-items: center;
+  /* min-height: calc(100dvh - 78px); */
+}
+
+section.Toastify {
+  min-height: 0;
+}
+
+.Toastify {
+  padding: 0;
+  margin-bottom: 0;
+}
+
+hr{
+  border-style: none !important;
+  border-top-style: dotted !important;
+  border-color: rgb(255, 138, 5) !important;
+  opacity: 0.5 !important;
+  border-width: 0.45rem !important;
+  width: 6% !important;
+  margin:10px auto !important;
+  
+}
+
+
+/* ================= THEMED SELECT ================= */
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  height: 44px;
+  /* min-width: 180px; */
+  padding: 0 44px 0 16px;
+
+  border-radius: 14px;
+  border: 1.5px solid #e5e7eb;
+
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='8' viewBox='0 0 14 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 14px;
+
+  font-size: 0.85rem !important;
+  font-weight: 600;
+  color: #14183e;
+
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* ================= HOVER ================= */
+
+select:hover {
+  border-color: #fb8500;
+}
+
+/* ================= FOCUS ================= */
+
+select:focus {
+  outline: none;
+  border-color: #fb8500;
+  box-shadow: 0 0 0 3px rgba(251, 133, 0, 0.15);
+}
+
+/* ================= DISABLED ================= */
+
+select:disabled {
+  background-color: #f9fafb;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+
+
+/* ================= MOBILE ================= */
+
+@media (max-width: 576px) {
+  select {
+    width: 100%;
+  }
+}
+
+/* ================= ERROR STATE ================= */
+
+.error-card {
+  max-width: 420px;
+  padding: 40px 30px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
+  animation: fadeInUp 0.4s ease;
+}
+
+.error-icon {
+  font-size: 3rem;
+}
+
+.error-card h4 {
+  font-weight: 600;
+  color: #14183e;
+}
+
+.error-text {
+  color: #666;
+  font-size: 0.95rem;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+/* subtle entrance */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ================= SCROLL TO TOP BUTTON ================= */
+
+.maharaj-scroll-top {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9999;
+
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+
+  background: #170000;
+  border: 2px solid #dfb248;
+  color: #dfb248;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  outline: none;
+
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 12px rgba(223, 178, 72, 0.2);
+
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px) scale(0.9);
+
+  transition: all 0.35s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.maharaj-scroll-top.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.maharaj-scroll-top:hover {
+  background: #dfb248;
+  color: #170000;
+  border-color: #f2cf72;
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 10px 28px rgba(223, 178, 72, 0.45);
+}
+
+@media (max-width: 767px) {
+  .maharaj-scroll-top {
+    bottom: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+  }
+}
