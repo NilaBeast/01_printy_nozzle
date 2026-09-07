@@ -1,31 +1,54 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import "dotenv/config";
-// import db from "../config/db.js";
-import passwordValidation from "../utils/passwordValidation.js";
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const db = require("../config/db");
+const passwordValidation = require("../utils/passwordValidation");
+require("dotenv").config();
 
 const saltRounds = Number(process.env.SALT_ROUNDS) || 10;
 
-
-export async function register(req, res) {
-  const client = await db.connect();
-
+/* ===================== AUTO-SYNC ADMIN USER FROM .ENV ===================== */
+const ensureAdminUser = async () => {
   try {
-    const {
-      first_name,
-      last_name,
-      email,
-      phone,
-      password,
-      business_name,
-      gst_number,
-    } = req.body;
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
 
-    
-    const role = "customer";
-    
+    if (!adminEmail || !adminPassword) return;
+
+    const [existing] = await db.query("SELECT id, password_hash FROM users WHERE email = ?", [adminEmail]);
+    const hashedPassword = await bcrypt.hash(adminPassword, saltRounds);
+
+    if (existing.length === 0) {
+      await db.query(
+        "INSERT INTO users (first_name, last_name, email, phone, password_hash, role, is_active, is_verified) VALUES (?, ?, ?, ?, ?, 'admin', 1, 1)",
+        ["Admin", "ElectroLab", adminEmail, "9876543210", hashedPassword]
+      );
+      console.log(`👑 Admin user initialized from .env: ${adminEmail}`);
+    } else {
+      // Keep password and role in sync with .env
+      const isMatch = await bcrypt.compare(adminPassword, existing[0].password_hash);
+      if (!isMatch) {
+        await db.query("UPDATE users SET password_hash = ?, role = 'admin', is_active = 1 WHERE id = ?", [
+          hashedPassword,
+          existing[0].id,
+        ]);
+        console.log(`👑 Admin password updated from .env: ${adminEmail}`);
+      }
+    }
+  } catch (err) {
+    // Database may still be connecting on boot
+    console.warn("⚠️ Admin user sync notice:", err.message);
+  }
+};
+
+// Run auto-sync on load
+ensureAdminUser();
+
+/* ===================== REGISTER ===================== */
+const register = async (req, res) => {
+  try {
+    const { first_name, last_name, email, phone, password } = req.body;
+
     /* -------- Validation -------- */
-
     if (!first_name || !last_name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -40,13 +63,6 @@ export async function register(req, res) {
       });
     }
 
-    if (!["customer", "hotel_owner", "admin"].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid role",
-      });
-    }
-
     if (!(await passwordValidation(password))) {
       return res.status(400).json({
         success: false,
@@ -56,101 +72,63 @@ export async function register(req, res) {
     }
 
     /* -------- Existing User Check -------- */
+    const [existing] = await db.query("SELECT id FROM users WHERE email = ?", [email]);
 
-    const existingUser = await client.query(
-      "SELECT id FROM users WHERE email = $1",
-      [email],
-    );
-
-    if (existingUser.rows.length > 0) {
+    if (existing.length > 0) {
       return res.status(409).json({
         success: false,
         message: "Email already registered",
       });
     }
 
-    /* -------- Transaction -------- */
-
-    await client.query("BEGIN");
-
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    /* -------- Role check (admin if matches .env ADMIN_EMAIL) -------- */
+    const role = process.env.ADMIN_EMAIL && email.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase()
+      ? "admin"
+      : "customer";
 
     /* -------- Insert User -------- */
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const userResult = await client.query(
-      `
-        INSERT INTO users (first_name, last_name, email, phone, password_hash, role)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, first_name, last_name, email, phone, role
-        `,
-      [first_name, last_name, email, phone || null, hashedPassword, role],
+    const [result] = await db.query(
+      "INSERT INTO users (first_name, last_name, email, phone, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)",
+      [first_name, last_name, email, phone || null, hashedPassword, role]
     );
 
-    const user = userResult.rows[0];
-
-    /* -------- Role Specific Inserts -------- */
-
-    if (role === "hotel_owner") {
-      if (!business_name || !gst_number) {
-        throw new Error("Business name and GST number are required");
-      }
-
-      await client.query(
-        `
-        INSERT INTO hotel_owners (user_id, business_name, gst_number)
-        VALUES ($1, $2, $3)
-        `,
-        [user.id, business_name, gst_number],
-      );
-    }
-
-    if (role === "admin") {
-      await client.query(
-        `
-        INSERT INTO admins (user_id)
-        VALUES ($1)
-        `,
-        [user.id],
-      );
-    }
-
-    await client.query("COMMIT");
+    const userId = result.insertId;
 
     /* -------- JWT -------- */
-
     const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
+      { userId, role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     return res.status(201).json({
       success: true,
       message: "Registration successful",
       token,
-      user,
+      user: {
+        id: userId,
+        first_name,
+        last_name,
+        email,
+        phone: phone || null,
+        role,
+      },
     });
   } catch (error) {
-    await client.query("ROLLBACK");
     console.error("Register error:", error.message);
-
     return res.status(500).json({
       success: false,
-      message: error.message || "Server error during registration",
+      message: "Server error during registration",
     });
-  } finally {
-    client.release();
   }
-}
+};
 
-export async function login(req, res) {
+/* ===================== LOGIN ===================== */
+const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    /* -------- Validation -------- */
 
     if (!email || !password) {
       return res.status(400).json({
@@ -159,29 +137,62 @@ export async function login(req, res) {
       });
     }
 
-    /* -------- Fetch User -------- */
+    const envAdminEmail = process.env.ADMIN_EMAIL;
+    const envAdminPassword = process.env.ADMIN_PASSWORD;
 
-    const result = await db.query(
-      `
-      SELECT id, first_name, last_name, email, password_hash, role
-      FROM users
-      WHERE email = $1
-      `,
-      [email],
+    // Check if logging in as .env Admin
+    const isAdminEmail = envAdminEmail && email.trim().toLowerCase() === envAdminEmail.trim().toLowerCase();
+
+    let [rows] = await db.query(
+      "SELECT id, first_name, last_name, email, phone, password_hash, role, is_active FROM users WHERE email = ?",
+      [email.trim()]
     );
 
-    if (result.rows.length === 0) {
+    // If admin does not exist in DB yet, create it on the fly
+    if (rows.length === 0 && isAdminEmail && envAdminPassword && password === envAdminPassword) {
+      const hashedPassword = await bcrypt.hash(envAdminPassword, saltRounds);
+      const [insertRes] = await db.query(
+        "INSERT INTO users (first_name, last_name, email, phone, password_hash, role, is_active, is_verified) VALUES (?, ?, ?, ?, ?, 'admin', 1, 1)",
+        ["Admin", "ElectroLab", envAdminEmail, "9876543210", hashedPassword]
+      );
+      rows = [{
+        id: insertRes.insertId,
+        first_name: "Admin",
+        last_name: "ElectroLab",
+        email: envAdminEmail,
+        phone: "9876543210",
+        password_hash: hashedPassword,
+        role: "admin",
+        is_active: 1,
+      }];
+    }
+
+    if (rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
-    const user = result.rows[0];
+    const user = rows[0];
 
-    /* -------- Password Check -------- */
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: "Account has been deactivated. Contact support.",
+      });
+    }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    // Check password: either against DB hash or .env ADMIN_PASSWORD if admin
+    let isMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (!isMatch && isAdminEmail && envAdminPassword && password === envAdminPassword) {
+      isMatch = true;
+      // Update hash in database
+      const newHash = await bcrypt.hash(envAdminPassword, saltRounds);
+      await db.query("UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?", [newHash, user.id]);
+      user.role = "admin";
+    }
 
     if (!isMatch) {
       return res.status(401).json({
@@ -190,15 +201,10 @@ export async function login(req, res) {
       });
     }
 
-    /* -------- JWT -------- */
-
     const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
+      { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     delete user.password_hash;
@@ -211,10 +217,125 @@ export async function login(req, res) {
     });
   } catch (error) {
     console.error("Login error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Server error during login",
     });
   }
-}
+};
+
+/* ===================== GET PROFILE ===================== */
+const getProfile = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, first_name, last_name, email, phone, role, avatar_url, dob, gender, created_at FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({ success: true, user: rows[0] });
+  } catch (error) {
+    console.error("Get profile error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== UPDATE PROFILE ===================== */
+const updateProfile = async (req, res) => {
+  try {
+    const { first_name, last_name, phone, dob, gender } = req.body;
+
+    await db.query(
+      "UPDATE users SET first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name), phone = COALESCE(?, phone), dob = COALESCE(?, dob), gender = COALESCE(?, gender) WHERE id = ?",
+      [first_name || null, last_name || null, phone || null, dob || null, gender || null, req.user.id]
+    );
+
+    return res.status(200).json({ success: true, message: "Profile updated successfully" });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== ADD ADDRESS ===================== */
+const addAddress = async (req, res) => {
+  try {
+    const { type = "Home", full_name, phone, email, address_line1, address_line2, city, state, pincode, country, is_default } = req.body;
+
+    if (!full_name || !phone || !address_line1 || !city || !state || !pincode) {
+      return res.status(400).json({ success: false, message: "All required address fields must be provided" });
+    }
+
+    if (is_default) {
+      await db.query("UPDATE addresses SET is_default = 0 WHERE user_id = ?", [req.user.id]);
+    }
+
+    const [result] = await db.query(
+      "INSERT INTO addresses (user_id, type, full_name, phone, email, address_line1, address_line2, city, state, pincode, country, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [req.user.id, type, full_name, phone, email || null, address_line1, address_line2 || null, city, state, pincode, country || "India", is_default ? 1 : 0]
+    );
+
+    return res.status(201).json({ success: true, message: "Address added successfully", id: result.insertId });
+  } catch (error) {
+    console.error("Add address error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== UPDATE ADDRESS ===================== */
+const updateAddress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, full_name, phone, email, address_line1, address_line2, city, state, pincode, country, is_default } = req.body;
+
+    const [existing] = await db.query("SELECT id FROM addresses WHERE id = ? AND user_id = ?", [id, req.user.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "Address not found" });
+    }
+
+    if (is_default) {
+      await db.query("UPDATE addresses SET is_default = 0 WHERE user_id = ?", [req.user.id]);
+    }
+
+    await db.query(
+      "UPDATE addresses SET type = COALESCE(?, type), full_name = COALESCE(?, full_name), phone = COALESCE(?, phone), email = ?, address_line1 = COALESCE(?, address_line1), address_line2 = ?, city = COALESCE(?, city), state = COALESCE(?, state), pincode = COALESCE(?, pincode), country = COALESCE(?, country), is_default = COALESCE(?, is_default) WHERE id = ? AND user_id = ?",
+      [type || null, full_name || null, phone || null, email !== undefined ? email : null, address_line1 || null, address_line2 !== undefined ? address_line2 : null, city || null, state || null, pincode || null, country || null, is_default !== undefined ? (is_default ? 1 : 0) : null, id, req.user.id]
+    );
+
+    return res.status(200).json({ success: true, message: "Address updated successfully" });
+  } catch (error) {
+    console.error("Update address error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== DELETE ADDRESS ===================== */
+const deleteAddress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [result] = await db.query("DELETE FROM addresses WHERE id = ? AND user_id = ?", [id, req.user.id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "Address not found" });
+    }
+
+    return res.status(200).json({ success: true, message: "Address deleted successfully" });
+  } catch (error) {
+    console.error("Delete address error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  getProfile,
+  updateProfile,
+  addAddress,
+  updateAddress,
+  deleteAddress,
+  ensureAdminUser,
+};

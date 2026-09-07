@@ -1,112 +1,116 @@
-import express from "express";
-import bodyParser from "body-parser";
-import path, { dirname } from "path";
-import { fileURLToPath } from "url";
-import cors from "cors";
-import "dotenv/config";
-import helmet from "helmet";
+const express = require("express");
+const bodyParser = require("body-parser");
+const path = require("path");
+const cors = require("cors");
+const helmet = require("helmet");
+require("dotenv").config();
 
-import authRoutes from "./routers/authRoutes.js";
+// Client Routers
+const authRoutes = require("./routers/authRoutes");
+const profileRoutes = require("./routers/profileRoutes");
+const homeRoutes = require("./routers/homeRoutes");
+const productRoutes = require("./routers/productRoutes");
+const categoryRoutes = require("./routers/categoryRoutes");
+const cartRoutes = require("./routers/cartRoutes");
+const orderRoutes = require("./routers/orderRoutes");
+const checkoutRoutes = require("./routers/checkoutRoutes");
+const printingRoutes = require("./routers/printingRoutes");
+const reviewRoutes = require("./routers/reviewRoutes");
+const newsletterRoutes = require("./routers/newsletterRoutes");
+const contactRoutes = require("./routers/contactRoutes");
+
+// Admin Routers
+const adminDashboardRoutes = require("./routers/admin/adminDashboardRoutes");
+const adminProductRoutes = require("./routers/admin/adminProductRoutes");
+const adminCategoryRoutes = require("./routers/admin/adminCategoryRoutes");
+const adminBrandRoutes = require("./routers/admin/adminBrandRoutes");
+const adminOrderRoutes = require("./routers/admin/adminOrderRoutes");
+const adminPrintingRoutes = require("./routers/admin/adminPrintingRoutes");
+const adminUserRoutes = require("./routers/admin/adminUserRoutes");
+const adminCouponRoutes = require("./routers/admin/adminCouponRoutes");
+const adminSettingsRoutes = require("./routers/admin/adminSettingsRoutes");
+const adminNewsletterRoutes = require("./routers/admin/adminNewsletterRoutes");
+const adminReviewRoutes = require("./routers/admin/adminReviewRoutes");
 
 const app = express();
-const port = process.env.SERVER_PORT || 3000;
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
-
-/* ================= NORMAL BODY PARSERS AFTER ================= */
-
+/* ================= MIDDLEWARES ================= */
+app.use(helmet());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
-
-// app.use(flash());
 
 const allowedOrigins = [
   process.env.FRONTEND_URL_1,
   process.env.FRONTEND_URL_2,
   "http://localhost:5173",
   "http://localhost:3000",
-];
+  "http://localhost:5174",
+  "http://localhost:8000",
+].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-
       const normalizedOrigin = origin.replace(/\/$/, "");
-
-      if (allowedOrigins.includes(normalizedOrigin)) {
+      if (allowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV !== "production") {
         return callback(null, true);
       }
-
-      console.error("❌ CORS Blocked:", normalizedOrigin);
-      return callback(null, false); // block silently
+      console.warn("⚠️ CORS Origin blocked:", normalizedOrigin);
+      return callback(null, false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Razorpay-Signature"],
-  }),
+  })
 );
 
 app.options("*", cors());
 
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://cdn.jsdelivr.net",
-          "https://code.jquery.com",
-        ],
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://cdn.jsdelivr.net",
-          "https://fonts.googleapis.com",
-          "https://unpkg.com",
-          "https://boxicons.com",
-        ],
-        fontSrc: [
-          "'self'",
-          "https://fonts.gstatic.com",
-          "https://unpkg.com",
-          "https://boxicons.com",
-          "https://cdn.jsdelivr.net",
-        ],
-
-        imgSrc: [
-          "'self'",
-          "data:",
-          "https://cdn-icons-png.flaticon.com",
-          "https://res.cloudinary.com",
-        ],
-        connectSrc: [
-          "'self'",
-          "https://cdn.jsdelivr.net",
-          "https://api.razorpay.com",
-          "https://checkout.razorpay.com",
-        ],
-
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: [],
-      },
-    },
-  }),
-);
-
-app.set("view engine", "ejs");
-
-app.set("views", path.join(__dirname, "views"));
-
-app.use(express.static(path.join(__dirname, "public")));
-
-// app.use("/api/auth", authRoutes);
-
-app.use((err, req, res, next) => {
-  console.error("SERVER ERROR:", err);
-  res.status(500).render("500", { title: "Server Error" });
+/* ================= HEALTH CHECK ================= */
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-export default app;
+/* ================= CLIENT API ROUTES ================= */
+app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/home", homeRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/checkout", checkoutRoutes);
+app.use("/api/printing", printingRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/newsletter", newsletterRoutes);
+app.use("/api/contact", contactRoutes);
+
+/* ================= ADMIN API ROUTES ================= */
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin/products", adminProductRoutes);
+app.use("/api/admin/categories", adminCategoryRoutes);
+app.use("/api/admin/brands", adminBrandRoutes);
+app.use("/api/admin/orders", adminOrderRoutes);
+app.use("/api/admin/printing", adminPrintingRoutes);
+app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/admin/coupons", adminCouponRoutes);
+app.use("/api/admin/settings", adminSettingsRoutes);
+app.use("/api/admin/newsletter", adminNewsletterRoutes);
+app.use("/api/admin/reviews", adminReviewRoutes);
+
+/* ================= 404 HANDLER ================= */
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` });
+});
+
+/* ================= GLOBAL ERROR HANDLER ================= */
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
+
+module.exports = app;

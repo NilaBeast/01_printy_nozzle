@@ -1,5 +1,5 @@
-import cloudinary from "../config/cloudinary.js";
-import fs from "fs";
+const cloudinary = require("../config/cloudinary");
+const fs = require("fs");
 
 /* ---------- Delete Local File ---------- */
 const removeLocalFile = (filePath) => {
@@ -9,20 +9,12 @@ const removeLocalFile = (filePath) => {
   });
 };
 
-
 /* ===================== UPLOAD ===================== */
-
-export async function uploadFile({
-  filePath,          // required
-  folder,            // required
-  resourceType,      // "image" | "raw" | "video" | "auto"
-  publicId,          // optional
-  transformation,    // optional (array)
-}) {
+const uploadFile = async ({ filePath, folder, resourceType, publicId, transformation }) => {
   try {
     const result = await cloudinary.uploader.upload(filePath, {
       folder,
-      resource_type: resourceType,
+      resource_type: resourceType || "auto",
       public_id: publicId,
       transformation,
     });
@@ -40,17 +32,10 @@ export async function uploadFile({
     removeLocalFile(filePath);
     throw error;
   }
-}
-
+};
 
 /* ===================== UPLOAD BUFFER ===================== */
-
-export async function uploadBuffer({
-  buffer,            // REQUIRED (Buffer)
-  folder,            // REQUIRED
-  publicId,          // REQUIRED
-  resourceType = "image",
-}) {
+const uploadBuffer = async ({ buffer, folder, publicId, resourceType = "image" }) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -74,16 +59,13 @@ export async function uploadBuffer({
 
     stream.end(buffer);
   });
-}
-
+};
 
 /* ===================== DELETE ===================== */
-
-export async function deleteFile({
-  publicId,
-  resourceType, // "image" | "raw" | "video"
-}) {
+const deleteFile = async ({ publicId, resourceType }) => {
   return cloudinary.uploader.destroy(publicId, {
     resource_type: resourceType,
   });
-}
+};
+
+module.exports = { uploadFile, uploadBuffer, deleteFile };
