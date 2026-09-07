@@ -9,4 +9,4 @@ const passwordValidation = async (password) => {
   return hasUppercase && hasLowercase && hasNumber && hasSpecial;
 };
 
-export default passwordValidation;
+module.exports = passwordValidation;

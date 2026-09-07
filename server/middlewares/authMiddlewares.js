@@ -1,8 +1,8 @@
-import jwt from "jsonwebtoken";
-import db from "../config/db.js";
-import "dotenv/config";
+const jwt = require("jsonwebtoken");
+const db = require("../config/db");
+require("dotenv").config();
 
-export async function protect(req, res, next) {
+const protect = async (req, res, next) => {
   try {
     let token;
 
@@ -22,30 +22,33 @@ export async function protect(req, res, next) {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const result = await db.query(
-      `
-      SELECT id, first_name, last_name, email, role, is_verified
-      FROM users
-      WHERE id = $1
-      `,
+    const [rows] = await db.query(
+      "SELECT id, first_name, last_name, email, phone, role, is_active, is_verified FROM users WHERE id = ?",
       [decoded.userId]
     );
 
-    if (result.rows.length === 0) {
+    if (rows.length === 0) {
       return res.status(401).json({
         success: false,
         message: "User no longer exists",
       });
     }
 
-    if (!result.rows[0].is_verified) {
+    if (!rows[0].is_active) {
+      return res.status(403).json({
+        success: false,
+        message: "Account has been deactivated",
+      });
+    }
+
+    if (!rows[0].is_verified) {
       return res.status(403).json({
         success: false,
         message: "Account not verified",
       });
     }
 
-    req.user = result.rows[0];
+    req.user = rows[0];
     next();
   } catch (error) {
     return res.status(401).json({
@@ -53,17 +56,18 @@ export async function protect(req, res, next) {
       message: "Invalid or expired token",
     });
   }
-}
+};
 
-
-export function authorizeRoles(...roles) {
+const authorizeRoles = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: "Access denied",
+        message: "Access denied. Insufficient permissions.",
       });
     }
     next();
   };
-}
+};
+
+module.exports = { protect, authorizeRoles };
