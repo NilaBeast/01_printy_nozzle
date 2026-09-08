@@ -2,71 +2,1140 @@
   {
     "id": 1,
     "name": "ESP32 DevKit V1",
+    "subtitle": "Wi-Fi + Bluetooth Development Board",
     "image": "/images/products/01.png",
+    "gallery": [
+      "/images/products/01.png",
+      "/images/products/11.png",
+      "/images/products/12.png",
+      "/images/products/01.png",
+      "/images/products/11.png"
+    ],
     "price": 499,
-    "category": "Microcontrollers"
+    "originalPrice": 599,
+    "category": "Microcontrollers",
+    "brand": "ESPRESSIF",
+    "rating": 4.8,
+    "reviewCount": 128,
+    "tag": "Bestseller",
+    "availability": "In Stock",
+    "stockCount": 45,
+    "description": "ESP32 DevKit V1 is a powerful, low-cost development board with integrated Wi-Fi and Bluetooth. Ideal for IoT, home automation, robotics, and wireless projects. Easy to program with Arduino IDE, ESP-IDF, or MicroPython.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "Dual Core", "subtitle": "240 MHz" },
+      { "icon": "bi-wifi", "title": "Wi-Fi", "subtitle": "802.11 b/g/n" },
+      { "icon": "bi-bluetooth", "title": "Bluetooth", "subtitle": "v4.2 (BLE)" },
+      { "icon": "bi-code-slash", "title": "Arduino /", "subtitle": "MicroPython" },
+      { "icon": "bi-gear", "title": "Wide", "subtitle": "Community Support" }
+    ],
+    "keyFeatures": [
+      "Powered by ESP-WROOM-32 (Dual-core Tensilica LX6)",
+      "Wi-Fi 802.11 b/g/n and Bluetooth v4.2 (BLE + Classic)",
+      "30+ GPIO pins with multiple peripheral support",
+      "Supports Arduino IDE, ESP-IDF, MicroPython",
+      "On-board USB to Serial (CP2102)",
+      "Compact and breadboard friendly design"
+    ],
+    "applications": [
+      "IoT Projects",
+      "Home Automation",
+      "Wireless Sensor Networks",
+      "Robotics",
+      "DIY Electronics",
+      "Smart Wearables"
+    ],
+    "specifications": {
+      "Microcontroller": "ESP-WROOM-32 (Xtensa Dual-Core 32-bit LX6)",
+      "Clock Speed": "Up to 240 MHz",
+      "Wireless Connectivity": "Wi-Fi 802.11 b/g/n + Bluetooth 4.2 BR/EDR & BLE",
+      "Operating Voltage": "3.3V (5V via Micro-USB)",
+      "Flash Memory": "4MB SPI Flash",
+      "SRAM": "520 KB",
+      "GPIO Pins": "30 Pins (ADC, DAC, I2C, SPI, PWM, UART)",
+      "Dimensions": "51.5mm x 28.5mm"
+    },
+    "faqs": [
+      {
+        "q": "Can I program this board using Arduino IDE?",
+        "a": "Yes! ESP32 DevKit V1 is fully compatible with the Arduino IDE, ESP-IDF, PlatformIO, and MicroPython."
+      },
+      {
+        "q": "What driver is required for USB connection?",
+        "a": "It uses the CP2102 USB-to-UART bridge driver, which is automatically installed on Windows 10/11."
+      }
+    ]
   },
   {
     "id": 2,
-    "name": "HC-SR04 Ultrasonic",
-    "image": "/images/products/06.png",
-    "price": 149,
-    "category": "Modules & Sensors"
+    "name": "ESP32 WROOM-32 WiFi + Bluetooth",
+    "subtitle": "High Performance Wireless MCU Module",
+    "image": "/images/products/11.png",
+    "gallery": [
+      "/images/products/11.png",
+      "/images/products/01.png",
+      "/images/products/12.png"
+    ],
+    "price": 449,
+    "originalPrice": 599,
+    "category": "Microcontrollers",
+    "brand": "ESPRESSIF",
+    "rating": 4.9,
+    "reviewCount": 86,
+    "tag": "New",
+    "availability": "In Stock",
+    "stockCount": 30,
+    "description": "Powerful generic Wi-Fi+BT+BLE MCU module targeting a wide variety of applications, from low-power sensor networks to voice encoding.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "Dual Core", "subtitle": "240 MHz" },
+      { "icon": "bi-wifi", "title": "Wi-Fi", "subtitle": "802.11 b/g/n" },
+      { "icon": "bi-bluetooth", "title": "Bluetooth", "subtitle": "v4.2 (BLE)" },
+      { "icon": "bi-code-slash", "title": "Arduino /", "subtitle": "ESP-IDF" }
+    ],
+    "keyFeatures": [
+      "Tensilica Xtensa Dual-Core 32-bit LX6 microprocessor",
+      "Integrated 4MB external SPI flash",
+      "Rich peripherals including capacitive touch sensors, Hall sensors, SD card interface",
+      "Supports sleep modes with ultra-low power co-processor"
+    ],
+    "applications": [
+      "Smart Home Automation",
+      "Industrial Wireless Control",
+      "Sensor Nodes",
+      "Wearable Electronics"
+    ],
+    "specifications": {
+      "Core": "Dual-Core Tensilica Xtensa 32-bit LX6",
+      "Clock Frequency": "Up to 240 MHz",
+      "Connectivity": "802.11 b/g/n Wi-Fi + BLE v4.2",
+      "Operating Voltage": "2.7V - 3.6V",
+      "Flash": "4MB External SPI Flash",
+      "Interface": "UART, SPI, I2C, PWM, ADC, DAC"
+    }
   },
   {
     "id": 3,
-    "name": "Mini Screwdriver Set",
-    "image": "/images/products/07.png",
-    "price": 299,
-    "category": "Tools & Accessories"
+    "name": "Arduino UNO R3 Original",
+    "subtitle": "The Benchmark Open-Source Prototyping Board",
+    "image": "/images/products/13.png",
+    "gallery": [
+      "/images/products/13.png",
+      "/images/products/01.png"
+    ],
+    "price": 649,
+    "originalPrice": 899,
+    "category": "Microcontrollers",
+    "brand": "Arduino",
+    "rating": 4.7,
+    "reviewCount": 93,
+    "availability": "In Stock",
+    "stockCount": 22,
+    "description": "The iconic Arduino Uno R3 micro-controller board based on ATmega328P, ideal for beginners, education, and prototyping.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "ATmega328P", "subtitle": "16 MHz" },
+      { "icon": "bi-plug", "title": "Operating", "subtitle": "5V DC" },
+      { "icon": "bi-motherboard", "title": "Digital I/O", "subtitle": "14 Pins" },
+      { "icon": "bi-code-slash", "title": "Arduino", "subtitle": "IDE Ready" }
+    ],
+    "keyFeatures": [
+      "DIP-socket ATmega328P microcontroller, easily replaceable",
+      "ATmega16U2 programmed as a USB-to-serial converter",
+      "14 digital input/output pins (6 can be used as PWM outputs)",
+      "6 analog inputs, 16 MHz quartz crystal, USB connection, power jack"
+    ],
+    "applications": [
+      "Robotics Projects",
+      "STEM Education",
+      "Electronic Prototyping",
+      "Automation Control"
+    ],
+    "specifications": {
+      "Microcontroller": "ATmega328P",
+      "Operating Voltage": "5V",
+      "Input Voltage": "7-12V Recommended",
+      "Digital I/O Pins": "14 (6 provide PWM output)",
+      "Analog Input Pins": "6",
+      "Clock Speed": "16 MHz",
+      "Flash Memory": "32 KB"
+    }
   },
   {
     "id": 4,
-    "name": "PLA 3D Printer Filament",
-    "image": "/images/products/08.png",
-    "price": 899,
-    "category": "Additive & 3D Parts"
+    "name": "HC-SR04 Ultrasonic Sensor",
+    "subtitle": "High Precision Distance Measuring Module",
+    "image": "/images/products/14.png",
+    "gallery": [
+      "/images/products/14.png"
+    ],
+    "price": 149,
+    "originalPrice": 249,
+    "category": "Modules & Sensors",
+    "brand": "HiLetgo",
+    "rating": 4.6,
+    "reviewCount": 214,
+    "availability": "In Stock",
+    "stockCount": 65,
+    "description": "High precision ultrasonic distance measurement sensor module with stable performance and high accuracy.",
+    "highlights": [
+      { "icon": "bi-broadcast", "title": "Range", "subtitle": "2cm - 400cm" },
+      { "icon": "bi-bullseye", "title": "Accuracy", "subtitle": "0.3 cm" },
+      { "icon": "bi-lightning", "title": "Working", "subtitle": "5V DC" }
+    ],
+    "keyFeatures": [
+      "Provides 2cm - 400cm non-contact measurement function",
+      "Ranging accuracy reaches up to 3mm",
+      "Includes ultrasonic transmitters, receiver and control circuit",
+      "Easy 4-pin interface: VCC, Trig, Echo, GND"
+    ],
+    "applications": [
+      "Obstacle Avoiding Robots",
+      "Distance Measurement Devices",
+      "Liquid Level Sensing",
+      "Security Alarm Systems"
+    ],
+    "specifications": {
+      "Working Voltage": "DC 5V",
+      "Static Current": "< 2mA",
+      "Ranging Distance": "2cm – 400cm",
+      "Resolution": "0.3 cm",
+      "Measuring Angle": "15 degrees",
+      "Trigger Input": "10uS TTL pulse"
+    }
   },
   {
     "id": 5,
-    "name": "TP4056 Charging Module",
-    "image": "/images/products/09.png",
-    "price": 99,
-    "category": "Power Supplies"
+    "name": "1 Channel 5V Relay Module",
+    "subtitle": "Optocoupler Isolated Switching Board",
+    "image": "/images/products/15.png",
+    "gallery": [
+      "/images/products/15.png"
+    ],
+    "price": 69,
+    "originalPrice": 120,
+    "category": "Modules & Sensors",
+    "brand": "HiLetgo",
+    "rating": 4.8,
+    "reviewCount": 176,
+    "availability": "In Stock",
+    "stockCount": 80,
+    "description": "Standard 1-channel relay module board with optocoupler isolation for controlling AC/DC electrical appliances safely.",
+    "highlights": [
+      { "icon": "bi-toggles", "title": "Load Max", "subtitle": "250V AC / 10A" },
+      { "icon": "bi-shield-check", "title": "Isolation", "subtitle": "Optocoupler" },
+      { "icon": "bi-lightning", "title": "Control", "subtitle": "5V DC" }
+    ],
+    "keyFeatures": [
+      "Equipped with high-current relay: AC250V 10A, DC30V 10A",
+      "Standard interface directly controllable by microcontrollers",
+      "Optocoupler isolation ensures complete circuit protection",
+      "LED status indicator for power and relay actuation"
+    ],
+    "applications": [
+      "Smart Home Automation",
+      "Appliance Switching",
+      "Industrial Control",
+      "Microcontroller Interfacing"
+    ],
+    "specifications": {
+      "Control Voltage": "5V DC",
+      "Max Load": "AC 250V/10A, DC 30V/10A",
+      "Trigger Current": "5mA",
+      "Indicator": "Power (Green) & Relay Status (Red)",
+      "Isolation": "Optocoupler isolation"
+    }
   },
   {
     "id": 6,
-    "name": "SG90 Servo Motor",
-    "image": "/images/products/10.png",
-    "price": 179,
-    "category": "Modules & Sensors"
+    "name": "DHT11 Temperature & Humidity Sensor",
+    "subtitle": "Calibrated Digital Climate Sensing Module",
+    "image": "/images/products/02.png",
+    "gallery": [
+      "/images/products/02.png"
+    ],
+    "price": 49,
+    "originalPrice": 99,
+    "category": "Modules & Sensors",
+    "brand": "DFRobot",
+    "rating": 4.5,
+    "reviewCount": 312,
+    "availability": "In Stock",
+    "stockCount": 50,
+    "description": "Basic ultra low-cost digital temperature and humidity sensor with pre-calibrated digital signal output.",
+    "highlights": [
+      { "icon": "bi-thermometer-half", "title": "Temperature", "subtitle": "0°C - 50°C" },
+      { "icon": "bi-moisture", "title": "Humidity", "subtitle": "20% - 90% RH" },
+      { "icon": "bi-cpu", "title": "Output", "subtitle": "Single-Bus Digital" }
+    ],
+    "keyFeatures": [
+      "High reliability and excellent long-term stability",
+      "Pre-calibrated digital output signal on 1 wire",
+      "Low power consumption with high cost-performance ratio",
+      "Compatible with 3.3V and 5V microcontrollers"
+    ],
+    "applications": [
+      "Weather Stations",
+      "HVAC Monitoring",
+      "Greenhouse Automation",
+      "Home Comfort Systems"
+    ],
+    "specifications": {
+      "Operating Voltage": "3.5V to 5.5V",
+      "Humidity Range": "20% - 90% RH (±5% RH)",
+      "Temperature Range": "0°C - 50°C (±2°C)",
+      "Sampling Rate": "1 Hz (one reading every second)",
+      "Output": "Single-bus digital signal"
+    }
   },
   {
     "id": 7,
-    "name": "DHT11 Sensor Module",
-    "image": "/images/products/02.png",
-    "price": 129,
-    "category": "Modules & Sensors"
+    "name": "MPU6050 Gyroscope Accelerometer Module",
+    "subtitle": "6-Axis Motion Tracking I2C Sensor",
+    "image": "/images/products/16.png",
+    "gallery": [
+      "/images/products/16.png"
+    ],
+    "price": 199,
+    "originalPrice": 299,
+    "category": "Modules & Sensors",
+    "brand": "HiLetgo",
+    "rating": 4.8,
+    "reviewCount": 159,
+    "availability": "In Stock",
+    "stockCount": 42,
+    "description": "6-axis motion tracking device combining a 3-axis gyroscope and a 3-axis accelerometer on a single silicon chip.",
+    "highlights": [
+      { "icon": "bi-compass", "title": "6-Axis", "subtitle": "Gyro + Accel" },
+      { "icon": "bi-diagram-3", "title": "Protocol", "subtitle": "Standard I2C" },
+      { "icon": "bi-cpu", "title": "DMP Engine", "subtitle": "On-chip Motion" }
+    ],
+    "keyFeatures": [
+      "Built-in 16-bit ADC for high accuracy coordinate conversion",
+      "Integrated Digital Motion Processor (DMP) offloads host MCU",
+      "Programmable gyroscope full scale range up to ±2000 °/sec",
+      "Programmable accelerometer full scale range up to ±16g"
+    ],
+    "applications": [
+      "Drone Flight Controllers",
+      "Self-Balancing Robots",
+      "Gesture Control Wearables",
+      "Gaming Controllers"
+    ],
+    "specifications": {
+      "Sensor Type": "3-Axis Gyroscope + 3-Axis Accelerometer",
+      "Communication": "I2C Protocol",
+      "Power Supply": "3V - 5V",
+      "Gyro Range": "± 250, 500, 1000, 2000 °/s",
+      "Accel Range": "± 2, ± 4, ± 8, ± 16 g",
+      "ADC": "16-bit AD converter built-in"
+    }
   },
   {
     "id": 8,
-    "name": "LM2596 Buck Converter",
-    "image": "/images/products/03.png",
-    "price": 199,
-    "category": "Power Supplies"
+    "name": "16x2 LCD Display (I2C Interface)",
+    "subtitle": "Blue Backlight Alphanumeric Display",
+    "image": "/images/products/17.png",
+    "gallery": [
+      "/images/products/17.png"
+    ],
+    "price": 129,
+    "originalPrice": 220,
+    "category": "Displays",
+    "brand": "Seeed Studio",
+    "rating": 4.7,
+    "reviewCount": 145,
+    "availability": "In Stock",
+    "stockCount": 35,
+    "description": "1602 LCD screen with pre-soldered I2C backpack interface reducing required GPIO pins from 16 to only 4.",
+    "highlights": [
+      { "icon": "bi-display", "title": "Characters", "subtitle": "16x2 Lines" },
+      { "icon": "bi-diagram-2", "title": "Interface", "subtitle": "I2C (4 Pins)" },
+      { "icon": "bi-brightness-high", "title": "Backlight", "subtitle": "High Contrast Blue" }
+    ],
+    "keyFeatures": [
+      "Displays 16 characters per row across 2 rows",
+      "Pre-soldered PCF8574 I2C adapter saves microcontroller GPIOs",
+      "On-board potentiometer for contrast adjustment",
+      "Jumper for backlight power control"
+    ],
+    "applications": [
+      "System Status Monitors",
+      "Temperature Display Units",
+      "Smart Counters",
+      "DIY Instruments"
+    ],
+    "specifications": {
+      "Characters": "16 characters x 2 lines",
+      "Interface": "I2C (Address 0x27 or 0x3F)",
+      "Backlight": "Blue with White Characters",
+      "Operating Voltage": "5V DC",
+      "Dimensions": "80mm x 36mm x 12mm"
+    }
   },
   {
     "id": 9,
-    "name": "Precision Screwdriver Set",
-    "image": "/images/products/04.png",
-    "price": 349,
-    "category": "Tools & Accessories"
+    "name": "5V 3A Switching Power Supply Module",
+    "subtitle": "Isolated AC-DC Step-Down Regulator Board",
+    "image": "/images/products/18.png",
+    "gallery": [
+      "/images/products/18.png"
+    ],
+    "price": 199,
+    "originalPrice": 299,
+    "category": "Power Supplies",
+    "brand": "HiLetgo",
+    "rating": 4.9,
+    "reviewCount": 88,
+    "availability": "In Stock",
+    "stockCount": 28,
+    "description": "Compact isolated AC-DC step down power module providing regulated 5V DC output with built-in fuse and filters.",
+    "highlights": [
+      { "icon": "bi-plug", "title": "Input", "subtitle": "85-265V AC" },
+      { "icon": "bi-lightning-charge", "title": "Output", "subtitle": "5V DC @ 3A" },
+      { "icon": "bi-shield-check", "title": "Protection", "subtitle": "Over-Current & OVP" }
+    ],
+    "keyFeatures": [
+      "Wide universal AC voltage input (85V - 265V)",
+      "Stable regulated 5V DC output with low ripple",
+      "Built-in protection against over-voltage, overload, and short circuit",
+      "High conversion efficiency up to 85%"
+    ],
+    "applications": [
+      "Raspberry Pi Powering",
+      "MCU Projects",
+      "LED Strip Powering",
+      "Embedded Systems"
+    ],
+    "specifications": {
+      "Input Voltage": "AC 85-265V 50/60Hz",
+      "Output Voltage": "DC 5V (±0.2V)",
+      "Output Current": "3A (Peak 3.5A)",
+      "Power Rating": "15W",
+      "Protection": "Over-voltage, over-current, short circuit"
+    }
   },
   {
     "id": 10,
-    "name": "3D Printer Filament Spool",
+    "name": "PLA 3D Printer Filament 1.75mm (1kg)",
+    "subtitle": "High Precision Tangle-Free Printing Filament",
+    "image": "/images/products/19.png",
+    "gallery": [
+      "/images/products/19.png"
+    ],
+    "price": 899,
+    "originalPrice": 1299,
+    "category": "Additive & 3D Parts",
+    "brand": "DFRobot",
+    "rating": 4.9,
+    "reviewCount": 66,
+    "colors": ["#1e293b", "#f59e0b", "#8b5cf6", "#3b82f6"],
+    "extraColorsCount": 4,
+    "availability": "In Stock",
+    "stockCount": 18,
+    "description": "Premium high-grade PLA filament engineered for tangle-free, bubble-free, and warp-free 3D printing with silky finish.",
+    "highlights": [
+      { "icon": "bi-bullseye", "title": "Diameter", "subtitle": "1.75mm ±0.02mm" },
+      { "icon": "bi-box-seam", "title": "Net Weight", "subtitle": "1 kg (2.2 lbs)" },
+      { "icon": "bi-fire", "title": "Print Temp", "subtitle": "190°C - 220°C" }
+    ],
+    "keyFeatures": [
+      "Zero-bubble, completely tangle-free winding",
+      "High dimensional accuracy ±0.02 mm",
+      "Eco-friendly natural plant starch raw material",
+      "Vibrant gloss finish with excellent layer adhesion"
+    ],
+    "applications": [
+      "Prototypes",
+      "Art Models",
+      "Functional Parts",
+      "Educational Prints"
+    ],
+    "specifications": {
+      "Diameter": "1.75 mm ±0.02 mm",
+      "Net Weight": "1 kg (2.2 lbs)",
+      "Printing Temp": "190°C - 220°C",
+      "Bed Temp": "50°C - 60°C",
+      "Material": "Virgin Grade PLA (Eco-Friendly)",
+      "Spool Type": "Reinforced recyclable spool"
+    }
+  },
+  {
+    "id": 11,
+    "name": "Brass Nozzle 0.4mm for 3D Printer",
+    "subtitle": "Precision Machined M6 Thread Extruder Nozzle",
+    "image": "/images/products/20.png",
+    "gallery": [
+      "/images/products/20.png"
+    ],
+    "price": 29,
+    "originalPrice": 59,
+    "category": "3D Printer Parts",
+    "brand": "DFRobot",
+    "rating": 4.8,
+    "reviewCount": 201,
+    "availability": "In Stock",
+    "stockCount": 150,
+    "description": "Precision machined 0.4mm brass extruder nozzle offering excellent thermal conductivity and smooth filament flow.",
+    "highlights": [
+      { "icon": "bi-circle", "title": "Orifice", "subtitle": "0.4 mm" },
+      { "icon": "bi-threads", "title": "Thread", "subtitle": "Standard M6" },
+      { "icon": "bi-thermometer-high", "title": "Max Temp", "subtitle": "300°C" }
+    ],
+    "keyFeatures": [
+      "High precision CNC machining ensures smooth inner bore",
+      "Superior thermal conductivity of H59 brass alloy",
+      "Prevents filament snagging and nozzle clogging",
+      "Compatible with Creality, Anycubic, Artillery and Prusa printers"
+    ],
+    "applications": [
+      "PLA Printing",
+      "ABS Printing",
+      "PETG Printing",
+      "TPU Printing"
+    ],
+    "specifications": {
+      "Orifice Diameter": "0.4 mm",
+      "Input Filament": "1.75 mm",
+      "Thread": "M6 Thread",
+      "Material": "High-grade H59 Brass",
+      "Max Temperature": "300°C",
+      "Compatibility": "Ender 3/5, CR-10, Anycubic, Prusa MK3"
+    }
+  },
+  {
+    "id": 12,
+    "name": "NEMA 17 Stepper Motor",
+    "subtitle": "High Torque 1.8 Degree Hybrid Stepper Motor",
+    "image": "/images/products/21.png",
+    "gallery": [
+      "/images/products/21.png"
+    ],
+    "price": 349,
+    "originalPrice": 499,
+    "category": "Robotics",
+    "brand": "DFRobot",
+    "rating": 4.9,
+    "reviewCount": 101,
+    "availability": "In Stock",
+    "stockCount": 38,
+    "description": "High torque bipolar NEMA 17 stepper motor widely used for 3D printers, CNC routers, robotics, and linear actuators.",
+    "highlights": [
+      { "icon": "bi-arrow-clockwise", "title": "Step Angle", "subtitle": "1.8° (200 steps)" },
+      { "icon": "bi-speedometer2", "title": "Holding Torque", "subtitle": "40 N·cm" },
+      { "icon": "bi-cpu", "title": "Rated Current", "subtitle": "1.5A / Phase" }
+    ],
+    "keyFeatures": [
+      "Bipolar 2-phase 4-wire stepper motor",
+      "High torque output with minimal vibration and noise",
+      "D-cut shaft prevents pulley slippage",
+      "Includes 1m connector cable"
+    ],
+    "applications": [
+      "3D Printer Axis Drive",
+      "CNC Engraving Machines",
+      "Robotic Arms",
+      "Automated Camera Sliders"
+    ],
+    "specifications": {
+      "Step Angle": "1.8° (200 steps/rev)",
+      "Rated Current": "1.5A / Phase",
+      "Holding Torque": "40 N·cm (56.6 oz.in)",
+      "Shaft Diameter": "5mm D-Cut Shaft",
+      "Phase Resistance": "1.5 ohms",
+      "Weight": "280g"
+    }
+  },
+  {
+    "id": 13,
+    "name": "Precision Screwdriver Set (25 in 1)",
+    "subtitle": "Magnetic S2 Alloy Steel Repair Kit",
+    "image": "/images/products/22.png",
+    "gallery": [
+      "/images/products/22.png"
+    ],
+    "price": 299,
+    "originalPrice": 499,
+    "category": "Tools & Accessories",
+    "brand": "HiLetgo",
+    "rating": 4.6,
+    "reviewCount": 73,
+    "availability": "In Stock",
+    "stockCount": 40,
+    "description": "Pocket-sized 25-in-1 magnetic screwdriver repair kit designed for electronics, smartphones, drones, and precision mechanics.",
+    "highlights": [
+      { "icon": "bi-tools", "title": "Total Bits", "subtitle": "24 Magnetic Bits" },
+      { "icon": "bi-box-seam", "title": "Storage", "subtitle": "Push-to-Eject Box" },
+      { "icon": "bi-shield-check", "title": "Material", "subtitle": "S2 Alloy Steel" }
+    ],
+    "keyFeatures": [
+      "High-grade S2 alloy steel with 60HRC hardness",
+      "Push-to-release aluminum storage cassette",
+      "Strong magnetic bit holder prevents screws from falling",
+      "Ergonomic handle with 360-degree rotating cap"
+    ],
+    "applications": [
+      "Smartphone & Tablet Repair",
+      "Laptop & PC Maintenance",
+      "Drone Assembly",
+      "Eyeglass & Watch Repair"
+    ],
+    "specifications": {
+      "Total Bits": "24 Magnetic S2 Steel Bits",
+      "Case": "Aluminum alloy push-to-eject storage case",
+      "Handle": "Anodized aluminum alloy with 360° rotating cap",
+      "Bit Types": "Torx, Phillips, Slotted, Pentalobe, Tri-wing, Hex"
+    }
+  },
+  {
+    "id": 14,
+    "name": "Jumper Wires (Male to Male, 40pcs)",
+    "subtitle": "20cm Detachable Rainbow Ribbon Cable",
+    "image": "/images/products/23.png",
+    "gallery": [
+      "/images/products/23.png"
+    ],
+    "price": 79,
+    "originalPrice": 129,
+    "category": "Cables & Wires",
+    "brand": "HiLetgo",
+    "rating": 4.7,
+    "reviewCount": 498,
+    "availability": "In Stock",
+    "stockCount": 120,
+    "description": "Flexible rainbow jumper ribbon wires for breadboard prototyping, Arduino, Raspberry Pi, and DIY robotics.",
+    "highlights": [
+      { "icon": "bi-bezier2", "title": "Quantity", "subtitle": "40 Wires" },
+      { "icon": "bi-arrows-expand", "title": "Length", "subtitle": "20 cm" },
+      { "icon": "bi-pin", "title": "Pitch", "subtitle": "Standard 2.54mm" }
+    ],
+    "keyFeatures": [
+      "Separable ribbon cable easily pulled apart into individual wires",
+      "Standard 2.54mm pitch DuPont connectors fit breadboard pin headers",
+      "Copper clad aluminum wire for flexibility and conductivity",
+      "Multi-color design for clean circuit routing"
+    ],
+    "applications": [
+      "Breadboard Prototyping",
+      "Arduino Connections",
+      "Sensor Modules Hookup",
+      "Educational DIY Kits"
+    ],
+    "specifications": {
+      "Length": "20 cm",
+      "Pin Type": "Male to Male (2.54mm pitch)",
+      "Quantity": "40 pins strip (detachable)",
+      "Conductor": "High-grade copper clad aluminum"
+    }
+  },
+  {
+    "id": 15,
+    "name": "60W Soldering Iron Kit",
+    "subtitle": "Adjustable Temperature 200°C - 450°C",
+    "image": "/images/products/24.png",
+    "gallery": [
+      "/images/products/24.png"
+    ],
+    "price": 249,
+    "originalPrice": 399,
+    "category": "Tools & Accessories",
+    "brand": "Seeed Studio",
+    "rating": 4.8,
+    "reviewCount": 121,
+    "availability": "In Stock",
+    "stockCount": 30,
+    "description": "Ergonomic temperature-controlled 60W electric soldering iron with fast heating ceramic core and heat-resistant silicone grip.",
+    "highlights": [
+      { "icon": "bi-lightning-charge", "title": "Power", "subtitle": "60W Rapid Heat" },
+      { "icon": "bi-thermometer-high", "title": "Temp Range", "subtitle": "200°C - 450°C" },
+      { "icon": "bi-shield", "title": "Handle", "subtitle": "Heat-Resistant Grip" }
+    ],
+    "keyFeatures": [
+      "Internal ceramic induction heating element warms up in 30 seconds",
+      "Easy rotary temperature adjustment dial (200°C to 450°C)",
+      "Includes metal soldering stand and high-density cleaning sponge",
+      "Heat-resistant insulated silicone grip for safety"
+    ],
+    "applications": [
+      "PCB Soldering & Repair",
+      "Cable & Connector Assembly",
+      "DIY Electronic Kits",
+      "Hardware Prototyping"
+    ],
+    "specifications": {
+      "Power": "60W",
+      "Voltage": "220V AC",
+      "Temperature Range": "200°C - 450°C Adjustable",
+      "Heating Element": "Internal ceramic core",
+      "Included": "Soldering iron + stand with cleaning sponge"
+    }
+  },
+  {
+    "id": 16,
+    "name": "Raspberry Pi 4 Model B (4GB)",
+    "subtitle": "Quad-Core 64-bit Single Board Computer",
+    "image": "/images/products/25.png",
+    "gallery": [
+      "/images/products/25.png"
+    ],
+    "price": 4499,
+    "originalPrice": 5299,
+    "category": "Microcontrollers",
+    "brand": "Raspberry Pi",
+    "rating": 4.9,
+    "reviewCount": 57,
+    "availability": "In Stock",
+    "stockCount": 14,
+    "description": "The revolutionary single board computer offering desktop-level performance, 4K dual display support, and Gigabit Ethernet.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "Processor", "subtitle": "Quad-Core 1.5GHz" },
+      { "icon": "bi-memory", "title": "RAM", "subtitle": "4GB LPDDR4" },
+      { "icon": "bi-display", "title": "Video", "subtitle": "Dual 4K Micro-HDMI" }
+    ],
+    "keyFeatures": [
+      "Broadcom BCM2711, Quad-core Cortex-A72 (ARM v8) 64-bit SoC @ 1.5GHz",
+      "4GB LPDDR4-3200 SDRAM",
+      "True Gigabit Ethernet & dual-band 2.4/5.0 GHz IEEE 802.11ac wireless",
+      "2 x USB 3.0 ports, 2 x USB 2.0 ports"
+    ],
+    "applications": [
+      "Home Media Server",
+      "IoT Gateway & Edge Computing",
+      "Retro Gaming Console",
+      "Compact Linux Desktop"
+    ],
+    "specifications": {
+      "Processor": "Broadcom BCM2711, Quad-core Cortex-A72 @ 1.5GHz",
+      "RAM": "4GB LPDDR4-3200 SDRAM",
+      "Connectivity": "Dual-band 2.4/5.0 GHz WiFi, Bluetooth 5.0, Gigabit Ethernet",
+      "Ports": "2 x USB 3.0, 2 x USB 2.0, 2 x micro-HDMI (4k60p)",
+      "Power": "5V DC via USB-C (min 3A)"
+    }
+  },
+  {
+    "id": 17,
+    "name": "LM2596 Buck Converter Module",
+    "subtitle": "Adjustable DC-DC Step-Down Power Supply",
+    "image": "/images/products/03.png",
+    "gallery": [
+      "/images/products/03.png"
+    ],
+    "price": 99,
+    "originalPrice": 149,
+    "category": "Power Supplies",
+    "brand": "HiLetgo",
+    "rating": 4.7,
+    "reviewCount": 110,
+    "availability": "In Stock",
+    "stockCount": 55,
+    "description": "DC-DC step-down buck power module with high precision multi-turn potentiometer and low ripple output.",
+    "highlights": [
+      { "icon": "bi-plug", "title": "Input", "subtitle": "3.2V - 40V DC" },
+      { "icon": "bi-lightning", "title": "Output", "subtitle": "1.25V - 35V DC" },
+      { "icon": "bi-speedometer2", "title": "Efficiency", "subtitle": "Up to 92%" }
+    ],
+    "keyFeatures": [
+      "Wide input range from 3.2V to 40V DC",
+      "Continuously adjustable output voltage with precision potentiometer",
+      "High efficiency switching buck topology",
+      "Thermal shutdown and current limit protection"
+    ],
+    "applications": [
+      "DIY Mobile Power Supply",
+      "Battery Step-Down Converter",
+      "Industrial Control Powering"
+    ],
+    "specifications": {
+      "Input Voltage": "3.2V - 40V DC",
+      "Output Voltage": "1.25V - 35V DC Adjustable",
+      "Max Current": "3A (Heatsink recommended for >2A)",
+      "Conversion Efficiency": "Up to 92%"
+    }
+  },
+  {
+    "id": 18,
+    "name": "Mini Precision Screwdriver Set",
+    "subtitle": "Pocket 12-in-1 Compact Repair Tool",
+    "image": "/images/products/07.png",
+    "gallery": [
+      "/images/products/07.png"
+    ],
+    "price": 179,
+    "originalPrice": 299,
+    "category": "Tools & Accessories",
+    "brand": "HiLetgo",
+    "rating": 4.4,
+    "reviewCount": 45,
+    "availability": "In Stock",
+    "stockCount": 25,
+    "description": "Compact screwdriver kit for light electronic repair, phone dismantling, and hobby models.",
+    "highlights": [
+      { "icon": "bi-tools", "title": "Bits", "subtitle": "12 Bits" },
+      { "icon": "bi-shield", "title": "Material", "subtitle": "Chrome Vanadium" }
+    ],
+    "keyFeatures": [
+      "Chrome Vanadium steel bits for durability",
+      "Magnetic bits easily pick up tiny screws",
+      "Compact pocket-sized transparent case"
+    ],
+    "applications": [
+      "Glasses Repair",
+      "Toys & Gadgets",
+      "Camera Maintenance"
+    ],
+    "specifications": {
+      "Bit Count": "12 in 1",
+      "Material": "Chrome Vanadium Steel",
+      "Features": "Magnetic tip, pocket size"
+    }
+  },
+  {
+    "id": 19,
+    "name": "TP4056 Type-C Charging Module",
+    "subtitle": "1A Lithium Battery Charger with Dual Protection",
+    "image": "/images/products/09.png",
+    "gallery": [
+      "/images/products/09.png"
+    ],
+    "price": 49,
+    "originalPrice": 89,
+    "category": "Power Supplies",
+    "brand": "HiLetgo",
+    "rating": 4.8,
+    "reviewCount": 220,
+    "availability": "In Stock",
+    "stockCount": 90,
+    "description": "Lithium battery charger board with Type-C input and dual protection IC for 18650 Li-ion cells.",
+    "highlights": [
+      { "icon": "bi-usb-c", "title": "Input", "subtitle": "USB Type-C 5V" },
+      { "icon": "bi-battery-charging", "title": "Cut-Off", "subtitle": "4.2V ±1%" },
+      { "icon": "bi-shield-check", "title": "Protection", "subtitle": "DW01A + 8205A" }
+    ],
+    "keyFeatures": [
+      "Modern USB Type-C charging port",
+      "Constant-current / constant-voltage charging mode",
+      "Over-charge, over-discharge, and short-circuit protection",
+      "Dual LED indicators: Red (charging), Blue (charged)"
+    ],
+    "applications": [
+      "18650 Li-ion Battery Charging",
+      "DIY Power Banks",
+      "Portable Device Powering"
+    ],
+    "specifications": {
+      "Input Interface": "USB Type-C (5V)",
+      "Charge Voltage": "4.2V ±1%",
+      "Max Charging Current": "1000mA",
+      "Protection": "Battery over-discharge & over-current"
+    }
+  },
+  {
+    "id": 20,
+    "name": "SG90 Micro Servo Motor 9g",
+    "subtitle": "Lightweight Micro Servo for RC & Robotics",
+    "image": "/images/products/10.png",
+    "gallery": [
+      "/images/products/10.png"
+    ],
+    "price": 99,
+    "originalPrice": 159,
+    "category": "Robotics",
+    "brand": "HiLetgo",
+    "rating": 4.5,
+    "reviewCount": 165,
+    "availability": "In Stock",
+    "stockCount": 60,
+    "description": "Tiny and lightweight 9g servo motor with high output power for robotic arms, RC planes, and steering systems.",
+    "highlights": [
+      { "icon": "bi-weight", "title": "Weight", "subtitle": "Only 9g" },
+      { "icon": "bi-speedometer", "title": "Speed", "subtitle": "0.1s / 60°" },
+      { "icon": "bi-cpu", "title": "Rotation", "subtitle": "180 Degree" }
+    ],
+    "keyFeatures": [
+      "Ultra-compact footprint fits tight project enclosures",
+      "Includes 3 servo horns and mounting screws",
+      "Standard 3-pin PWM interface (Ground, Power, Signal)",
+      "Compatible with Arduino Servo library out-of-the-box"
+    ],
+    "applications": [
+      "Robotic Grippers",
+      "RC Airplanes & Cars",
+      "Camera Pan-Tilt Systems",
+      "Animatronics"
+    ],
+    "specifications": {
+      "Operating Voltage": "4.8V - 6.0V",
+      "Stall Torque": "1.8 kgf·cm",
+      "Operating Speed": "0.1 s/60 degree",
+      "Gear Type": "POM Nylon gear",
+      "Weight": "9 grams"
+    }
+  },
+  {
+    "id": 21,
+    "name": "ESP32-CAM Board with OV2640",
+    "subtitle": "Wi-Fi & Bluetooth Video Streaming Module",
+    "image": "/images/products/12.png",
+    "gallery": [
+      "/images/products/12.png"
+    ],
+    "price": 549,
+    "originalPrice": 799,
+    "category": "IoT & Communication",
+    "brand": "ESPRESSIF",
+    "rating": 4.6,
+    "reviewCount": 89,
+    "availability": "In Stock",
+    "stockCount": 35,
+    "description": "Compact camera development board with ESP32 chip, Wi-Fi, Bluetooth, and OV2640 camera module for IoT video streaming.",
+    "highlights": [
+      { "icon": "bi-camera-video", "title": "Camera", "subtitle": "2MP OV2640" },
+      { "icon": "bi-sd-card", "title": "Storage", "subtitle": "TF Card Slot" },
+      { "icon": "bi-wifi", "title": "Wireless", "subtitle": "Wi-Fi + BLE" }
+    ],
+    "keyFeatures": [
+      "Includes 2-megapixel OV2640 camera module",
+      "Supports image Wi-Fi upload and video stream broadcasting",
+      "Built-in micro-SD card slot for local storage",
+      "On-board high power LED flash for night capture"
+    ],
+    "applications": [
+      "Smart Video Doorbells",
+      "Home Security Cameras",
+      "Time-Lapse Photography",
+      "Computer Vision Projects"
+    ],
+    "specifications": {
+      "CPU": "Dual-core 32-bit LX6 @ 160MHz",
+      "Camera": "OV2640 2MP Camera included",
+      "Wireless": "Wi-Fi 802.11b/g/n + Bluetooth 4.2 LE",
+      "Flash Light": "Built-in high brightness LED flash"
+    }
+  },
+  {
+    "id": 22,
+    "name": "Creality Ender 3 Nozzle Pack (5 Pcs)",
+    "subtitle": "0.4mm Replacement Brass Extruder Nozzles",
+    "image": "/images/products/20.png",
+    "gallery": [
+      "/images/products/20.png"
+    ],
+    "price": 119,
+    "originalPrice": 199,
+    "category": "3D Printer Parts",
+    "brand": "DFRobot",
+    "rating": 4.7,
+    "reviewCount": 94,
+    "availability": "In Stock",
+    "stockCount": 75,
+    "description": "Pack of 5 replacement 0.4mm brass nozzles with smooth inner wall for minimal clogging and uniform extrusion.",
+    "highlights": [
+      { "icon": "bi-circle", "title": "Size", "subtitle": "0.4mm (5 Pcs)" },
+      { "icon": "bi-threads", "title": "Thread", "subtitle": "M6" }
+    ],
+    "keyFeatures": [
+      "Pack of 5 matched nozzles",
+      "High temperature resistance up to 300°C",
+      "Seamless filament feed prevents clogs"
+    ],
+    "applications": [
+      "Ender 3",
+      "Ender 5",
+      "CR-10"
+    ],
+    "specifications": {
+      "Size": "0.4mm (5 pieces)",
+      "Material": "Brass",
+      "Thread": "M6",
+      "Compatibility": "Ender-3, Ender-5, CR-10"
+    }
+  },
+  {
+    "id": 23,
+    "name": "Arduino Nano V3.0 ATmega328P",
+    "subtitle": "Compact Breadboard-Friendly Microcontroller",
+    "image": "/images/products/13.png",
+    "gallery": [
+      "/images/products/13.png"
+    ],
+    "price": 299,
+    "originalPrice": 420,
+    "category": "Microcontrollers",
+    "brand": "Arduino",
+    "rating": 4.7,
+    "reviewCount": 112,
+    "availability": "In Stock",
+    "stockCount": 44,
+    "description": "Compact, breadboard-friendly microcontroller board based on the ATmega328P with mini-USB connection.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "ATmega328P", "subtitle": "16 MHz" },
+      { "icon": "bi-pin-angle", "title": "Form Factor", "subtitle": "DIP-30" }
+    ],
+    "keyFeatures": [
+      "Miniature footprint plugs right into solderless breadboards",
+      "8 analog inputs and 14 digital I/O pins",
+      "Mini-B USB connector for programming and power"
+    ],
+    "applications": [
+      "Wearables",
+      "Mini Robots",
+      "Compact IoT Nodes"
+    ],
+    "specifications": {
+      "Microcontroller": "ATmega328P",
+      "Operating Voltage": "5V",
+      "Digital I/O Pins": "14",
+      "Analog Input Pins": "8",
+      "Clock Speed": "16 MHz"
+    }
+  },
+  {
+    "id": 24,
+    "name": "Silk Gold PLA 3D Printer Filament 1kg",
+    "subtitle": "High Gloss Metallic Finish 1.75mm Spool",
     "image": "/images/products/05.png",
-    "price": 799,
-    "category": "Additive & 3D Parts"
+    "gallery": [
+      "/images/products/05.png"
+    ],
+    "price": 999,
+    "originalPrice": 1499,
+    "category": "Additive & 3D Parts",
+    "brand": "DFRobot",
+    "rating": 4.8,
+    "reviewCount": 42,
+    "availability": "In Stock",
+    "stockCount": 20,
+    "description": "Shiny metallic finish PLA filament providing a glossy and eye-catching surface quality without extra polishing.",
+    "highlights": [
+      { "icon": "bi-gem", "title": "Finish", "subtitle": "Silk Metallic Gold" },
+      { "icon": "bi-box", "title": "Weight", "subtitle": "1 kg" }
+    ],
+    "keyFeatures": [
+      "Luxurious silk reflective gold sheen",
+      "No post-processing or polishing needed",
+      "Tough, tangle-free winding"
+    ],
+    "applications": [
+      "Cosplay Props",
+      "Awards & Trophies",
+      "Decorative Art"
+    ],
+    "specifications": {
+      "Diameter": "1.75mm ±0.02mm",
+      "Color": "Silk Shiny Gold",
+      "Spool Weight": "1 kg (2.2 lbs)",
+      "Print Temp": "205°C - 225°C"
+    }
+  },
+  {
+    "id": 25,
+    "name": "ESP8266 NodeMCU CP2102 WiFi Module",
+    "subtitle": "Open-Source IoT Development Board",
+    "image": "/images/products/01.png",
+    "gallery": [
+      "/images/products/01.png"
+    ],
+    "price": 269,
+    "originalPrice": 399,
+    "category": "IoT & Communication",
+    "brand": "ESPRESSIF",
+    "rating": 4.5,
+    "reviewCount": 78,
+    "availability": "Out of Stock",
+    "stockCount": 0,
+    "description": "Open-source firmware and development kit that helps you to prototype your IoT product with Lua or Arduino IDE.",
+    "highlights": [
+      { "icon": "bi-wifi", "title": "Wi-Fi", "subtitle": "802.11 b/g/n" },
+      { "icon": "bi-usb", "title": "Bridge", "subtitle": "CP2102" }
+    ],
+    "keyFeatures": [
+      "Integrated TCP/IP protocol stack",
+      "GPIO, PWM, I2C, 1-Wire and ADC all in one board",
+      "CP2102 USB interface for hassle-free flashing"
+    ],
+    "applications": [
+      "Home Automation",
+      "Smart Sockets",
+      "Sensor Nodes"
+    ],
+    "specifications": {
+      "Chip": "ESP8266-12E",
+      "Wi-Fi Protocol": "802.11 b/g/n",
+      "USB Interface": "CP2102",
+      "Operating Voltage": "3.3V"
+    }
+  },
+  {
+    "id": 26,
+    "name": "Raspberry Pi Zero 2 W",
+    "subtitle": "Quad-Core Ultra-Compact Linux Board",
+    "image": "/images/products/25.png",
+    "gallery": [
+      "/images/products/25.png"
+    ],
+    "price": 1699,
+    "originalPrice": 2199,
+    "category": "Microcontrollers",
+    "brand": "Raspberry Pi",
+    "rating": 4.8,
+    "reviewCount": 39,
+    "availability": "Out of Stock",
+    "stockCount": 0,
+    "description": "Ultra-compact single-board computer packed with quad-core 64-bit ARM Cortex-A53 processing power and wireless LAN.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "Quad-Core", "subtitle": "1.0 GHz" },
+      { "icon": "bi-wifi", "title": "Wireless", "subtitle": "Wi-Fi + BLE" }
+    ],
+    "keyFeatures": [
+      "RP3A0 SiP with quad-core ARM Cortex-A53 processor",
+      "512MB LPDDR2 SDRAM",
+      "Mini HDMI port and micro-USB On-The-Go (OTG) port"
+    ],
+    "applications": [
+      "Embedded Linux",
+      "Retro Handhelds",
+      "Mini Smart Cameras"
+    ],
+    "specifications": {
+      "SoC": "RP3A0 SiP, Quad-core 64-bit ARM Cortex-A53 @ 1GHz",
+      "RAM": "512MB LPDDR2",
+      "Wireless": "2.4GHz 802.11 b/g/n, Bluetooth 4.2 BLE",
+      "Ports": "Mini HDMI, micro USB OTG, CSI-2 camera connector"
+    }
+  },
+  {
+    "id": 27,
+    "name": "Seeed Studio XIAO SAMD21",
+    "subtitle": "Thumb-Sized Microcontroller with Type-C",
+    "image": "/images/products/13.png",
+    "gallery": [
+      "/images/products/13.png"
+    ],
+    "price": 599,
+    "originalPrice": 799,
+    "category": "Microcontrollers",
+    "brand": "Seeed Studio",
+    "rating": 4.7,
+    "reviewCount": 33,
+    "availability": "In Stock",
+    "stockCount": 26,
+    "description": "The smallest member of the Seeeduino family with rich GPIO interfaces and USB Type-C interface.",
+    "highlights": [
+      { "icon": "bi-cpu", "title": "SAMD21", "subtitle": "ARM Cortex-M0+" },
+      { "icon": "bi-usb-c", "title": "Interface", "subtitle": "USB Type-C" }
+    ],
+    "keyFeatures": [
+      "ARM Cortex-M0+ CPU running at up to 48MHz",
+      "Tiny dimensions: 20 x 17.5 mm",
+      "14 GPIO pins with DAC, ADC, I2C, UART, SPI support"
+    ],
+    "applications": [
+      "Wearable Devices",
+      "Tiny USB Keyboards",
+      "Mini Sensor Nodes"
+    ],
+    "specifications": {
+      "CPU": "ARM Cortex-M0+ CPU running at up to 48MHz",
+      "Flash / SRAM": "256KB Flash, 32KB SRAM",
+      "Size": "21 x 17.5mm",
+      "Interface": "USB Type-C"
+    }
   }
 ]
