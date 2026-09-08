@@ -2,6 +2,27 @@
 
 :root {
   --searchbar-color: rgb(223 225 253);
+
+  --pn-blue: #0759d6;
+  --pn-blue-dark: #0649b5;
+  --pn-blue-deep: #032b73;
+  --pn-blue-deeper: #021f52;
+
+  --pn-blue-soft: #eff5ff;
+
+  --pn-orange: #ff7a00;
+  --pn-orange-dark: #e96700;
+
+  --pn-text: #111111;
+  --pn-muted: #727b88;
+
+  --pn-border: #e7ebf1;
+
+  --pn-white: #ffffff;
+  --pn-white-soft: rgba(255, 255, 255, 0.72);
+
+  --pn-shadow:
+    0 12px 30px rgba(20, 40, 80, 0.09);
 }
 
 * {
