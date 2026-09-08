@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "name": "ESP32 DevKit V1",
+    "image": "/images/products/01.png",
+    "price": 499,
+    "category": "Microcontrollers"
+  },
+  {
+    "id": 2,
+    "name": "HC-SR04 Ultrasonic",
+    "image": "/images/products/06.png",
+    "price": 149,
+    "category": "Modules & Sensors"
+  },
+  {
+    "id": 3,
+    "name": "Mini Screwdriver Set",
+    "image": "/images/products/07.png",
+    "price": 299,
+    "category": "Tools & Accessories"
+  },
+  {
+    "id": 4,
+    "name": "PLA 3D Printer Filament",
+    "image": "/images/products/08.png",
+    "price": 899,
+    "category": "Additive & 3D Parts"
+  },
+  {
+    "id": 5,
+    "name": "TP4056 Charging Module",
+    "image": "/images/products/09.png",
+    "price": 99,
+    "category": "Power Supplies"
+  },
+  {
+    "id": 6,
+    "name": "SG90 Servo Motor",
+    "image": "/images/products/10.png",
+    "price": 179,
+    "category": "Modules & Sensors"
+  },
+  {
+    "id": 7,
+    "name": "DHT11 Sensor Module",
+    "image": "/images/products/02.png",
+    "price": 129,
+    "category": "Modules & Sensors"
+  },
+  {
+    "id": 8,
+    "name": "LM2596 Buck Converter",
+    "image": "/images/products/03.png",
+    "price": 199,
+    "category": "Power Supplies"
+  },
+  {
+    "id": 9,
+    "name": "Precision Screwdriver Set",
+    "image": "/images/products/04.png",
+    "price": 349,
+    "category": "Tools & Accessories"
+  },
+  {
+    "id": 10,
+    "name": "3D Printer Filament Spool",
+    "image": "/images/products/05.png",
+    "price": 799,
+    "category": "Additive & 3D Parts"
+  }
+]
