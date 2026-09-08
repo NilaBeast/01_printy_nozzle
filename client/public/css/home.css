@@ -1,0 +1,1722 @@
+/* =========================================================
+   ELECTROLAB HOME HERO
+   ========================================================= */
+
+.home-hero {
+  position: relative;
+
+  width: 100vw;
+
+  /*
+    Hero fills the complete available viewport height
+    below the existing navbar.
+  */
+  min-height: calc(100vh - 230px);
+
+  overflow: hidden;
+
+  display: flex;
+  align-items: center;
+
+  background: #edf5ff;
+
+  isolation: isolate;
+}
+
+
+/* =========================================================
+   FULL BACKGROUND IMAGE
+   ========================================================= */
+
+.home-hero-background {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  z-index: -3;
+}
+
+
+.home-hero-image {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  /*
+    THIS IS THE IMPORTANT PART.
+
+    The image is no longer sitting beside the text.
+    It covers the entire hero.
+  */
+
+  object-fit: cover;
+
+  object-position: center center;
+
+  display: block;
+
+  opacity: 0;
+
+  transform: scale(1.015);
+
+  transition:
+    opacity 0.8s ease,
+    transform 5s ease;
+
+  pointer-events: none;
+}
+
+
+.home-hero-image.is-active {
+  opacity: 1;
+
+  transform: scale(1);
+}
+
+
+/* =========================================================
+   IMAGE OVERLAY
+   ========================================================= */
+
+/*
+   Very subtle overlay.
+
+   The reference image is bright, so we don't want
+   a heavy dark overlay.
+
+   It mainly protects the text area.
+*/
+
+.home-hero-overlay {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: -2;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(239, 247, 255, 0.88) 0%,
+      rgba(239, 247, 255, 0.68) 25%,
+      rgba(239, 247, 255, 0.18) 49%,
+      rgba(239, 247, 255, 0) 70%
+    );
+}
+
+
+/* =========================================================
+   HERO CONTENT
+   ========================================================= */
+
+.home-hero-content {
+  position: relative;
+
+  z-index: 5;
+
+  width: 100%;
+
+  max-width: 620px;
+
+  margin-left: clamp(50px, 7vw, 115px);
+
+  /*
+    This places the text over the image,
+    not beside the image.
+  */
+
+  margin-top: -10px;
+
+  padding: 30px 20px 100px 0;
+
+  animation: homeHeroContentIn 0.75s ease both;
+}
+
+
+@keyframes homeHeroContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* =========================================================
+   EYEBROW
+   ========================================================= */
+
+.home-hero-eyebrow {
+  display: flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  margin-bottom: 17px;
+
+  color: var(--pn-blue);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  letter-spacing: 1.1px;
+
+  line-height: 1;
+}
+
+
+.home-hero-eyebrow span {
+  width: 8px;
+  height: 8px;
+
+  flex: 0 0 8px;
+
+  border-radius: 50%;
+
+  background: var(--pn-blue);
+
+  box-shadow:
+    0 0 0 5px rgba(7, 89, 214, 0.10);
+}
+
+
+/* =========================================================
+   HERO TITLE
+   ========================================================= */
+
+.home-hero-title {
+  margin: 0;
+
+  color: #0d172b;
+
+  font-family: "EB Garamond", serif !important;
+
+  font-size: clamp(58px, 5.5vw, 82px);
+
+  font-weight: 700;
+
+  line-height: 0.92;
+
+  letter-spacing: -3px;
+}
+
+
+.home-hero-title strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: var(--pn-blue);
+
+  font-family: "EB Garamond", serif !important;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   DESCRIPTION
+   ========================================================= */
+
+.home-hero-description {
+  margin-top: 25px;
+
+  margin-bottom: 0;
+
+  color: #52647c;
+
+  font-family: "Sanchez", serif !important;
+
+  font-size: 15px;
+
+  font-weight: 400;
+
+  line-height: 1.65;
+}
+
+
+/* =========================================================
+   BUTTON CONTAINER
+   ========================================================= */
+
+.home-hero-buttons {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  margin-top: 28px;
+}
+
+
+/* =========================================================
+   BUTTON BASE
+   ========================================================= */
+
+.home-hero-btn {
+  min-height: 48px;
+
+  padding: 0 18px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 10px;
+
+  border-radius: 6px;
+
+  font-family: "Sanchez", serif !important;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease,
+    border-color 0.22s ease;
+}
+
+
+.home-hero-btn svg {
+  width: 15px;
+  height: 15px;
+
+  fill: none;
+
+  stroke: currentColor;
+
+  stroke-width: 1.8;
+
+  stroke-linecap: round;
+
+  stroke-linejoin: round;
+
+  transition:
+    transform 0.22s ease;
+}
+
+
+.home-hero-btn:hover svg {
+  transform: translateX(3px);
+}
+
+
+/* =========================================================
+   PRIMARY BUTTON
+   ========================================================= */
+
+.home-hero-btn-primary {
+  color: #ffffff;
+
+  background: var(--pn-blue);
+
+  border: 1px solid var(--pn-blue);
+
+  box-shadow:
+    0 8px 20px rgba(7, 89, 214, 0.22);
+}
+
+
+.home-hero-btn-primary:hover {
+  color: #ffffff;
+
+  background: var(--pn-blue-dark);
+
+  border-color: var(--pn-blue-dark);
+
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 12px 26px rgba(7, 89, 214, 0.27);
+}
+
+
+/* =========================================================
+   SECONDARY BUTTON
+   ========================================================= */
+
+.home-hero-btn-secondary {
+  color: var(--pn-blue);
+
+  background: rgba(255, 255, 255, 0.86);
+
+  border: 1px solid rgba(7, 89, 214, 0.28);
+
+  box-shadow:
+    0 4px 14px rgba(30, 70, 110, 0.06);
+}
+
+
+.home-hero-btn-secondary:hover {
+  color: var(--pn-blue);
+
+  background: #ffffff;
+
+  border-color: var(--pn-blue);
+
+  transform: translateY(-2px);
+}
+
+
+/* =========================================================
+   SLIDER NAVIGATION
+   ========================================================= */
+
+.home-hero-navigation {
+  position: absolute;
+
+  left: clamp(50px, 7vw, 115px);
+
+  right: clamp(40px, 5vw, 80px);
+
+  bottom: 27px;
+
+  height: 42px;
+
+  display: flex;
+
+  align-items: center;
+
+  z-index: 10;
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   DOTS
+   ========================================================= */
+
+.home-hero-dots {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  pointer-events: auto;
+}
+
+
+.home-hero-dot {
+  width: 24px;
+  height: 4px;
+
+  padding: 0;
+
+  border: 0;
+
+  border-radius: 20px;
+
+  background: rgba(7, 89, 214, 0.22);
+
+  cursor: pointer;
+
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+
+
+.home-hero-dot:hover {
+  background: rgba(7, 89, 214, 0.48);
+}
+
+
+.home-hero-dot.active {
+  width: 42px;
+
+  background: var(--pn-blue);
+}
+
+
+/* =========================================================
+   ARROW BUTTONS
+   ========================================================= */
+
+.home-hero-arrow {
+  position: absolute;
+
+  width: 40px;
+  height: 40px;
+
+  padding: 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  pointer-events: auto;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+
+.home-hero-arrow svg {
+  width: 17px;
+  height: 17px;
+
+  fill: none;
+
+  stroke: currentColor;
+
+  stroke-width: 1.8;
+
+  stroke-linecap: round;
+
+  stroke-linejoin: round;
+}
+
+
+/* =========================================================
+   PREVIOUS
+   ========================================================= */
+
+.home-hero-arrow-prev {
+  right: 49px;
+
+  color: var(--pn-blue);
+
+  background: rgba(255, 255, 255, 0.90);
+
+  border: 1px solid rgba(7, 89, 214, 0.18);
+}
+
+
+.home-hero-arrow-prev:hover {
+  background: #ffffff;
+
+  border-color: var(--pn-blue);
+
+  transform: translateY(-2px);
+}
+
+
+/* =========================================================
+   NEXT
+   ========================================================= */
+
+.home-hero-arrow-next {
+  right: 0;
+
+  color: #ffffff;
+
+  background: var(--pn-blue);
+
+  border: 1px solid var(--pn-blue);
+
+  box-shadow:
+    0 7px 18px rgba(7, 89, 214, 0.20);
+}
+
+
+.home-hero-arrow-next:hover {
+  background: var(--pn-blue-dark);
+
+  border-color: var(--pn-blue-dark);
+
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 10px 22px rgba(7, 89, 214, 0.28);
+}
+
+
+/* =========================================================
+   LARGE DESKTOP
+   ========================================================= */
+
+@media (min-width: 1500px) {
+
+  .home-hero-content {
+    margin-left: 7vw;
+
+    max-width: 650px;
+  }
+
+
+  .home-hero-title {
+    font-size: 86px;
+  }
+
+
+  .home-hero-description {
+    font-size: 16px;
+  }
+
+
+  .home-hero-navigation {
+    left: 7vw;
+  }
+}
+
+
+/* =========================================================
+   LAPTOP
+   ========================================================= */
+
+@media (max-width: 1200px) {
+
+  .home-hero {
+    min-height: calc(100vh - 325px);
+  }
+
+
+  .home-hero-content {
+    margin-left: 6vw;
+
+    max-width: 520px;
+  }
+
+
+  .home-hero-title {
+    font-size: clamp(52px, 6vw, 70px);
+  }
+
+
+  .home-hero-overlay {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(239, 247, 255, 0.92) 0%,
+        rgba(239, 247, 255, 0.74) 29%,
+        rgba(239, 247, 255, 0.24) 54%,
+        rgba(239, 247, 255, 0) 75%
+      );
+  }
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  .home-hero {
+    min-height: calc(100vh - 325px);
+  }
+
+
+  .home-hero-background {
+    height: 100%;
+  }
+
+
+  .home-hero-image {
+    object-position: center center;
+  }
+
+
+  .home-hero-overlay {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(239, 247, 255, 0.94) 0%,
+        rgba(239, 247, 255, 0.80) 40%,
+        rgba(239, 247, 255, 0.35) 72%,
+        rgba(239, 247, 255, 0.05) 100%
+      );
+  }
+
+
+  .home-hero-content {
+    margin-left: 45px;
+
+    max-width: 500px;
+
+    padding-bottom: 80px;
+  }
+
+
+  .home-hero-title {
+    font-size: clamp(50px, 8vw, 68px);
+  }
+
+
+  .home-hero-navigation {
+    left: 45px;
+
+    right: 35px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 600px) {
+
+  .home-hero {
+    min-height: calc(100svh - 325px);
+  }
+
+
+  .home-hero-image {
+    object-position: center center;
+  }
+
+
+  .home-hero-overlay {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(239, 247, 255, 0.93) 0%,
+        rgba(239, 247, 255, 0.82) 42%,
+        rgba(239, 247, 255, 0.30) 75%,
+        rgba(239, 247, 255, 0.05) 100%
+      );
+  }
+
+
+  .home-hero-content {
+    width: 100%;
+
+    max-width: none;
+
+    margin-left: 0;
+
+    padding:
+      45px
+      24px
+      105px;
+
+    text-align: left;
+  }
+
+
+  .home-hero-eyebrow {
+    font-size: 10px;
+
+    letter-spacing: 0.9px;
+  }
+
+
+  .home-hero-title {
+    font-size: 48px;
+
+    line-height: 0.94;
+
+    letter-spacing: -2px;
+  }
+
+
+  .home-hero-description {
+    margin-top: 20px;
+
+    font-size: 13px;
+
+    line-height: 1.6;
+  }
+
+
+  .home-hero-description br {
+    display: none;
+  }
+
+
+  .home-hero-buttons {
+    align-items: stretch;
+
+    flex-direction: column;
+
+    width: 100%;
+
+    max-width: 280px;
+
+    margin-top: 24px;
+  }
+
+
+  .home-hero-btn {
+    width: 100%;
+
+    min-height: 46px;
+  }
+
+
+  .home-hero-navigation {
+    left: 24px;
+
+    right: 24px;
+
+    bottom: 18px;
+  }
+
+
+  .home-hero-arrow {
+    width: 36px;
+    height: 36px;
+  }
+
+
+  .home-hero-arrow-prev {
+    right: 43px;
+  }
+
+
+  .home-hero-dot {
+    width: 19px;
+  }
+
+
+  .home-hero-dot.active {
+    width: 34px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 400px) {
+
+  .home-hero-content {
+    padding-top: 35px;
+  }
+
+
+  .home-hero-title {
+    font-size: 42px;
+  }
+
+
+  .home-hero-description {
+    font-size: 12px;
+  }
+
+
+  .home-hero-buttons {
+    max-width: 250px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .home-hero-image {
+    transition: none;
+
+    transform: none;
+  }
+
+
+  .home-hero-content {
+    animation: none;
+  }
+
+
+  .home-hero-btn,
+  .home-hero-arrow,
+  .home-hero-dot {
+    transition: none;
+  }
+}
+
+
+/* =========================================================
+   HOME PAGE - BELOW HERO
+   ========================================================= */
+
+
+/* =========================================================
+   COMMON & OVERRIDES FOR GLOBAL SECTION FLEX
+   ========================================================= */
+
+.home-benefits-section,
+.home-category-section,
+.home-printing-section,
+.home-products-section {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  box-sizing: border-box !important;
+}
+
+.home-benefits-card,
+.home-category-grid,
+.home-printing-card,
+.home-products-grid,
+.home-section-heading,
+.home-products-heading {
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   BENEFITS STRIP
+   ========================================================= */
+
+.home-benefits-section {
+  position: relative !important;
+  z-index: 20 !important;
+  margin-top: -38px !important;
+  margin-bottom: 36px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.home-benefits-card {
+  min-height: 78px;
+
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr 1px 1fr 1px 1fr;
+  align-items: center;
+
+  padding: 12px 28px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5eaf2;
+  border-radius: 14px;
+
+  box-shadow: 0 8px 30px rgba(15, 35, 75, 0.06);
+}
+
+.home-benefit-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 12px;
+}
+
+.home-benefit-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #0759d6;
+  background: #edf4fe;
+
+  border-radius: 12px;
+}
+
+.home-benefit-icon svg {
+  width: 22px;
+  height: 22px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-benefit-content {
+  min-width: 0;
+}
+
+.home-benefit-content h3 {
+  margin: 0;
+
+  color: #17223a;
+  font-family: "Sanchez", serif !important;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.home-benefit-content p {
+  margin: 3px 0 0;
+
+  color: #64748b;
+  font-family: "Sanchez", serif !important;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.home-benefit-divider {
+  width: 1px;
+  height: 42px;
+  background: #e5ebf2;
+}
+
+
+/* =========================================================
+   SECTION HEADINGS (CENTERED)
+   ========================================================= */
+
+.home-section-heading,
+.home-products-heading {
+  text-align: center;
+  width: 100%;
+}
+
+.home-section-heading h2,
+.home-products-heading h2 {
+  margin: 0;
+  text-align: center;
+  color: #17223a;
+  font-family: "Sanchez", serif !important;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+
+/* =========================================================
+   SHOP BY CATEGORY
+   ========================================================= */
+
+.home-category-section {
+  padding-top: 16px !important;
+  padding-bottom: 36px !important;
+}
+
+.home-category-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.home-category-card {
+  width: 100%;
+  min-width: 0;
+
+  padding: 16px 12px 18px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+
+  background: #ffffff;
+  border: 1px solid #edf1f7;
+  border-radius: 14px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.home-category-card:hover {
+  transform: translateY(-4px);
+  border-color: #d0e1fd;
+  box-shadow: 0 10px 25px rgba(10, 50, 110, 0.08);
+}
+
+.home-category-image {
+  width: 100%;
+  height: 105px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.home-category-image img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  display: block;
+
+  transition: transform 0.3s ease;
+}
+
+.home-category-card:hover .home-category-image img {
+  transform: scale(1.06);
+}
+
+.home-category-card > span {
+  width: 100%;
+  margin-top: 10px;
+
+  color: #1e293b;
+  font-family: "Sanchez", serif !important;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.home-category-icon {
+  width: 55px;
+  height: 55px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #0759d6;
+  background: #f0f6ff;
+  border-radius: 12px;
+}
+
+.home-category-icon svg {
+  width: 28px;
+  height: 28px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.home-all-products-icon {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.home-all-products-icon span {
+  display: block;
+  border: 2.2px solid #0759d6;
+  border-radius: 4px;
+}
+
+
+/* =========================================================
+   3D PRINTING SECTION
+   ========================================================= */
+
+.home-printing-section {
+  padding-top: 10px !important;
+  padding-bottom: 36px !important;
+}
+
+.home-printing-card {
+  position: relative;
+  min-height: 230px;
+
+  display: grid;
+  grid-template-columns: 1.15fr 0.95fr 0.95fr 0.95fr;
+  align-items: center;
+  gap: 24px;
+
+  overflow: hidden;
+
+  padding: 32px 38px;
+
+  border-radius: 16px;
+
+  background: linear-gradient(115deg, #ebf3fe 0%, #f4f8fe 52%, #eaf2fd 100%);
+  border: 1px solid #dce8fa;
+}
+
+.home-printing-card::after {
+  content: "";
+  position: absolute;
+  right: -50px;
+  top: -80px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 70%);
+  pointer-events: none;
+}
+
+.home-printing-content {
+  position: relative;
+  z-index: 2;
+}
+
+.home-printing-label {
+  display: inline-block;
+  margin-bottom: 6px;
+
+  color: #0759d6;
+  font-family: "Sanchez", serif !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+
+.home-printing-content h2 {
+  margin: 0 0 14px;
+
+  color: #0759d6;
+  font-family: "Sanchez", serif !important;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.12;
+}
+
+.home-printing-content ul {
+  padding: 0;
+  margin: 0 0 18px;
+  list-style: none;
+}
+
+.home-printing-content li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  margin-bottom: 6px;
+
+  color: #475569;
+  font-family: "Sanchez", serif !important;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.home-printing-content .check-icon {
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-printing-btn {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+
+  color: #ffffff;
+  background: #0759d6;
+  border: 1px solid #0759d6;
+  border-radius: 6px;
+
+  font-family: "Sanchez", serif !important;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.home-printing-btn:hover {
+  background: #0649b5;
+  border-color: #0649b5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(7, 89, 214, 0.25);
+}
+
+.home-printing-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+
+/* =========================================================
+   3D PRINTING STEPS
+   ========================================================= */
+
+.home-printing-step {
+  position: relative;
+  z-index: 2;
+  min-height: 175px;
+
+  padding: 18px 18px;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  border: 1px solid #e1ebf7;
+  border-radius: 12px;
+
+  box-shadow: 0 4px 18px rgba(25, 60, 120, 0.05);
+}
+
+.home-printing-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.home-printing-step-number {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+  background: #0759d6;
+  border-radius: 50%;
+
+  font-family: Arial, sans-serif !important;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-printing-step h4 {
+  margin: 0;
+  color: #1e293b;
+  font-family: "Sanchez", serif !important;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.home-printing-step-subtitle {
+  margin: 0 0 14px;
+  color: #64748b;
+  font-family: "Sanchez", serif !important;
+  font-size: 10.5px;
+}
+
+.home-printing-upload-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 12px 10px;
+
+  border: 1.5px dashed #c8daf2;
+  background: #f8fbff;
+  border-radius: 8px;
+
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.home-printing-upload-box:hover {
+  border-color: #0759d6;
+  background: #f0f6ff;
+}
+
+.home-printing-upload-text {
+  font-family: "Sanchez", serif !important;
+  font-size: 10.5px;
+  color: #64748b;
+  text-align: center;
+}
+
+.home-printing-upload-or {
+  font-family: "Sanchez", serif !important;
+  font-size: 9.5px;
+  color: #94a3b8;
+  margin: 3px 0;
+}
+
+.home-printing-choose-btn {
+  padding: 5px 14px;
+  background: #0759d6;
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+
+  font-family: "Sanchez", serif !important;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.home-printing-choose-btn:hover {
+  background: #0649b5;
+}
+
+.home-printing-colors {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 10px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-block;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.swatch-black {
+  background: #1e293b;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.swatch-white {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+}
+
+.swatch-gray {
+  background: #94a3b8;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.swatch-red {
+  background: #ef4444;
+}
+
+.swatch-yellow {
+  background: #f59e0b;
+}
+
+.swatch-green {
+  background: #22c55e;
+}
+
+.swatch-blue {
+  background: #0284c7;
+}
+
+.swatch-purple {
+  background: #8b5cf6;
+}
+
+.swatch-pink {
+  background: #ec4899;
+}
+
+
+/* =========================================================
+   3D PRINTING ROCKET
+   ========================================================= */
+
+.home-printing-model {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-printing-model-glow {
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(212, 232, 255, 0.4) 55%,
+    transparent 75%
+  );
+  pointer-events: none;
+}
+
+.home-printing-rocket-img {
+  position: relative;
+  width: 175px;
+  height: 175px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 12px 18px rgba(15, 60, 140, 0.18));
+  transition: transform 0.35s ease;
+}
+
+.home-printing-model:hover .home-printing-rocket-img {
+  transform: translateY(-5px) scale(1.03);
+}
+
+
+/* =========================================================
+   POPULAR PRODUCTS
+   ========================================================= */
+
+.home-products-section {
+  padding-top: 12px !important;
+  padding-bottom: 50px !important;
+}
+
+.home-products-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.home-product-card {
+  min-width: 0;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #edf1f7;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.home-product-card:hover {
+  transform: translateY(-4px);
+  border-color: #d0e1fd;
+  box-shadow: 0 10px 26px rgba(15, 50, 120, 0.09);
+}
+
+.home-product-image {
+  width: 100%;
+  height: 135px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: #ffffff;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.home-product-image img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.home-product-card:hover .home-product-image img {
+  transform: scale(1.06);
+}
+
+.home-product-info {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-product-name {
+  width: 100%;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  color: #1e293b;
+  background: transparent;
+  border: 0;
+  font-family: "Sanchez", serif !important;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.home-product-name:hover {
+  color: #0759d6;
+}
+
+.home-product-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.home-product-bottom strong {
+  color: #0759d6;
+  font-family: "Sanchez", serif !important;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-product-cart {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+  color: #0759d6;
+  background: #ffffff;
+  border: 1px solid #d0e1fd;
+  border-radius: 6px;
+
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.home-product-cart:hover {
+  color: #ffffff;
+  background: #0759d6;
+  border-color: #0759d6;
+}
+
+.home-product-cart svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+
+/* =========================================================
+   RESPONSIVE - LAPTOP & TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .home-benefits-card {
+    padding: 12px 18px;
+  }
+
+  .home-category-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .home-products-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .home-printing-card {
+    grid-template-columns: 1fr 1fr;
+    padding: 24px;
+    gap: 16px;
+  }
+
+  .home-printing-model {
+    display: none;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE - MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+  .home-benefits-section {
+    margin-top: -24px !important;
+  }
+
+  .home-benefits-card {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .home-benefit-divider {
+    display: none;
+  }
+
+  .home-category-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .home-category-image {
+    height: 80px;
+  }
+
+  .home-category-card > span {
+    font-size: 10px;
+  }
+
+  .home-printing-card {
+    grid-template-columns: 1fr;
+    padding: 20px 16px;
+  }
+
+  .home-printing-content {
+    text-align: center;
+  }
+
+  .home-printing-content ul {
+    display: inline-block;
+    text-align: left;
+  }
+
+  .home-products-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .home-product-image {
+    height: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-benefits-card {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .home-category-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
