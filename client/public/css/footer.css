@@ -1,0 +1,621 @@
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.pn-footer {
+  position: relative;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--pn-blue-deeper) 0%,
+      var(--pn-blue-deep) 48%,
+      #063f9c 100%
+    );
+
+  color: var(--pn-white);
+
+  padding: 64px 6% 0;
+
+  isolation: isolate;
+}
+
+
+/* =========================================================
+   BACKGROUND GLOW
+========================================================= */
+
+.pn-footer-glow {
+  position: absolute;
+
+  width: 420px;
+  height: 420px;
+
+  right: -180px;
+  top: -220px;
+
+  background: rgba(7, 89, 214, 0.28);
+
+  border-radius: 50%;
+
+  filter: blur(20px);
+
+  pointer-events: none;
+
+  z-index: -1;
+}
+
+.pn-footer-glow::after {
+  content: "";
+
+  position: absolute;
+
+  width: 220px;
+  height: 220px;
+
+  left: -500px;
+  bottom: -420px;
+
+  background: rgba(255, 122, 0, 0.08);
+
+  border-radius: 50%;
+
+  filter: blur(25px);
+}
+
+
+/* =========================================================
+   MAIN CONTAINER
+========================================================= */
+
+.pn-footer-container {
+  position: relative;
+
+  max-width: 1400px;
+
+  margin: 0 auto;
+
+  display: grid;
+
+  grid-template-columns:
+    1.8fr
+    1fr
+    1.1fr
+    1.2fr
+    1fr
+    1.5fr;
+
+  gap: 38px;
+}
+
+
+/* =========================================================
+   BRAND
+========================================================= */
+
+.pn-footer-brand {
+  padding-right: 20px;
+}
+
+
+/* Logo white/orange becomes visible here */
+.pn-footer-logo {
+  display: inline-flex;
+
+  align-items: center;
+
+  width: fit-content;
+
+  margin-bottom: 20px;
+
+  padding: 10px 16px;
+
+  border-radius: 12px;
+
+  /* background: rgba(255, 255, 255, 0.96); */
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.15);
+
+  text-decoration: none;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.pn-footer-logo:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 14px 35px rgba(0, 0, 0, 0.2);
+}
+
+.pn-footer-logo img {
+  display: block;
+
+  width: 205px;
+
+  max-width: 100%;
+
+  height: auto;
+
+  object-fit: contain;
+}
+
+
+/* =========================================================
+   BRAND DESCRIPTION
+========================================================= */
+
+.pn-footer-brand p {
+  max-width: 290px;
+
+  margin: 0;
+
+  color: var(--pn-white-soft);
+
+  font-size: 13px;
+
+  line-height: 1.8;
+}
+
+
+/* =========================================================
+   SOCIALS
+========================================================= */
+
+.pn-socials {
+  display: flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  margin-top: 23px;
+}
+
+.pn-socials a {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.07);
+
+  color: var(--pn-white);
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s ease;
+}
+
+.pn-socials a:hover {
+  background: var(--pn-orange);
+
+  border-color: var(--pn-orange);
+
+  color: #ffffff;
+
+  transform: translateY(-3px);
+}
+
+
+/* =========================================================
+   COLUMNS
+========================================================= */
+
+.pn-footer-column {
+  display: flex;
+
+  flex-direction: column;
+}
+
+.pn-footer-column h4,
+.pn-footer-newsletter h4 {
+  position: relative;
+
+  margin: 4px 0 22px;
+
+  color: #ffffff;
+
+  font-size: 14px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.1px;
+}
+
+
+/* Orange underline */
+.pn-footer-column h4::after,
+.pn-footer-newsletter h4::after {
+  content: "";
+
+  display: block;
+
+  width: 25px;
+  height: 2px;
+
+  margin-top: 8px;
+
+  border-radius: 10px;
+
+  background: var(--pn-orange);
+}
+
+
+/* =========================================================
+   LINKS
+========================================================= */
+
+.pn-footer-links {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 12px;
+}
+
+.pn-footer-column a {
+  width: fit-content;
+
+  color: rgba(255, 255, 255, 0.68);
+
+  font-size: 12.5px;
+
+  line-height: 1.45;
+
+  text-decoration: none;
+
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.pn-footer-column a:hover {
+  color: #ffffff;
+
+  transform: translateX(4px);
+}
+
+
+/* =========================================================
+   NEWSLETTER
+========================================================= */
+
+.pn-footer-newsletter p {
+  margin: 0 0 18px;
+
+  color: rgba(255, 255, 255, 0.68);
+
+  font-size: 12.5px;
+
+  line-height: 1.7;
+}
+
+
+/* Newsletter */
+.pn-newsletter-form {
+  display: flex;
+
+  width: 100%;
+
+  max-width: 340px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  border-radius: 8px;
+
+  background: rgba(255, 255, 255, 0.08);
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pn-newsletter-form:focus-within {
+  border-color: rgba(255, 122, 0, 0.8);
+
+  box-shadow:
+    0 0 0 3px rgba(255, 122, 0, 0.12);
+}
+
+
+/* Input */
+.pn-newsletter-form input {
+  flex: 1;
+
+  min-width: 0;
+
+  height: 43px;
+
+  padding: 0 13px;
+
+  border: none;
+
+  outline: none;
+
+  background: transparent;
+
+  color: #ffffff;
+
+  font-size: 11.5px;
+}
+
+.pn-newsletter-form input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+
+/* Button */
+.pn-newsletter-form button {
+  height: 43px;
+
+  padding: 0 16px;
+
+  border: none;
+
+  background: var(--pn-orange);
+
+  color: #ffffff;
+
+  font-size: 11.5px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease;
+}
+
+.pn-newsletter-form button:hover {
+  background: var(--pn-orange-dark);
+}
+
+
+/* Newsletter disclaimer */
+.pn-footer-newsletter small {
+  display: block;
+
+  margin-top: 10px;
+
+  color: rgba(255, 255, 255, 0.4);
+
+  font-size: 10px;
+}
+
+
+/* =========================================================
+   BOTTOM
+========================================================= */
+
+.pn-footer-bottom {
+  position: relative;
+
+  max-width: 1400px;
+
+  margin: 48px auto 0;
+
+  padding: 19px 0;
+
+  border-top: 1px solid var(--pn-border);
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 20px;
+}
+
+.pn-footer-bottom p {
+  margin: 0;
+
+  color: rgba(255, 255, 255, 0.5);
+
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   PAYMENT METHODS
+========================================================= */
+
+.pn-payment-methods {
+  display: flex;
+
+  align-items: center;
+
+  gap: 7px;
+}
+
+.pn-payment-methods > span {
+  min-width: 48px;
+
+  height: 27px;
+
+  padding: 0 8px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 3px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  border-radius: 4px;
+
+  background: rgba(255, 255, 255, 0.95);
+
+  color: #1a1a1a;
+
+  font-size: 8px;
+
+  font-weight: 700;
+}
+
+
+/* Mastercard */
+.pn-payment-methods .pn-mastercard {
+  min-width: 73px;
+
+  font-size: 7.5px;
+
+  font-weight: 600;
+}
+
+.pn-card-circles {
+  display: flex;
+
+  align-items: center;
+
+  position: relative;
+
+  width: 21px;
+
+  height: 13px;
+}
+
+.pn-card-circles i {
+  position: absolute;
+
+  width: 12px;
+  height: 12px;
+
+  border-radius: 50%;
+
+  border: 1px solid #555;
+}
+
+.pn-card-circles i:first-child {
+  left: 0;
+}
+
+.pn-card-circles i:last-child {
+  left: 7px;
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1150px) {
+
+  .pn-footer-container {
+    grid-template-columns:
+      1.5fr
+      1fr
+      1fr
+      1fr;
+
+    gap: 40px 30px;
+  }
+
+  .pn-footer-brand {
+    grid-column: span 2;
+  }
+
+  .pn-footer-newsletter {
+    grid-column: span 2;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 700px) {
+
+  .pn-footer {
+    padding: 48px 24px 0;
+  }
+
+  .pn-footer-container {
+    grid-template-columns: 1fr 1fr;
+
+    gap: 36px 25px;
+  }
+
+  .pn-footer-brand {
+    grid-column: span 2;
+
+    padding-right: 0;
+  }
+
+  .pn-footer-logo img {
+    width: 185px;
+  }
+
+  .pn-footer-newsletter {
+    grid-column: span 2;
+  }
+
+  .pn-footer-bottom {
+    margin-top: 38px;
+
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+
+  .pn-payment-methods {
+    flex-wrap: wrap;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
+@media (max-width: 440px) {
+
+  .pn-footer-container {
+    grid-template-columns: 1fr;
+  }
+
+  .pn-footer-brand,
+  .pn-footer-newsletter {
+    grid-column: span 1;
+  }
+
+  .pn-footer-logo img {
+    width: 175px;
+  }
+
+  .pn-newsletter-form {
+    max-width: 100%;
+  }
+
+  .pn-footer-column h4,
+  .pn-footer-newsletter h4 {
+    margin-bottom: 18px;
+  }
+}
