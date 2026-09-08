@@ -1,0 +1,1988 @@
+/* =========================================================
+   PRINTY NOZZLES
+   RESPONSIVE NAVBAR
+   ========================================================= */
+
+:root {
+  --pn-blue: #0759d6;
+  --pn-blue-dark: #0649b5;
+  --pn-blue-soft: #eff5ff;
+
+  --pn-text: #111111;
+  --pn-muted: #727b88;
+
+  --pn-border: #e7ebf1;
+
+  --pn-shadow:
+    0 12px 30px rgba(20, 40, 80, 0.09);
+}
+
+
+/* =========================================================
+   BASE
+   ========================================================= */
+
+.site-header {
+  width: 100%;
+  position: relative;
+  z-index: 1000;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+}
+
+.site-header *,
+.site-header *::before,
+.site-header *::after {
+  box-sizing: border-box;
+}
+
+.site-header a {
+  text-decoration: none;
+}
+
+.site-header button,
+.site-header input {
+  font-family: inherit;
+}
+
+
+/* =========================================================
+   ANNOUNCEMENT BAR
+   ========================================================= */
+
+.announcement-bar {
+  width: 100%;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: var(--pn-blue);
+  color: #ffffff;
+
+  font-size: 11.5px;
+  line-height: 1;
+
+  position: relative;
+  z-index: 1005;
+}
+
+.announcement-content {
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  white-space: nowrap;
+}
+
+.announcement-icon {
+  font-size: 11px;
+}
+
+.announcement-divider {
+  opacity: 0.65;
+  margin: 0 1px;
+}
+
+
+/* =========================================================
+   MAIN NAVBAR
+   ========================================================= */
+
+.main-navbar {
+  width: 100%;
+  height: 64px;
+
+  background: #ffffff;
+
+  border-bottom: 1px solid var(--pn-border);
+
+  position: relative;
+  z-index: 1000;
+}
+
+
+/* =========================================================
+   NAVBAR CONTAINER
+   ========================================================= */
+
+.navbar-container {
+  width: min(
+    calc(100% - 40px),
+    1180px
+  );
+
+  height: 64px;
+
+  margin: 0 auto;
+
+  display: flex;
+  align-items: center;
+
+  position: relative;
+}
+
+
+/* =========================================================
+   LOGO
+   ========================================================= */
+
+.brand-logo {
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+
+  flex-shrink: 0;
+
+  color: var(--pn-blue);
+
+  transition:
+    transform 0.2s ease;
+}
+
+.brand-logo:hover {
+  color: var(--pn-blue);
+
+  transform:
+    translateY(-1px);
+}
+
+
+/* Logo icon */
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+
+  margin-right: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--pn-blue);
+
+  font-size: 30px;
+
+  flex-shrink: 0;
+}
+
+
+/* Logo text */
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  line-height: 1;
+}
+
+.brand-name {
+  color: var(--pn-blue);
+
+  font-size: 22px;
+  font-weight: 700;
+
+  letter-spacing: -0.65px;
+
+  white-space: nowrap;
+}
+
+.brand-name span {
+  color: #155ecb;
+}
+
+.brand-tagline {
+  color: var(--pn-muted);
+
+  font-size: 8.5px;
+  font-weight: 500;
+
+  margin-top: 5px;
+
+  letter-spacing: 0.05px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   DESKTOP NAVIGATION
+   ========================================================= */
+
+.desktop-navigation {
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+
+  margin-left: auto;
+  margin-right: 28px;
+}
+
+.main-nav {
+  height: 64px;
+
+  margin: 0;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+
+  flex-direction: row;
+
+  gap: 1px;
+}
+
+.main-nav .nav-item {
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+
+  position: relative;
+}
+
+
+/* =========================================================
+   NAV LINKS
+   ========================================================= */
+
+.nav-link-custom {
+  height: 64px;
+
+  padding:
+    0 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  position: relative;
+
+  color: var(--pn-text);
+
+  font-size: 14px;
+  font-weight: 500;
+
+  white-space: nowrap;
+
+  transition:
+    color 0.2s ease;
+}
+
+.nav-link-custom:hover {
+  color: var(--pn-blue);
+}
+
+.nav-link-custom.active {
+  color: var(--pn-blue);
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   FIX 1 — NAV UNDERLINE POSITION
+   ========================================================= */
+
+/*
+  Keep the underline attached to the nav link itself,
+  but center it precisely within the clickable nav item.
+
+  This prevents the underline from appearing shifted when
+  the navigation items have different text widths.
+*/
+
+.nav-link-custom::after {
+  content: "";
+
+  position: absolute;
+
+  bottom: -1px;
+  left: 50%;
+
+  width: calc(100% - 30px);
+
+  height: 2px;
+
+  border-radius:
+    3px 3px 0 0;
+
+  background: var(--pn-blue);
+
+  transform:
+    translateX(-50%)
+    scaleX(0);
+
+  transform-origin: center;
+
+  opacity: 0;
+
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+
+/* Hover underline */
+
+.nav-link-custom:hover::after {
+  opacity: 1;
+
+  transform:
+    translateX(-50%)
+    scaleX(1);
+}
+
+
+/* Active underline */
+
+.nav-link-custom.active::after {
+  opacity: 1;
+
+  transform:
+    translateX(-50%)
+    scaleX(1);
+}
+
+
+/* =========================================================
+   PRODUCT ARROW
+   ========================================================= */
+
+.products-arrow {
+  margin-left: 7px;
+
+  font-size: 8px;
+
+  transition:
+    transform 0.2s ease;
+}
+
+.products-nav-item:hover
+.products-arrow {
+  transform:
+    rotate(180deg);
+}
+
+
+/* =========================================================
+   PRODUCT DROPDOWN
+   ========================================================= */
+
+.products-dropdown {
+  width: 235px;
+
+  padding: 8px;
+
+  position: absolute;
+
+  top: calc(100% + 7px);
+  left: 0;
+
+  background: #ffffff;
+
+  border: 1px solid var(--pn-border);
+
+  border-radius: 10px;
+
+  box-shadow: var(--pn-shadow);
+
+  opacity: 0;
+  visibility: hidden;
+
+  pointer-events: none;
+
+  transform:
+    translateY(7px);
+
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    visibility 0.18s ease;
+
+  z-index: 1002;
+}
+
+
+/* =========================================================
+   FIX 2 — DROPDOWN HOVER BRIDGE
+   ========================================================= */
+
+/*
+  There is intentionally a 7px visual gap between the
+  Products navigation item and the dropdown.
+
+  Previously that gap caused :hover to disappear while
+  moving the mouse from "Products" to the submenu.
+
+  This invisible bridge keeps the parent hovered while
+  the cursor travels through that gap.
+*/
+
+.products-nav-item::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  top: 100%;
+
+  width: 235px;
+  height: 8px;
+
+  background: transparent;
+
+  pointer-events: auto;
+}
+
+
+/* Show dropdown */
+
+.products-nav-item:hover
+.products-dropdown {
+  opacity: 1;
+  visibility: visible;
+
+  pointer-events: auto;
+
+  transform:
+    translateY(0);
+}
+
+
+/* Dropdown arrow */
+
+.products-dropdown::before {
+  content: "";
+
+  width: 9px;
+  height: 9px;
+
+  position: absolute;
+
+  top: -5px;
+  left: 29px;
+
+  background: #ffffff;
+
+  border-left: 1px solid var(--pn-border);
+  border-top: 1px solid var(--pn-border);
+
+  transform:
+    rotate(45deg);
+
+  z-index: 1;
+}
+
+
+/* Dropdown items */
+
+.products-dropdown a {
+  min-height: 38px;
+
+  padding:
+    8px 11px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  color: #333333;
+
+  border-radius: 7px;
+
+  font-size: 13px;
+
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+}
+
+.products-dropdown a:hover {
+  color: var(--pn-blue);
+
+  background:
+    var(--pn-blue-soft);
+}
+
+.products-dropdown a i {
+  width: 18px;
+
+  color: var(--pn-blue);
+
+  font-size: 14px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   RIGHT ACTIONS
+   ========================================================= */
+
+.navbar-actions {
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   NAV ICON BUTTON
+   ========================================================= */
+
+.nav-icon-btn {
+  width: 38px;
+  height: 38px;
+
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  color: #111111;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  font-size: 21px;
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.nav-icon-btn:hover {
+  color: var(--pn-blue);
+
+  background:
+    #f3f7ff;
+}
+
+
+/* =========================================================
+   ACCOUNT
+   ========================================================= */
+
+.account-wrapper {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+}
+
+.account-tooltip {
+  position: absolute;
+
+  top: calc(100% + 8px);
+  right: -5px;
+
+  padding:
+    5px 9px;
+
+  background: #171717;
+
+  color: #ffffff;
+
+  border-radius: 5px;
+
+  white-space: nowrap;
+
+  font-size: 11px;
+
+  opacity: 0;
+  visibility: hidden;
+
+  transform:
+    translateY(-3px);
+
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.account-wrapper:hover
+.account-tooltip {
+  opacity: 1;
+  visibility: visible;
+
+  transform:
+    translateY(0);
+}
+
+
+/* =========================================================
+   CART
+   ========================================================= */
+
+.cart-wrapper {
+  width: 38px;
+  height: 38px;
+
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #111111;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  font-size: 22px;
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.cart-wrapper:hover {
+  color: var(--pn-blue);
+
+  background:
+    #f3f7ff;
+}
+
+
+/* Cart badge */
+
+.cart-badge {
+  min-width: 17px;
+  height: 17px;
+
+  padding:
+    0 4px;
+
+  position: absolute;
+
+  top: -1px;
+  right: -1px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background:
+    var(--pn-blue);
+
+  color: #ffffff;
+
+  border:
+    2px solid #ffffff;
+
+  border-radius: 50%;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  line-height: 1;
+}
+
+
+/* =========================================================
+   DESKTOP SEARCH
+   ========================================================= */
+
+.desktop-search {
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition:
+    width 0.22s ease;
+}
+
+.desktop-search-open {
+  width: 236px;
+}
+
+
+/* Expanded search */
+
+.desktop-search-form {
+  width: 236px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+
+  background:
+    #f7f9fc;
+
+  border:
+    1px solid #e0e6ed;
+
+  border-radius: 20px;
+
+  overflow: hidden;
+
+  animation:
+    desktopSearchOpen
+    0.2s ease;
+}
+
+@keyframes desktopSearchOpen {
+
+  from {
+    width: 38px;
+    opacity: 0;
+  }
+
+  to {
+    width: 236px;
+    opacity: 1;
+  }
+
+}
+
+
+.desktop-search-form > i {
+  margin-left: 12px;
+
+  color: #667486;
+
+  font-size: 14px;
+
+  flex-shrink: 0;
+}
+
+
+.desktop-search-form input {
+  flex: 1;
+
+  min-width: 0;
+
+  height: 100%;
+
+  padding:
+    0 8px;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  color: #222222;
+
+  font-size: 12.5px;
+}
+
+.desktop-search-form input::placeholder {
+  color: #909aa8;
+}
+
+
+/* Desktop clear */
+
+.desktop-search-clear {
+  width: 27px;
+  height: 27px;
+
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  color: #707987;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+}
+
+.desktop-search-clear:hover {
+  color: #222222;
+
+  background:
+    #e9edf3;
+}
+
+
+/* Desktop submit */
+
+.desktop-search-submit {
+  width: 35px;
+  height: 100%;
+
+  border: none;
+
+  background: transparent;
+
+  color: #222222;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  font-size: 13px;
+
+  transition:
+    color 0.2s ease;
+}
+
+.desktop-search-submit:hover {
+  color: var(--pn-blue);
+}
+
+
+/* =========================================================
+   MOBILE SEARCH TRIGGER
+   ========================================================= */
+
+.mobile-search-trigger {
+  display: none;
+
+  width: 36px;
+  height: 36px;
+
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  color: #111111;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  font-size: 20px;
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.mobile-search-trigger:hover {
+  color: var(--pn-blue);
+
+  background:
+    #f3f7ff;
+}
+
+
+/* =========================================================
+   HAMBURGER
+   ========================================================= */
+
+.menu-toggle {
+  display: none;
+
+  width: 38px;
+  height: 38px;
+
+  padding: 0;
+  margin: 0;
+
+  border: none;
+
+  background: transparent;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  align-items: center;
+  justify-content: center;
+
+  flex-direction: column;
+
+  gap: 5px;
+}
+
+.menu-toggle span {
+  width: 21px;
+  height: 2px;
+
+  display: block;
+
+  background: #171717;
+
+  border-radius: 3px;
+
+  transform-origin: center;
+
+  transition:
+    transform 0.25s ease,
+    opacity 0.2s ease;
+}
+
+.menu-toggle:hover {
+  background:
+    #f3f7ff;
+}
+
+.menu-toggle:hover span {
+  background:
+    var(--pn-blue);
+}
+
+
+/* =========================================================
+   HAMBURGER -> X
+   ========================================================= */
+
+.menu-toggle.menu-open {
+  gap: 0;
+}
+
+.menu-toggle.menu-open span:nth-child(1) {
+  transform:
+    translateY(1px)
+    rotate(45deg);
+}
+
+.menu-toggle.menu-open span:nth-child(2) {
+  opacity: 0;
+}
+
+.menu-toggle.menu-open span:nth-child(3) {
+  transform:
+    translateY(-1px)
+    rotate(-45deg);
+}
+
+
+/* =========================================================
+   MOBILE SEARCH PANEL
+   ========================================================= */
+
+.mobile-search-panel {
+  display: none;
+
+  position: absolute;
+
+  top: 64px;
+  left: 0;
+
+  width: 100%;
+
+  padding:
+    10px 15px
+    12px;
+
+  background: #ffffff;
+
+  border-bottom:
+    1px solid var(--pn-border);
+
+  box-shadow:
+    0 8px 20px
+    rgba(20, 40, 80, 0.07);
+
+  opacity: 0;
+  visibility: hidden;
+
+  pointer-events: none;
+
+  transform:
+    translateY(-8px);
+
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s ease;
+
+  z-index: 998;
+}
+
+.mobile-search-panel.search-visible {
+  opacity: 1;
+  visibility: visible;
+
+  pointer-events: auto;
+
+  transform:
+    translateY(0);
+}
+
+
+/* =========================================================
+   MOBILE SEARCH FORM
+   ========================================================= */
+
+.mobile-search-form {
+  width: 100%;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+
+  background:
+    #f6f8fb;
+
+  border:
+    1px solid #dfe5ed;
+
+  border-radius: 9px;
+
+  overflow: hidden;
+}
+
+.mobile-search-form > i {
+  margin-left: 12px;
+
+  color: #6c7787;
+
+  font-size: 15px;
+
+  flex-shrink: 0;
+}
+
+.mobile-search-form input {
+  flex: 1;
+
+  min-width: 0;
+
+  height: 100%;
+
+  padding:
+    0 9px;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  font-size: 13px;
+}
+
+.mobile-search-form input::placeholder {
+  color: #929ba8;
+}
+
+
+/* Mobile clear */
+
+.mobile-search-clear {
+  width: 30px;
+  height: 30px;
+
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  color: #777f8b;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+}
+
+
+/* Mobile search submit */
+
+.mobile-search-submit {
+  height: 100%;
+
+  padding:
+    0 15px;
+
+  border: none;
+
+  background:
+    var(--pn-blue);
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   MOBILE MENU
+   ========================================================= */
+
+.mobile-menu {
+  display: none;
+}
+
+
+/* =========================================================
+   DESKTOP RESPONSIVE ADJUSTMENT
+   ========================================================= */
+
+@media (min-width: 1200px) {
+
+  .navbar-container {
+    width:
+      min(
+        calc(100% - 60px),
+        1180px
+      );
+  }
+
+  .desktop-navigation {
+    margin-right: 30px;
+  }
+
+}
+
+
+/* =========================================================
+   TABLET / SMALL DESKTOP
+   ========================================================= */
+
+@media (max-width: 1100px) and (min-width: 992px) {
+
+  .navbar-container {
+    width:
+      calc(100% - 30px);
+  }
+
+  .brand-name {
+    font-size: 20px;
+  }
+
+  .brand-logo {
+    min-width: 175px;
+  }
+
+  .desktop-navigation {
+    margin-right: 10px;
+  }
+
+  .nav-link-custom {
+    padding-left: 9px;
+    padding-right: 9px;
+
+    font-size: 13px;
+  }
+
+
+  /* Keep underline centered with reduced padding */
+
+  .nav-link-custom::after {
+    width: calc(100% - 18px);
+  }
+
+
+  .navbar-actions {
+    gap: 1px;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 991.98px) {
+
+  /* -------------------------------------------------------
+     Announcement
+     ------------------------------------------------------- */
+
+  .announcement-bar {
+    height: 30px;
+
+    padding: 0 10px;
+
+    font-size: 10.5px;
+  }
+
+  .announcement-content {
+    gap: 5px;
+  }
+
+
+  /* -------------------------------------------------------
+     Main navbar
+     ------------------------------------------------------- */
+
+  .main-navbar {
+    height: 64px;
+    min-height: 64px;
+  }
+
+  .navbar-container {
+    width: 100%;
+
+    height: 64px;
+    min-height: 64px;
+
+    padding:
+      0 15px;
+  }
+
+
+  /* -------------------------------------------------------
+     Logo
+     ------------------------------------------------------- */
+
+  .brand-logo {
+    height: 64px;
+
+    padding: 0;
+    margin: 0;
+
+    min-width: 0;
+  }
+
+  .brand-icon {
+    width: 34px;
+    height: 40px;
+
+    margin-right: 7px;
+
+    font-size: 26px;
+  }
+
+  .brand-name {
+    font-size: 20px;
+  }
+
+  .brand-tagline {
+    font-size: 8px;
+
+    margin-top: 5px;
+  }
+
+
+  /* -------------------------------------------------------
+     Hide desktop navigation
+     ------------------------------------------------------- */
+
+  .desktop-navigation {
+    display: none;
+  }
+
+
+  /* -------------------------------------------------------
+     Actions
+     ------------------------------------------------------- */
+
+  .navbar-actions {
+    height: 64px;
+
+    margin-left: auto;
+
+    gap: 1px;
+  }
+
+
+  /* -------------------------------------------------------
+     Desktop search completely removed on mobile
+     ------------------------------------------------------- */
+
+  .desktop-search {
+    display: none !important;
+  }
+
+  .mobile-search-trigger {
+    display: flex;
+  }
+
+
+  /* -------------------------------------------------------
+     Mobile icons
+     ------------------------------------------------------- */
+
+  .nav-icon-btn,
+  .cart-wrapper,
+  .mobile-search-trigger {
+    width: 36px;
+    height: 36px;
+  }
+
+  .nav-icon-btn,
+  .mobile-search-trigger {
+    font-size: 20px;
+  }
+
+  .cart-wrapper {
+    font-size: 21px;
+  }
+
+
+  /* -------------------------------------------------------
+     Hamburger
+     ------------------------------------------------------- */
+
+  .menu-toggle {
+    display: flex;
+  }
+
+
+  /* -------------------------------------------------------
+     Mobile search panel
+
+     This is the ONLY search input on mobile.
+     ------------------------------------------------------- */
+
+  .mobile-search-panel {
+    display: block;
+  }
+
+
+  /* -------------------------------------------------------
+     Mobile menu
+     ------------------------------------------------------- */
+
+  .mobile-menu {
+    display: block;
+
+    width: 100%;
+
+    position: absolute;
+
+    top: 64px;
+    left: 0;
+
+    max-height:
+      calc(100vh - 94px);
+
+    overflow-y: auto;
+
+    background:
+      #ffffff;
+
+    border-bottom:
+      1px solid var(--pn-border);
+
+    box-shadow:
+      0 10px 25px
+      rgba(20, 40, 80, 0.08);
+
+    opacity: 0;
+    visibility: hidden;
+
+    pointer-events: none;
+
+    transform:
+      translateY(-8px);
+
+    transition:
+      opacity 0.22s ease,
+      transform 0.22s ease,
+      visibility 0.22s ease;
+
+    z-index: 997;
+  }
+
+  .mobile-menu.mobile-menu-visible {
+    opacity: 1;
+    visibility: visible;
+
+    pointer-events: auto;
+
+    transform:
+      translateY(0);
+  }
+
+
+  /* -------------------------------------------------------
+     Menu inner
+     ------------------------------------------------------- */
+
+  .mobile-menu-inner {
+    width: 100%;
+
+    padding:
+      8px 15px
+      14px;
+  }
+
+
+  /* -------------------------------------------------------
+     Mobile navigation item
+     ------------------------------------------------------- */
+
+  .mobile-nav-link {
+    width: 100%;
+
+    min-height: 46px;
+
+    padding:
+      0 14px;
+
+    margin:
+      2px 0;
+
+    border: none;
+
+    background: transparent;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    color: #171717;
+
+    border-radius: 9px;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    text-decoration: none;
+
+    cursor: pointer;
+
+    transition:
+      background 0.18s ease,
+      color 0.18s ease;
+  }
+
+  .mobile-nav-link:hover {
+    background:
+      #f5f8fd;
+
+    color:
+      var(--pn-blue);
+  }
+
+  .mobile-nav-link.active {
+    background:
+      var(--pn-blue-soft);
+
+    color:
+      var(--pn-blue);
+
+    font-weight: 600;
+  }
+
+  .mobile-nav-link > i {
+    color: #748094;
+
+    font-size: 10px;
+  }
+
+  .mobile-nav-link.active > i {
+    color:
+      var(--pn-blue);
+  }
+
+
+  /* -------------------------------------------------------
+     Products button
+     ------------------------------------------------------- */
+
+  .mobile-products-button {
+    appearance: none;
+    -webkit-appearance: none;
+
+    text-align: left;
+  }
+
+
+  /* -------------------------------------------------------
+     Product submenu
+     ------------------------------------------------------- */
+
+  .mobile-products-dropdown {
+    max-height: 0;
+
+    overflow: hidden;
+
+    padding-left: 14px;
+
+    opacity: 0;
+
+    transition:
+      max-height 0.25s ease,
+      opacity 0.2s ease;
+  }
+
+  .mobile-products-dropdown.mobile-products-visible {
+    max-height: 300px;
+
+    opacity: 1;
+  }
+
+
+  .mobile-products-dropdown a {
+    min-height: 39px;
+
+    padding:
+      0 12px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 11px;
+
+    color:
+      #505966;
+
+    border-radius: 7px;
+
+    font-size: 13px;
+
+    text-decoration: none;
+
+    transition:
+      color 0.18s ease,
+      background 0.18s ease;
+  }
+
+  .mobile-products-dropdown a:hover {
+    color:
+      var(--pn-blue);
+
+    background:
+      #f5f8fd;
+  }
+
+  .mobile-products-dropdown a i {
+    width: 17px;
+
+    color:
+      var(--pn-blue);
+
+    font-size: 13px;
+
+    text-align: center;
+  }
+
+
+  /* -------------------------------------------------------
+     Mobile account section
+     ------------------------------------------------------- */
+
+  .mobile-account-section {
+    margin-top: 10px;
+
+    padding-top: 10px;
+
+    border-top:
+      1px solid var(--pn-border);
+
+    display: flex;
+
+    flex-direction: column;
+  }
+
+
+  .mobile-account-button {
+    width: 100%;
+
+    min-height: 43px;
+
+    padding:
+      0 14px;
+
+    border: none;
+
+    background: transparent;
+
+    display: flex;
+    align-items: center;
+
+    gap: 11px;
+
+    color:
+      #444444;
+
+    border-radius: 8px;
+
+    font-size: 13px;
+
+    cursor: pointer;
+
+    text-align: left;
+  }
+
+  .mobile-account-button:hover {
+    color:
+      var(--pn-blue);
+
+    background:
+      #f5f8fd;
+  }
+
+
+  /* Account icon */
+
+  .mobile-account-icon {
+    width: 30px;
+    height: 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    position: relative;
+
+    background:
+      #f2f6fc;
+
+    color:
+      var(--pn-blue);
+
+    border-radius: 50%;
+
+    font-size: 15px;
+  }
+
+
+  /* Mobile cart badge */
+
+  .mobile-account-badge {
+    min-width: 15px;
+    height: 15px;
+
+    padding:
+      0 3px;
+
+    position: absolute;
+
+    top: -2px;
+    right: -2px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background:
+      var(--pn-blue);
+
+    color:
+      #ffffff;
+
+    border:
+      1px solid #ffffff;
+
+    font-size: 8px;
+
+    font-weight: 700;
+  }
+
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .announcement-bar {
+    height: 29px;
+
+    font-size: 9.5px;
+  }
+
+  .announcement-content {
+    gap: 4px;
+  }
+
+  .navbar-container {
+    padding:
+      0 11px;
+  }
+
+  .brand-icon {
+    width: 30px;
+
+    font-size: 23px;
+  }
+
+  .brand-name {
+    font-size: 18px;
+  }
+
+  .brand-tagline {
+    font-size: 7px;
+  }
+
+  .navbar-actions {
+    gap: 0;
+  }
+
+  .nav-icon-btn,
+  .cart-wrapper,
+  .mobile-search-trigger {
+    width: 34px;
+    height: 34px;
+  }
+
+  .menu-toggle {
+    width: 35px;
+    height: 35px;
+  }
+
+  .menu-toggle span {
+    width: 19px;
+  }
+
+  .mobile-menu-inner {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+
+  .mobile-search-panel {
+    padding:
+      9px 11px
+      11px;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .brand-name {
+    font-size: 17px;
+  }
+
+  .brand-tagline {
+    font-size: 6.5px;
+  }
+
+  .brand-icon {
+    width: 28px;
+
+    font-size: 21px;
+  }
+
+  .nav-icon-btn,
+  .cart-wrapper,
+  .mobile-search-trigger {
+    width: 32px;
+    height: 32px;
+  }
+
+  .menu-toggle {
+    width: 33px;
+    height: 33px;
+  }
+
+  .announcement-bar {
+    font-size: 8.8px;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+/* =========================================================
+   FINAL LOGO — BLUE BRAND BACKGROUND
+   ========================================================= */
+
+.brand-logo {
+  width: 150px;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  flex-shrink: 0;
+
+  padding: 5px 9px;
+
+  margin: 0;
+
+  background: var(--pn-blue);
+
+  border-radius: 9px;
+
+  overflow: hidden;
+
+  color: #ffffff;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.brand-logo:hover {
+  color: #ffffff;
+
+  transform:
+    translateY(-1px);
+
+  box-shadow:
+    0 5px 14px rgba(7, 89, 214, 0.20);
+}
+
+
+/* =========================================================
+   LOGO IMAGE
+   ========================================================= */
+
+.brand-logo img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  max-width: none;
+
+  object-fit: contain;
+  object-position: center;
+
+  margin: 0;
+  padding: 0;
+
+  opacity: 1;
+
+  filter: none;
+
+  transition:
+    transform 0.2s ease;
+}
+
+.brand-logo:hover img {
+  transform:
+    scale(1.015);
+}
+
+
+/* =========================================================
+   DESKTOP
+   ========================================================= */
+
+@media (min-width: 992px) {
+
+  .brand-logo {
+    width: 150px;
+    height: 58px;
+
+    margin-right: 24px;
+
+    padding: 4px 8px;
+
+    border-radius: 9px;
+  }
+
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 1100px) and (min-width: 992px) {
+
+  .brand-logo {
+    width: 140px;
+    height: 56px;
+
+    margin-right: 12px;
+
+    padding: 4px 7px;
+  }
+
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 991.98px) {
+
+  .brand-logo {
+    width: 125px;
+    height: 56px;
+
+    margin: 0;
+
+    padding: 4px 7px;
+
+    border-radius: 8px;
+  }
+
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .brand-logo {
+    width: 112px;
+    height: 52px;
+
+    padding: 4px 6px;
+
+    border-radius: 7px;
+  }
+
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .brand-logo {
+    width: 105px;
+    height: 50px;
+
+    padding: 3px 5px;
+  }
+
+}
