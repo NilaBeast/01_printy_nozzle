@@ -18,6 +18,7 @@ import ProductDetails from "./views/ProductDetails";
 import Cart from "./views/cart";
 import Checkout from "./views/checkout";
 import Contact from "./views/Contact";
+import Profile from "./views/Profile";
 
 
 function App() {
@@ -36,14 +37,14 @@ function App() {
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/profile" element={<Profile />} />
               {/* <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} /> */}
+              <Route path="/register" element={<Register />} />*/}
 
 
               {/* PROTECTED ROUTES */}
               <Route element={<ProtectedRoute />}>
-                
-                {/* <Route path="/profile" element={<Profile />} /> */}
+                {/* Add protected routes here once auth is wired up */}
               </Route>
             </Routes>
           </main>
