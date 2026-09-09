@@ -1,0 +1,925 @@
+/* =============================================================
+   PROFILE PAGE — profile.css
+   ============================================================= */
+
+/* ======================== PAGE WRAPPER ======================== */
+
+.profile-page-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+/* ======================== HERO BANNER ======================== */
+
+.profile-hero {
+  position: relative;
+  background: #e4f0fe url("/images/Profile_page_banner_image.png") right center / cover no-repeat;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  padding: 44px 0;
+  overflow: hidden;
+}
+
+.profile-hero-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.profile-hero-text h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #14183e;
+  margin: 0 0 6px;
+  line-height: 1.2;
+}
+
+.profile-hero-text p {
+  font-size: 1rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+/* ======================== MAIN CONTENT ======================== */
+
+.profile-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 28px;
+  align-items: start;
+}
+
+/* ======================== CARDS SHARED ======================== */
+
+.profile-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e7ebf1;
+  box-shadow: 0 2px 12px rgba(20, 40, 80, 0.05);
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.profile-card:hover {
+  box-shadow: 0 6px 24px rgba(20, 40, 80, 0.09);
+}
+
+.profile-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+}
+
+.profile-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-card-title i {
+  font-size: 1.25rem;
+  color: #2563eb;
+}
+
+.profile-card-body {
+  padding: 24px;
+}
+
+/* ======================== PROFILE INFO CARD ======================== */
+
+.profile-info-card .profile-card-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.profile-info-layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  width: 140px;
+  padding-right: 28px;
+  border-right: 1px solid #f1f5f9;
+}
+
+.profile-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: #4483f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(68, 131, 246, 0.25);
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.profile-change-photo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #ffffff;
+  color: #2563eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.profile-change-photo-btn:hover {
+  background: #eff6ff;
+}
+
+.profile-change-photo-btn svg {
+  flex-shrink: 0;
+}
+
+.profile-photo-hint {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: -4px;
+}
+
+/* Form Fields */
+
+.profile-form-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.profile-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-form-group label {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.profile-form-group input {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.9rem;
+  color: #111827;
+  transition: all 0.25s ease;
+  outline: none;
+  width: 100%;
+}
+
+.profile-email-input {
+  background: #f8fafc !important;
+  color: #475569 !important;
+}
+
+.profile-input-with-icon,
+.profile-select-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.profile-input-with-icon input {
+  padding-right: 38px;
+}
+
+.profile-field-icon {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+}
+
+.profile-select-wrapper select {
+  height: 42px;
+  padding: 0 38px 0 14px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.9rem;
+  color: #111827;
+  outline: none;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.profile-select-wrapper select:focus {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.profile-select-chevron {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+}
+
+.profile-form-group input:focus {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.profile-form-group input:disabled,
+.profile-form-group select:disabled {
+  background: #ffffff;
+  color: #111827;
+  cursor: default;
+}
+
+.profile-form-group input.profile-email-input:disabled {
+  background: #f8fafc;
+  color: #475569;
+}
+
+/* Edit Button */
+
+.profile-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #ffffff;
+  color: #2563eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-edit-btn:hover {
+  background: #eff6ff;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
+.profile-edit-btn svg {
+  flex-shrink: 0;
+}
+
+.profile-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: none;
+  background: #0759d6;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.profile-save-btn:hover {
+  background: #0649b5;
+}
+
+.profile-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.profile-cancel-btn:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.profile-edit-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ======================== ACCOUNT SUMMARY ======================== */
+
+/* ======================== ACCOUNT SUMMARY ======================== */
+
+.profile-summary-card .profile-card-header {
+  padding: 20px 22px 14px;
+}
+
+.profile-summary-card .profile-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-summary-card .profile-card-body {
+  padding: 0 22px 16px;
+}
+
+.profile-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.profile-summary-item:last-child {
+  border-bottom: none;
+}
+
+.profile-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-summary-label span {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.profile-summary-value {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-preferences-card .profile-card-header {
+  padding: 20px 22px 14px;
+}
+
+.profile-preferences-card .profile-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-preferences-card .profile-card-body {
+  padding: 0 22px 16px;
+}
+
+.profile-preferences-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-pref-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.profile-pref-item:last-child {
+  border-bottom: none;
+}
+
+.profile-pref-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-pref-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.profile-pref-icon.pref-icon-blue {
+  color: #2563eb;
+}
+
+.profile-pref-icon.pref-icon-dark {
+  color: #1e293b;
+}
+
+.profile-pref-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-pref-text .pref-item-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.profile-pref-text .pref-item-desc {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.81rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* Toggle Switch */
+
+.profile-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.profile-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.profile-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #94a3b8;
+  border-radius: 24px;
+  transition: all 0.25s ease;
+}
+
+.profile-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  left: 3px;
+  bottom: 3px;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.profile-toggle input:checked + .profile-toggle-slider {
+  background: #0256d0;
+}
+
+.profile-toggle input:checked + .profile-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ======================== SAVED ADDRESSES ======================== */
+
+.profile-addresses-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.profile-addresses-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-add-address-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #ffffff;
+  color: #2563eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-add-address-btn:hover {
+  background: #eff6ff;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
+.profile-add-address-btn svg {
+  flex-shrink: 0;
+}
+
+.profile-addresses-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 22px 24px 24px;
+}
+
+.profile-address-card {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.profile-address-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.profile-address-card-inner {
+  padding: 18px 20px 14px;
+}
+
+.profile-address-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.profile-address-type-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-address-type {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-address-default-badge {
+  display: inline-flex;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: #dbeafe;
+  color: #2563eb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.72rem;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.profile-address-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-address-details .address-name {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 2px;
+}
+
+.profile-address-details p {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.84rem;
+  color: #475569;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.profile-address-details .address-phone {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.84rem;
+  color: #475569;
+  font-weight: 500;
+  margin-top: 3px;
+}
+
+.profile-address-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #f1f5f9;
+}
+
+.profile-address-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-address-action-btn.edit-btn {
+  color: #2563eb;
+  border-right: 1px solid #f1f5f9;
+}
+
+.profile-address-action-btn.edit-btn:hover {
+  background: #f8fafc;
+}
+
+.profile-address-action-btn.remove-btn {
+  color: #ef4444;
+}
+
+.profile-address-action-btn.remove-btn:hover {
+  background: #fef2f2;
+}
+
+.profile-address-action-btn svg {
+  flex-shrink: 0;
+}
+
+/* ======================== CHANGE PASSWORD ======================== */
+
+.profile-password-card {
+  padding: 18px 20px;
+}
+
+.profile-password-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-password-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-password-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-password-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-password-text .password-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.profile-password-text .password-desc {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  font-size: 0.81rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.profile-password-btn {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.profile-password-btn:hover {
+  background: #eff6ff;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
+.profile-password-btn:active {
+  transform: scale(0.98);
+}
+
+/* ======================== RIGHT COLUMN ======================== */
+
+.profile-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ======================== ANIMATIONS ======================== */
+
+@keyframes profileFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-card {
+  animation: profileFadeInUp 0.45s ease both;
+}
+
+.profile-card:nth-child(1) { animation-delay: 0.05s; }
+.profile-card:nth-child(2) { animation-delay: 0.12s; }
+.profile-card:nth-child(3) { animation-delay: 0.19s; }
+.profile-card:nth-child(4) { animation-delay: 0.26s; }
+
+/* ======================== RESPONSIVE ======================== */
+
+@media (max-width: 1024px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-right-column {
+    order: -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-hero {
+    padding: 36px 0 32px;
+  }
+
+  .profile-hero-text h1 {
+    font-size: 1.8rem;
+  }
+
+  .profile-info-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .profile-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-addresses-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-addresses-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .profile-password-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .profile-content {
+    padding: 20px 16px 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-hero-text h1 {
+    font-size: 1.5rem;
+  }
+
+  .profile-hero-text p {
+    font-size: 0.88rem;
+  }
+
+  .profile-card-header {
+    padding: 16px 18px 0;
+  }
+
+  .profile-card-body {
+    padding: 16px 18px 20px;
+  }
+
+  .profile-addresses-grid {
+    padding: 16px 18px 20px;
+  }
+
+  .profile-addresses-header {
+    padding: 16px 18px 0;
+  }
+}
