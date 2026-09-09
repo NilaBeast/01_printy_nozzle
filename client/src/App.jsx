@@ -21,7 +21,7 @@ import Contact from "./views/Contact";
 import Profile from "./views/Profile";
 import Orders from "./views/Orders";
 import OrderDetails from "./views/OrderDetails";
-
+import Printing from "./views/Printing";
 
 function App() {
   return (
@@ -33,6 +33,8 @@ function App() {
           <main className="flex-grow-1">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/3d-printing" element={<Printing />} />
+              <Route path="/printing" element={<Printing />} />
               <Route path="/products" element={<Product />} />
               <Route path="/product/:id" element={<ProductDetails />} />
               <Route path="/products/:id" element={<ProductDetails />} />

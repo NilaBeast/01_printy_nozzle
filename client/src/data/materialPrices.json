@@ -1,0 +1,150 @@
+{
+  "siteSettings": {
+    "gstRate": 0.18,
+    "basePrice": 0,
+    "minOrderAmount": 99,
+    "estimatedDeliveryDays": "3 - 5 Working Days",
+    "deliveryRegion": "Across India",
+    "freeShippingThreshold": 999
+  },
+  "materials": [
+    {
+      "id": "pla",
+      "name": "PLA",
+      "pricePerGram": 12,
+      "density": 1.24,
+      "badge": "Popular",
+      "description": "Easy to print, eco-friendly and great for everyday use.",
+      "bestFor": "Prototypes, Decor, Toys",
+      "image": "/images/products/blue_filament.png",
+      "spoolColor": "#1E88E5",
+      "infillWeightMultiplier": 1.0
+    },
+    {
+      "id": "petg",
+      "name": "PETG",
+      "pricePerGram": 15,
+      "density": 1.27,
+      "badge": "Durable",
+      "description": "Strong, durable and resistant to moisture and chemicals.",
+      "bestFor": "Functional parts, Enclosures",
+      "image": "/images/products/petg_filament.jpg",
+      "spoolColor": "#43A047",
+      "infillWeightMultiplier": 1.05
+    },
+    {
+      "id": "abs",
+      "name": "ABS",
+      "pricePerGram": 14,
+      "density": 1.04,
+      "badge": "Tough",
+      "description": "Tough and heat resistant ideal for functional applications.",
+      "bestFor": "Mechanical parts, Tools",
+      "image": "/images/products/abs_filament.jpg",
+      "spoolColor": "#212121",
+      "infillWeightMultiplier": 0.95
+    },
+    {
+      "id": "tpu",
+      "name": "TPU",
+      "pricePerGram": 18,
+      "density": 1.21,
+      "badge": "Flexible",
+      "description": "Flexible, rubber-like material with great durability.",
+      "bestFor": "Wearables, Gaskets, Flexible parts",
+      "image": "/images/products/tpu_filament.jpg",
+      "spoolColor": "#E0E0E0",
+      "infillWeightMultiplier": 1.1
+    }
+  ],
+  "colors": [
+    { "id": "black", "name": "Black", "hex": "#1E1E1E", "priceAdjustment": 0 },
+    { "id": "white", "name": "White", "hex": "#FFFFFF", "priceAdjustment": 0 },
+    { "id": "grey", "name": "Grey", "hex": "#757575", "priceAdjustment": 0 },
+    { "id": "red", "name": "Red", "hex": "#E53935", "priceAdjustment": 0 },
+    {
+      "id": "orange",
+      "name": "Orange",
+      "hex": "#FB8C00",
+      "priceAdjustment": 0
+    },
+    {
+      "id": "yellow",
+      "name": "Yellow",
+      "hex": "#FDD835",
+      "priceAdjustment": 0
+    },
+    { "id": "green", "name": "Green", "hex": "#43A047", "priceAdjustment": 0 },
+    { "id": "blue", "name": "Blue", "hex": "#1E88E5", "priceAdjustment": 0 },
+    {
+      "id": "purple",
+      "name": "Purple",
+      "hex": "#8E24AA",
+      "priceAdjustment": 0
+    },
+    { "id": "pink", "name": "Pink", "hex": "#EC407A", "priceAdjustment": 0 }
+  ],
+  "infillOptions": [
+    {
+      "id": "10",
+      "percentage": 10,
+      "label": "10%",
+      "tag": "Fast",
+      "factor": 0.7,
+      "priceAdjustment": 0,
+      "description": "Ideal for decorative or display items with minimal stress."
+    },
+    {
+      "id": "20",
+      "percentage": 20,
+      "label": "20%",
+      "tag": "",
+      "factor": 0.8,
+      "priceAdjustment": 0,
+      "description": "Good balance of print time and strength for standard models."
+    },
+    {
+      "id": "30",
+      "percentage": 30,
+      "label": "30%",
+      "tag": "",
+      "factor": 0.9,
+      "priceAdjustment": 0,
+      "description": "Enhanced durability for regular use items."
+    },
+    {
+      "id": "50",
+      "percentage": 50,
+      "label": "50%",
+      "tag": "Strong",
+      "factor": 1.0,
+      "priceAdjustment": 0,
+      "description": "High strength for functional prototypes and working parts."
+    },
+    {
+      "id": "100",
+      "percentage": 100,
+      "label": "100%",
+      "tag": "Solid",
+      "factor": 1.4,
+      "priceAdjustment": 0,
+      "description": "Maximum rigidity and density for heavy-duty mechanical components."
+    }
+  ],
+  "surfaceFinishes": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "pricePerGram": 0,
+      "tag": "₹0",
+      "description": "Direct from print bed with subtle layer lines and clean support removal."
+    },
+    {
+      "id": "smooth",
+      "name": "Smooth",
+      "pricePerGram": 3,
+      "tag": "+ ₹3 / gram",
+      "description": "Vapor smoothing / micro-sanding treatment for a sleek, glossy finish."
+    }
+  ]
+}
