@@ -19,6 +19,8 @@ import Cart from "./views/cart";
 import Checkout from "./views/checkout";
 import Contact from "./views/Contact";
 import Profile from "./views/Profile";
+import Orders from "./views/Orders";
+import OrderDetails from "./views/OrderDetails";
 
 
 function App() {
@@ -38,6 +40,10 @@ function App() {
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/my-orders" element={<Orders />} />
+              <Route path="/orders/:id" element={<OrderDetails />} />
+              <Route path="/order/:id" element={<OrderDetails />} />
               {/* <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />*/}
 

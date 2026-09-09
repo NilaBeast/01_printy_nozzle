@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Settings,
@@ -14,6 +15,26 @@ import {
 import "../../public/css/profile.css";
 
 function Profile() {
+  const location = useLocation();
+
+  /* =====================================================
+     AUTO-SCROLL TO ADDRESSES
+     ===================================================== */
+  useEffect(() => {
+    if (
+      location.hash === "#addresses" ||
+      location.state?.scrollTo === "addresses"
+    ) {
+      const scrollTimer = setTimeout(() => {
+        const addressEl = document.getElementById("profile-addresses-section");
+        if (addressEl) {
+          addressEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 150);
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [location]);
+
   /* =====================================================
      STATES
      ===================================================== */
@@ -354,7 +375,7 @@ function Profile() {
 
             {/* ========== SAVED ADDRESSES ========== */}
 
-            <div className="profile-card profile-addresses-card">
+            <div id="profile-addresses-section" className="profile-card profile-addresses-card">
               <div className="profile-addresses-header">
                 <div className="profile-addresses-title">
                   <svg
