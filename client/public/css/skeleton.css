@@ -3,7 +3,7 @@
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #f1f2f4;
+  background: #f1f5f9;
 }
 
 /* shimmer */
@@ -15,7 +15,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 184, 28, 0.35),
+    rgba(37, 99, 235, 0.09),
     transparent
   );
   animation: skeleton-shimmer 1.3s infinite;
