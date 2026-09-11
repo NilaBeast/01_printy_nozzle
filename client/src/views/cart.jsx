@@ -333,7 +333,7 @@ export default function Cart() {
                     <div key={item.id} className="cart-item-row">
                       {/* Product Thumbnail & Names */}
                       <div className="cart-product-info">
-                        <Link to={`/product/${item.id}`} className="cart-thumb-wrapper">
+                        <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.id}`} className="cart-thumb-wrapper">
                           <img
                             src={item.image}
                             alt={item.name}
@@ -345,7 +345,7 @@ export default function Cart() {
                           />
                         </Link>
                         <div className="cart-product-details">
-                          <Link to={`/product/${item.id}`} className="cart-product-name">
+                          <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.id}`} className="cart-product-name">
                             {item.name}
                           </Link>
                           <span className="cart-product-sub">{item.subtitle}</span>

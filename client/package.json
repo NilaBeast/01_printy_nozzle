@@ -19,7 +19,8 @@
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4",
     "react-spinners": "^0.17.0",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

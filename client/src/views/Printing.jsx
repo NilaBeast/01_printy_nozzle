@@ -1,0 +1,990 @@
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import {
+  UploadCloud,
+  Trash2,
+  Plus,
+  Minus,
+  Truck,
+  ShieldCheck,
+  Headphones,
+  Box,
+  Layers,
+  HelpCircle,
+  Check,
+  ShoppingCart,
+  ArrowRight,
+  RotateCcw,
+  Sparkles,
+  Info,
+  X,
+  AlertTriangle,
+} from "lucide-react";
+import defaultPricingData from "../data/materialPrices.json";
+import ModelViewer3D from "../components/ModelViewer3D";
+import "../../public/css/printing.css";
+
+// Maximum Printable Dimensions from .env (-1 means no limit)
+const MAX_PRINT_WIDTH_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_WIDTH_MM ?? 250);
+const MAX_PRINT_DEPTH_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_DEPTH_MM ?? 250);
+const MAX_PRINT_HEIGHT_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_HEIGHT_MM ?? 250);
+
+// Maximum File Size in MB from .env (-1 means no limit)
+const MAX_FILE_SIZE_MB = parseFloat(import.meta.env.VITE_MAX_FILE_SIZE_MB ?? 100);
+
+export default function Printing() {
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const optionsSectionRef = useRef(null);
+
+  /* =========================================================
+     PRICING CONFIGURATION (JSON Controlled)
+     ========================================================= */
+  const pricingConfig = defaultPricingData;
+  const [isInfillModalOpen, setIsInfillModalOpen] = useState(false);
+
+  /* =========================================================
+     3D MODEL STATE
+     ========================================================= */
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [useSample, setUseSample] = useState(true);
+  const [modelAnalysis, setModelAnalysis] = useState({
+    fileName: "rocket.stl",
+    fileSizeMB: 2.45,
+    dimensions: { x: 80, y: 80, z: 150 },
+    volumeCm3: 16.1,
+    weightGrams: 20,
+  });
+
+  const handleModelAnalysis = useCallback((stats) => {
+    setModelAnalysis(stats);
+  }, []);
+
+  // Validation: Check if model dimensions exceed printable limits (-1 = no limit)
+  const isWidthExceeded =
+    MAX_PRINT_WIDTH_MM !== -1 &&
+    !isNaN(MAX_PRINT_WIDTH_MM) &&
+    (modelAnalysis?.dimensions?.x || 0) > MAX_PRINT_WIDTH_MM;
+
+  const isDepthExceeded =
+    MAX_PRINT_DEPTH_MM !== -1 &&
+    !isNaN(MAX_PRINT_DEPTH_MM) &&
+    (modelAnalysis?.dimensions?.y || 0) > MAX_PRINT_DEPTH_MM;
+
+  const isHeightExceeded =
+    MAX_PRINT_HEIGHT_MM !== -1 &&
+    !isNaN(MAX_PRINT_HEIGHT_MM) &&
+    (modelAnalysis?.dimensions?.z || 0) > MAX_PRINT_HEIGHT_MM;
+
+  const isOversized = isWidthExceeded || isDepthExceeded || isHeightExceeded;
+
+  /* =========================================================
+     PRINT OPTIONS STATE
+     ========================================================= */
+  const materials = pricingConfig.materials || defaultPricingData.materials;
+  const colors = pricingConfig.colors || defaultPricingData.colors;
+  const infillOptions = pricingConfig.infillOptions || defaultPricingData.infillOptions;
+  const surfaceFinishes = pricingConfig.surfaceFinishes || defaultPricingData.surfaceFinishes;
+
+  const [selectedMaterialId, setSelectedMaterialId] = useState(materials[0]?.id || "pla");
+  const [selectedColorHex, setSelectedColorHex] = useState("#1E88E5");
+  const [customHexInput, setCustomHexInput] = useState("");
+  const [selectedInfillId, setSelectedInfillId] = useState("50");
+  const [selectedFinishId, setSelectedFinishId] = useState("standard");
+  const [quantity, setQuantity] = useState(1);
+
+  // Selected option objects
+  const selectedMaterial = useMemo(() => {
+    return materials.find((m) => m.id === selectedMaterialId) || materials[0];
+  }, [materials, selectedMaterialId]);
+
+  const selectedColor = useMemo(() => {
+    const matched = colors.find((c) => c.hex.toLowerCase() === selectedColorHex.toLowerCase());
+    if (matched) return matched;
+    return { id: "custom", name: "Custom", hex: selectedColorHex, priceAdjustment: 0 };
+  }, [colors, selectedColorHex]);
+
+  const selectedInfill = useMemo(() => {
+    return infillOptions.find((inf) => inf.id === selectedInfillId) || infillOptions[3];
+  }, [infillOptions, selectedInfillId]);
+
+  const selectedFinish = useMemo(() => {
+    return surfaceFinishes.find((f) => f.id === selectedFinishId) || surfaceFinishes[0];
+  }, [surfaceFinishes, selectedFinishId]);
+
+  const getInfillCardPrice = (inf) => {
+    const baseWeight = modelAnalysis?.fileName?.includes("rocket") ? 20 : (modelAnalysis?.weightGrams || 20);
+    const weight = Math.max(2, Math.round(baseWeight * (inf.factor || 1.0)));
+    const matCost = Math.round(weight * (selectedMaterial?.pricePerGram || 12));
+    const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
+    return matCost + finishCost + (inf.priceAdjustment || 0);
+  };
+
+  /* =========================================================
+     LIVE PRICE CALCULATION ENGINE
+     ========================================================= */
+  const calculations = useMemo(() => {
+    const baseWeight = modelAnalysis?.fileName?.includes("rocket") ? 20 : (modelAnalysis?.weightGrams || 20);
+    const weight = Math.max(2, Math.round(baseWeight * (selectedInfill?.factor || 1.0)));
+
+    // Material cost = weight * pricePerGram
+    const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 12));
+
+    // Color adjustment (usually 0)
+    const colorCost = selectedColor?.priceAdjustment || 0;
+
+    // Infill price adjustment (from JSON or admin settings)
+    const infillCost = selectedInfill?.priceAdjustment || 0;
+
+    // Surface finish cost = weight * finishPricePerGram
+    const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
+
+    // Unit subtotal
+    const unitPrice = materialCost + colorCost + infillCost + finishCost;
+
+    // Total subtotal for quantity
+    const subtotal = unitPrice * quantity;
+
+    // GST (18%)
+    const gstRate = pricingConfig.siteSettings?.gstRate || 0.18;
+    const gstAmount = +(subtotal * gstRate).toFixed(2);
+
+    // Grand total
+    const grandTotal = +(subtotal + gstAmount).toFixed(2);
+
+    return {
+      weight,
+      materialCost,
+      colorCost,
+      infillCost,
+      finishCost,
+      unitPrice,
+      subtotal,
+      gstAmount,
+      grandTotal,
+    };
+  }, [modelAnalysis, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig]);
+
+  /* =========================================================
+     FILE UPLOAD HANDLERS
+     ========================================================= */
+  const handleFileUpload = (file) => {
+    if (!file) return;
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!["stl", "obj", "3mf"].includes(ext)) {
+      toast.error("Please upload an .STL, .OBJ, or .3MF file.");
+      return;
+    }
+    if (MAX_FILE_SIZE_MB !== -1 && !isNaN(MAX_FILE_SIZE_MB)) {
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        toast.error(`File exceeds maximum size limit of ${MAX_FILE_SIZE_MB}MB.`);
+        return;
+      }
+    }
+    setUploadedFile(file);
+    setUseSample(false);
+    toast.success(`Loaded ${file.name}`);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleRemoveModel = () => {
+    setUploadedFile(null);
+    setUseSample(false);
+    setModelAnalysis({
+      fileName: "No file loaded",
+      fileSizeMB: 0,
+      dimensions: { x: 0, y: 0, z: 0 },
+      volumeCm3: 0,
+      weightGrams: 0,
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    toast.info("Model removed. Upload a 3D model to calculate prices.");
+  };
+
+  const handleLoadSample = () => {
+    setUploadedFile(null);
+    setUseSample(true);
+  };
+
+  const handleCustomHexChange = (e) => {
+    const val = e.target.value;
+    setCustomHexInput(val);
+    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+      setSelectedColorHex(val);
+    }
+  };
+
+  const handleCustomColorPickerChange = (e) => {
+    const val = e.target.value;
+    setSelectedColorHex(val);
+    setCustomHexInput(val.toUpperCase());
+  };
+
+  /* =========================================================
+     CART & CHECKOUT INTEGRATION
+     ========================================================= */
+  const generateCartItem = () => {
+    return {
+      id: `print-${Date.now()}`,
+      name: `3D Print: ${modelAnalysis.fileName}`,
+      subtitle: `${selectedMaterial.name} • ${selectedColor.name} • ${selectedInfill.label} Infill`,
+      image: "/images/rocket.png",
+      price: calculations.unitPrice,
+      quantity: quantity,
+      isCustomPrint: true,
+      customPrintDetails: {
+        fileName: modelAnalysis.fileName,
+        fileSizeMB: modelAnalysis.fileSizeMB,
+        dimensions: `${modelAnalysis.dimensions.x} x ${modelAnalysis.dimensions.y} x ${modelAnalysis.dimensions.z} mm`,
+        volumeCm3: modelAnalysis.volumeCm3,
+        estimatedWeight: `${calculations.weight}g`,
+        material: selectedMaterial.name,
+        materialPricePerGram: selectedMaterial.pricePerGram,
+        color: selectedColor.name,
+        colorHex: selectedColorHex,
+        infill: selectedInfill.label,
+        surfaceFinish: selectedFinish.name,
+      },
+    };
+  };
+
+  const handleAddToCart = () => {
+    if (!modelAnalysis || modelAnalysis.weightGrams <= 0) {
+      toast.warning("Please upload a 3D model first.");
+      return;
+    }
+
+    if (isOversized) {
+      toast.error(
+        `Model exceeds maximum printable volume (${MAX_PRINT_WIDTH_MM === -1 ? "No limit" : MAX_PRINT_WIDTH_MM + "mm"} × ${MAX_PRINT_DEPTH_MM === -1 ? "No limit" : MAX_PRINT_DEPTH_MM + "mm"} × ${MAX_PRINT_HEIGHT_MM === -1 ? "No limit" : MAX_PRINT_HEIGHT_MM + "mm"}). Please scale down your model.`
+      );
+      return;
+    }
+
+    try {
+      const existingCart = JSON.parse(localStorage.getItem("printy_cart") || "[]");
+      const newItem = generateCartItem();
+      const updatedCart = [newItem, ...existingCart];
+      localStorage.setItem("printy_cart", JSON.stringify(updatedCart));
+      toast.success("3D print model added to your cart!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to add to cart.");
+    }
+  };
+
+  const handleBuyNow = () => {
+    if (!modelAnalysis || modelAnalysis.weightGrams <= 0) {
+      toast.warning("Please upload a 3D model first.");
+      return;
+    }
+    if (isOversized) {
+      toast.error(
+        `Model exceeds maximum printable volume (${MAX_PRINT_WIDTH_MM === -1 ? "No limit" : MAX_PRINT_WIDTH_MM + "mm"} × ${MAX_PRINT_DEPTH_MM === -1 ? "No limit" : MAX_PRINT_DEPTH_MM + "mm"} × ${MAX_PRINT_HEIGHT_MM === -1 ? "No limit" : MAX_PRINT_HEIGHT_MM + "mm"}). Please scale down your model.`
+      );
+      return;
+    }
+    handleAddToCart();
+    navigate("/checkout");
+  };
+
+  return (
+    <div className="printing-page">
+      {/* =====================================================
+          HERO BANNER
+          ===================================================== */}
+      <section className="printing-hero">
+        <div className="container">
+          <div className="row align-items-center">
+            <div className="col-lg-6 mb-4 mb-lg-0">
+              <h1 className="hero-title">
+                Your Ideas.
+                <span className="hero-title-highlight">Printed in 3D.</span>
+              </h1>
+              <p className="hero-subtitle">
+                Upload your 3D model, choose your material and color, and we'll print it
+                with precision and deliver to your door.
+              </p>
+
+              <div className="hero-pills">
+                <div className="hero-pill">
+                  <div className="hero-pill-icon">
+                    <Sparkles size={20} />
+                  </div>
+                  <div className="hero-pill-text">
+                    <span className="hero-pill-title">High Quality Prints</span>
+                    <span className="hero-pill-desc">Precision & detail you can trust</span>
+                  </div>
+                </div>
+
+                <div className="hero-pill">
+                  <div className="hero-pill-icon">
+                    <Box size={20} />
+                  </div>
+                  <div className="hero-pill-text">
+                    <span className="hero-pill-title">Wide Material</span>
+                    <span className="hero-pill-desc">PLA, ABS, PETG and more</span>
+                  </div>
+                </div>
+
+                <div className="hero-pill">
+                  <div className="hero-pill-icon">
+                    <Truck size={20} />
+                  </div>
+                  <div className="hero-pill-text">
+                    <span className="hero-pill-title">Fast Delivery</span>
+                    <span className="hero-pill-desc">Quick turnaround across India</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-lg-6">
+              <div className="hero-image-wrapper">
+                <img
+                  src="/images/3d_printer_hero.jpg"
+                  alt="3D Printer Printing Rocket"
+                  className="hero-printer-image"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          PROCESS STEPPER
+          ===================================================== */}
+      <section className="stepper-section">
+        <div className="container">
+          <h2 className="stepper-heading">Get Your 3D Print in 3 Easy Steps</h2>
+          <div className="stepper-container">
+            <div className="step-item">
+              <div className="step-badge">1</div>
+              <div className="step-content">
+                <span className="step-title">Upload Model</span>
+                <span className="step-subtitle">Upload your .STL or .OBJ file</span>
+              </div>
+            </div>
+
+            <div className="step-arrow">
+              <ArrowRight size={20} />
+            </div>
+
+            <div className="step-item">
+              <div className="step-badge">2</div>
+              <div className="step-content">
+                <span className="step-title">Choose Options</span>
+                <span className="step-subtitle">Select material, color & quantity</span>
+              </div>
+            </div>
+
+            <div className="step-arrow">
+              <ArrowRight size={20} />
+            </div>
+
+            <div className="step-item">
+              <div className="step-badge">3</div>
+              <div className="step-content">
+                <span className="step-title">Place Order</span>
+                <span className="step-subtitle">Secure payment & fast delivery</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          MAIN BUILDER: 2 COLUMNS
+          ===================================================== */}
+      <section className="builder-section">
+        <div className="container">
+          <div className="row">
+            {/* ---------------- LEFT COLUMN (Upload & Options) ---------------- */}
+            <div className="col-lg-8 mb-4 mb-lg-0">
+              {/* STEP 1: UPLOAD */}
+              <div className="mb-5">
+                <h3 className="section-label">
+                  <span className="section-label-number">1.</span> Upload Your 3D Model
+                </h3>
+
+                <div className="upload-viewer-grid">
+                  {/* Dropzone Card */}
+                  <div
+                    className={`upload-dropzone-card ${isDragActive ? "drag-active" : ""}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".stl,.obj,.3mf"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleFileUpload(e.target.files[0]);
+                      }}
+                    />
+                    <div className="dropzone-icon-wrap">
+                      <UploadCloud size={28} />
+                    </div>
+                    <div className="dropzone-title">Drag & drop your file here</div>
+                    <div className="dropzone-or">or</div>
+                    <button
+                      type="button"
+                      className="btn-choose-file"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                    >
+                      Choose File
+                    </button>
+                    <div className="dropzone-supports">
+                      Supports: .STL, .OBJ, .3MF{" "}
+                      {MAX_FILE_SIZE_MB === -1
+                        ? "(No file size limit)"
+                        : `(Max file size: ${MAX_FILE_SIZE_MB}MB)`}
+                    </div>
+                  </div>
+
+                  {/* 3D Model Display Card */}
+                  <div className="viewer-display-card">
+                    {useSample || uploadedFile ? (
+                      <>
+                        <ModelViewer3D
+                          file={uploadedFile}
+                          color={selectedColorHex}
+                          materialType={selectedMaterial.id}
+                          density={selectedMaterial.density}
+                          infillFactor={selectedInfill.factor}
+                          useSample={useSample}
+                          onAnalysis={handleModelAnalysis}
+                        />
+                        <div className="viewer-meta-bar">
+                          <div className="viewer-meta-left">
+                            <span className="viewer-filename">{modelAnalysis.fileName}</span>
+                            <div className="viewer-specs">
+                              <span>Size: {modelAnalysis.fileSizeMB} MB</span>
+                              <span className={isOversized ? "text-danger fw-semibold" : ""}>
+                                Dimensions: {modelAnalysis.dimensions.x} x {modelAnalysis.dimensions.y} x{" "}
+                                {modelAnalysis.dimensions.z} mm
+                              </span>
+                            </div>
+                            {isOversized && (
+                              <div className="dimension-warning-pill">
+                                <AlertTriangle size={13} />
+                                <span>
+                                  Exceeds max build volume (
+                                  {MAX_PRINT_WIDTH_MM === -1 ? "∞" : `${MAX_PRINT_WIDTH_MM}`} ×{" "}
+                                  {MAX_PRINT_DEPTH_MM === -1 ? "∞" : `${MAX_PRINT_DEPTH_MM}`} ×{" "}
+                                  {MAX_PRINT_HEIGHT_MM === -1 ? "∞" : `${MAX_PRINT_HEIGHT_MM}`} mm)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-remove-model"
+                            onClick={handleRemoveModel}
+                          >
+                            <Trash2 size={13} />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        className="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-center"
+                        style={{ minHeight: "300px", background: "#f8fafc" }}
+                      >
+                        <Box size={44} className="text-muted mb-2" />
+                        <span className="text-secondary small mb-3">No 3D Model loaded</span>
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm"
+                          onClick={handleLoadSample}
+                        >
+                          Load Sample Rocket Model
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 2: CHOOSE YOUR OPTIONS */}
+              <div ref={optionsSectionRef} className="options-container">
+                <h3 className="section-label">
+                  <span className="section-label-number">2.</span> Choose Your Options
+                </h3>
+
+                {/* Material & Color in Row */}
+                <div className="options-row-flex">
+                  {/* Material */}
+                  <div>
+                    <div className="option-group-label">Material</div>
+                    <div className="material-cards-grid">
+                      {materials.map((mat) => {
+                        const isSelected = mat.id === selectedMaterialId;
+                        return (
+                          <div
+                            key={mat.id}
+                            className={`material-card ${isSelected ? "active" : ""}`}
+                            onClick={() => setSelectedMaterialId(mat.id)}
+                          >
+                            <div className="material-name">{mat.name}</div>
+                            <div className="material-price">₹{mat.pricePerGram} / gram</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Color Swatches */}
+                  <div>
+                    <div className="option-group-label">Color</div>
+                    <div className="color-swatches-box">
+                      <div className="color-swatches-grid">
+                        {colors.map((c) => {
+                          const isSelected = selectedColorHex.toLowerCase() === c.hex.toLowerCase();
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className={`color-swatch-item ${isSelected ? "active" : ""}`}
+                              style={{
+                                backgroundColor: c.hex,
+                                border: c.hex.toLowerCase() === "#ffffff" ? "1px solid #cbd5e1" : "none",
+                              }}
+                              onClick={() => setSelectedColorHex(c.hex)}
+                              title={c.name}
+                              aria-label={c.name}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      {/* Custom Color Input */}
+                      <div className="custom-color-row">
+                        <span className="custom-color-label">Custom Color (Optional)</span>
+                        <div className="custom-color-input-wrap">
+                          <input
+                            type="text"
+                            placeholder="Enter HEX code (e.g. #1E88E5)"
+                            className="custom-color-input"
+                            value={customHexInput}
+                            onChange={handleCustomHexChange}
+                          />
+                          <input
+                            type="color"
+                            className="color-picker-native"
+                            value={selectedColorHex}
+                            onChange={handleCustomColorPickerChange}
+                            title="Open Color Picker"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Infill Density */}
+                <div>
+                  <div className="option-group-label">
+                    <span>Infill Density</span>
+                    <button
+                      type="button"
+                      className="what-is-infill-link btn btn-link p-0"
+                      onClick={() => setIsInfillModalOpen(true)}
+                    >
+                      What is Infill?
+                    </button>
+                  </div>
+
+                  <div className="infill-cards-grid">
+                    {infillOptions.map((inf) => {
+                      const isSelected = inf.id === selectedInfillId;
+                      const cardPrice = getInfillCardPrice(inf);
+                      return (
+                        <div
+                          key={inf.id}
+                          className={`infill-card ${isSelected ? "active" : ""}`}
+                          onClick={() => setSelectedInfillId(inf.id)}
+                        >
+                          <div className="infill-percentage">{inf.label}</div>
+                          <div className="infill-tag">
+                            ₹{cardPrice} {inf.tag ? `(${inf.tag})` : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Quantity & Surface Finish */}
+                <div className="qty-finish-row">
+                  {/* Quantity */}
+                  <div>
+                    <div className="option-group-label">Quantity</div>
+                    <div className="qty-stepper-box">
+                      <button
+                        type="button"
+                        className="qty-stepper-btn"
+                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                        disabled={quantity <= 1}
+                      >
+                        <Minus size={15} />
+                      </button>
+                      <span className="qty-stepper-val">{quantity}</span>
+                      <button
+                        type="button"
+                        className="qty-stepper-btn"
+                        onClick={() => setQuantity((q) => q + 1)}
+                      >
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Surface Finish */}
+                  <div>
+                    <div className="option-group-label">Surface Finish</div>
+                    <div className="finish-cards-grid">
+                      {surfaceFinishes.map((f) => {
+                        const isSelected = f.id === selectedFinishId;
+                        return (
+                          <div
+                            key={f.id}
+                            className={`finish-card ${isSelected ? "active" : ""}`}
+                            onClick={() => setSelectedFinishId(f.id)}
+                          >
+                            <div className="finish-name">{f.name}</div>
+                            <div className="finish-price">{f.tag}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* ---------------- RIGHT COLUMN (Sticky Order Summary) ---------------- */}
+            <div className="col-lg-4">
+              <div className="order-summary-card">
+                <h3 className="summary-heading">Order Summary</h3>
+
+                {/* Model Info Header */}
+                <div className="summary-model-item">
+                  <div className="summary-model-thumb-wrap">
+                    <img
+                      src="/images/rocket.png"
+                      alt="3D Model Preview"
+                      className="summary-model-thumb"
+                    />
+                  </div>
+                  <div className="summary-model-details">
+                    <div className="summary-model-filename">{modelAnalysis.fileName}</div>
+                    <div className="summary-model-dim">
+                      {modelAnalysis.dimensions.x} x {modelAnalysis.dimensions.y} x{" "}
+                      {modelAnalysis.dimensions.z} mm
+                    </div>
+                    <div className="summary-model-tags">
+                      {selectedMaterial.name} • {selectedColor.name} • {selectedInfill.label} Infill
+                    </div>
+                    <div className="summary-model-qty">Qty: {quantity}</div>
+                    <button
+                      type="button"
+                      className="btn-summary-edit"
+                      onClick={() => {
+                        optionsSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                    >
+                      Edit Model
+                    </button>
+                  </div>
+                </div>
+
+                {/* Breakdown Items */}
+                <div className="summary-breakdown">
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Material ({selectedMaterial.name})</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{calculations.weight}g</span>
+                      <span className="breakdown-price">₹{calculations.materialCost}</span>
+                    </div>
+                  </div>
+
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Color</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{selectedColor.name}</span>
+                      <span className="breakdown-price">₹0</span>
+                    </div>
+                  </div>
+
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Infill Density ({selectedInfill.label})</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{selectedInfill.tag || `${selectedInfill.percentage}%`}</span>
+                      <span className="breakdown-price">₹{calculations.infillCost}</span>
+                    </div>
+                  </div>
+
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Surface Finish</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{selectedFinish.name}</span>
+                      <span className="breakdown-price">₹{calculations.finishCost}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="summary-divider" />
+
+                {/* Subtotal & GST */}
+                <div className="summary-subtotal-row">
+                  <span>Subtotal</span>
+                  <span className="fw-semibold">₹{calculations.subtotal}</span>
+                </div>
+
+                <div className="summary-subtotal-row">
+                  <span>GST (18%)</span>
+                  <span className="fw-semibold">₹{calculations.gstAmount.toFixed(2)}</span>
+                </div>
+
+                <div className="summary-divider" />
+
+                {/* Grand Total */}
+                <div className="summary-total-row">
+                  <span className="summary-total-label">Total</span>
+                  <span className="summary-total-value">₹{calculations.grandTotal.toFixed(2)}</span>
+                </div>
+
+                {/* Delivery Guarantee Pill */}
+                <div className="summary-delivery-box">
+                  <Truck size={22} className="summary-delivery-icon" />
+                  <div className="summary-delivery-text">
+                    <span className="summary-delivery-label">Estimated Delivery</span>
+                    <span className="summary-delivery-time">
+                      {pricingConfig.siteSettings?.estimatedDeliveryDays || "3 – 5 Working Days"}{" "}
+                      {pricingConfig.siteSettings?.deliveryRegion || "Across India"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Oversized Warning Alert */}
+                {isOversized && (
+                  <div className="summary-oversized-alert">
+                    <AlertTriangle size={18} className="flex-shrink-0" />
+                    <span>
+                      Model exceeds maximum build volume (
+                      {MAX_PRINT_WIDTH_MM === -1 ? "∞" : `${MAX_PRINT_WIDTH_MM}`} ×{" "}
+                      {MAX_PRINT_DEPTH_MM === -1 ? "∞" : `${MAX_PRINT_DEPTH_MM}`} ×{" "}
+                      {MAX_PRINT_HEIGHT_MM === -1 ? "∞" : `${MAX_PRINT_HEIGHT_MM}`} mm).
+                      Please scale down to place order.
+                    </span>
+                  </div>
+                )}
+
+                {/* CTA Buttons */}
+                <div className="summary-actions">
+                  <button
+                    type="button"
+                    className="btn-add-to-cart"
+                    onClick={handleAddToCart}
+                    disabled={isOversized}
+                  >
+                    <ShoppingCart size={18} />
+                    <span>Add to Cart</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-buy-now"
+                    onClick={handleBuyNow}
+                    disabled={isOversized}
+                  >
+                    <span>Buy Now</span>
+                  </button>
+                </div>
+
+                <div className="summary-help-note">
+                  Need help?{" "}
+                  <Link to="/contact" className="summary-help-link">
+                    Contact us
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          WHY CHOOSE OUR 3D PRINTING SERVICE?
+          ===================================================== */}
+      <section className="why-choose-section">
+        <div className="container">
+          <h2 className="why-choose-heading">Why Choose Our 3D Printing Service?</h2>
+          <div className="why-features-grid">
+            <div className="why-feature-card">
+              <div className="why-icon-box">
+                <Sparkles size={22} />
+              </div>
+              <div className="why-content">
+                <span className="why-title">Precision & Quality</span>
+                <span className="why-desc">High accuracy prints with smooth finish</span>
+              </div>
+            </div>
+
+            <div className="why-feature-card">
+              <div className="why-icon-box">
+                <Layers size={22} />
+              </div>
+              <div className="why-content">
+                <span className="why-title">Wide Material Range</span>
+                <span className="why-desc">Multiple materials to suit your needs</span>
+              </div>
+            </div>
+
+            <div className="why-feature-card">
+              <div className="why-icon-box">
+                <ShieldCheck size={22} />
+              </div>
+              <div className="why-content">
+                <span className="why-title">Secure & Reliable</span>
+                <span className="why-desc">Your files are safe and secure with us</span>
+              </div>
+            </div>
+
+            <div className="why-feature-card">
+              <div className="why-icon-box">
+                <Headphones size={22} />
+              </div>
+              <div className="why-content">
+                <span className="why-title">Customer Support</span>
+                <span className="why-desc">We're here to help you at every step</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          POPULAR MATERIALS GUIDE
+          ===================================================== */}
+      <section className="materials-guide-section">
+        <div className="container">
+          <div className="guide-header-row">
+            <h2 className="guide-heading">Popular Materials Guide</h2>
+            <Link to="/products" className="guide-all-link">
+              <span>View all materials</span>
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+
+          <div className="guide-cards-grid">
+            {materials.map((mat) => (
+              <div key={mat.id} className="guide-card">
+                <div className="guide-spool-wrap">
+                  <img
+                    src={mat.image || "/images/products/blue_filament.png"}
+                    alt={mat.name}
+                    className="guide-spool-img"
+                  />
+                </div>
+                <div className="guide-material-title">{mat.name}</div>
+                <div className="guide-material-desc">{mat.description}</div>
+                <div className="guide-material-best">
+                  <span>Best for:</span> {mat.bestFor}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+
+      {/* =====================================================
+          "WHAT IS INFILL?" INFO MODAL
+          ===================================================== */}
+      {isInfillModalOpen && (
+        <div className="admin-modal-backdrop" onClick={() => setIsInfillModalOpen(false)}>
+          <div className="admin-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <span className="admin-modal-title">What is Infill Density?</span>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setIsInfillModalOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p className="text-secondary small mb-3">
+                Infill refers to the internal structure of a 3D print. 3D prints are rarely printed
+                100% solid inside to save weight, material, and printing time.
+              </p>
+              <div className="d-flex flex-column gap-3">
+                <div className="p-3 bg-light rounded-3">
+                  <div className="fw-bold text-dark">10% - 20% (Fast / Lightweight)</div>
+                  <div className="text-muted small">
+                    Ideal for figurines, architectural models, visual prototypes, and display items.
+                  </div>
+                </div>
+                <div className="p-3 bg-light rounded-3">
+                  <div className="fw-bold text-dark">30% - 50% (Standard / Strong)</div>
+                  <div className="text-muted small">
+                    Recommended for functional everyday objects, phone stands, brackets, and enclosures.
+                  </div>
+                </div>
+                <div className="p-3 bg-light rounded-3">
+                  <div className="fw-bold text-dark">100% (Solid Mechanical)</div>
+                  <div className="text-muted small">
+                    Maximum structural rigidity for heavy-duty gears, mechanical tools, and high stress parts.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setIsInfillModalOpen(false)}
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
