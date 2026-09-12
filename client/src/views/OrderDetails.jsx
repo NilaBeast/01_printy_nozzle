@@ -17,7 +17,6 @@ import {
   ShoppingCart,
   ArrowRight
 } from "lucide-react";
-import { INITIAL_ORDERS } from "./Orders";
 import orderService from "../services/order.service";
 import "../../public/css/order-details.css";
 
@@ -25,12 +24,7 @@ const OrderDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [serverOrder, setServerOrder] = useState(null);
-
-  // Find the exact order from INITIAL_ORDERS by id, fallback to the first order
-  const fallbackOrder = useMemo(() => {
-    const found = INITIAL_ORDERS.find((o) => o.id === id);
-    return found || INITIAL_ORDERS[0];
-  }, [id]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -42,6 +36,7 @@ const OrderDetails = () => {
       }
 
       try {
+        setLoading(true);
         const response = await orderService.getOrder(id);
         const data = response.data.order;
         const status =
@@ -82,7 +77,14 @@ const OrderDetails = () => {
           });
         }
       } catch (error) {
-        toast.error(error?.response?.data?.message || "Unable to load order details");
+        if (active) {
+          setServerOrder(null);
+          toast.error(error?.response?.data?.message || "Unable to load order details");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -92,7 +94,7 @@ const OrderDetails = () => {
     };
   }, [id, navigate]);
 
-  const order = serverOrder || fallbackOrder;
+  const order = serverOrder;
 
   // Order items mapped with fallbacks
   const items = useMemo(() => {
@@ -124,20 +126,20 @@ const OrderDetails = () => {
 
   // Parse address details
   const address = useMemo(() => {
-    if (typeof order.shippingAddress === "string") {
+    if (typeof order?.shippingAddress === "string" && order.shippingAddress.trim()) {
       const parts = order.shippingAddress.split(", ");
       return {
-        name: parts[0] || "Diprati Das",
-        line1: parts.slice(1, 3).join(", ") || "123 Maker Street, Koramangala",
-        line2: parts.slice(3).join(", ") || "Bengaluru, Karnataka 560034, India",
-        phone: "+91 98765 43210"
+        name: parts[0] || "Customer",
+        line1: parts.slice(1, 3).join(", ") || parts[0],
+        line2: parts.slice(3).join(", ") || "",
+        phone: ""
       };
     }
     return {
-      name: "Diprati Das",
-      line1: "123, Maker Street, Koramangala",
-      line2: "Bengaluru, Karnataka 560034, India",
-      phone: "+91 98765 43210"
+      name: "Customer",
+      line1: "Address on file",
+      line2: "",
+      phone: ""
     };
   }, [order]);
 

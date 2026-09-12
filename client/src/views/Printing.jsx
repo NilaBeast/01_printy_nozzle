@@ -86,8 +86,8 @@ export default function Printing() {
   /* =========================================================
      PRINT OPTIONS STATE
      ========================================================= */
-  const materials = serverMaterials || pricingConfig.materials || defaultPricingData.materials;
-  const colors = serverColors || pricingConfig.colors || defaultPricingData.colors;
+  const materials = serverMaterials !== null ? serverMaterials : (pricingConfig.materials || []);
+  const colors = serverColors !== null ? serverColors : (pricingConfig.colors || []);
   const infillOptions = pricingConfig.infillOptions || defaultPricingData.infillOptions;
   const surfaceFinishes = pricingConfig.surfaceFinishes || defaultPricingData.surfaceFinishes;
 
@@ -129,18 +129,18 @@ export default function Printing() {
           priceAdjustment: Number(color.price_adjustment || 0),
         }));
 
+        setServerMaterials(mappedMaterials);
         if (mappedMaterials.length > 0) {
-          setServerMaterials(mappedMaterials);
           setSelectedMaterialId(mappedMaterials[0].id);
         }
 
+        setServerColors(mappedColors);
         if (mappedColors.length > 0) {
-          setServerColors(mappedColors);
           setSelectedColorHex(mappedColors[0].hex);
         }
       } catch (error) {
-        setServerMaterials(null);
-        setServerColors(null);
+        setServerMaterials([]);
+        setServerColors([]);
       }
     };
 
@@ -664,7 +664,7 @@ export default function Printing() {
                   <div>
                     <div className="option-group-label">Material</div>
                     <div className="material-cards-grid">
-                      {materials.map((mat) => {
+                      {materials.length ? materials.map((mat) => {
                         const isSelected = mat.id === selectedMaterialId;
                         return (
                           <div
@@ -676,7 +676,7 @@ export default function Printing() {
                             <div className="material-price">₹{mat.pricePerGram} / gram</div>
                           </div>
                         );
-                      })}
+                      }) : <div className="text-muted py-2">No materials available</div>}
                     </div>
                   </div>
 
@@ -685,7 +685,7 @@ export default function Printing() {
                     <div className="option-group-label">Color</div>
                     <div className="color-swatches-box">
                       <div className="color-swatches-grid">
-                        {colors.map((c) => {
+                        {colors.length ? colors.map((c) => {
                           const isSelected = selectedColorHex.toLowerCase() === c.hex.toLowerCase();
                           return (
                             <button
@@ -701,7 +701,7 @@ export default function Printing() {
                               aria-label={c.name}
                             />
                           );
-                        })}
+                        }) : <div className="text-muted py-2">No colors available</div>}
                       </div>
 
                       {/* Custom Color Input */}

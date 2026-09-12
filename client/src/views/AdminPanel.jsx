@@ -31,46 +31,12 @@ import {
   Download,
 } from "lucide-react";
 import adminService from "../services/admin.service";
-import clientCatalog from "../data/products.json";
 import "../../public/css/admin.css";
 
 const money = (value) =>
   `Rs. ${Number(value || 0).toLocaleString("en-IN", {
     maximumFractionDigits: 2,
   })}`;
-
-const localCatalogProducts = Array.isArray(clientCatalog) ? clientCatalog : [];
-
-const normalizeLocalProduct = (product) => ({
-  id: `client-${product.id}`,
-  client_id: product.id,
-  name: product.name,
-  sku: `CLIENT-${product.id}`,
-  price: product.price,
-  stock: product.stockCount ?? 0,
-  category_name: product.category,
-  brand_name: product.brand,
-  primary_image: product.image,
-  is_active: product.availability !== "Out of Stock",
-  source: "client",
-});
-
-const mergeCatalogProducts = (serverProducts = []) => {
-  const normalizedServerProducts = serverProducts.map((product) => ({
-    ...product,
-    source: "server",
-  }));
-  const serverNames = new Set(
-    normalizedServerProducts
-      .map((product) => product.name?.trim().toLowerCase())
-      .filter(Boolean)
-  );
-  const localOnlyProducts = localCatalogProducts
-    .map(normalizeLocalProduct)
-    .filter((product) => !serverNames.has(product.name?.trim().toLowerCase()));
-
-  return [...normalizedServerProducts, ...localOnlyProducts];
-};
 
 const statusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
 const printStatusOptions = [
@@ -162,7 +128,7 @@ function AdminPanel() {
       ]);
 
       setStats(statsRes.data.data || {});
-      setProducts(mergeCatalogProducts(productsRes.data.data?.products || []));
+      setProducts(productsRes.data.data?.products || []);
       setOrders(ordersRes.data.data?.orders || []);
       setPrintOrders(printOrdersRes.data.data?.orders || []);
       setUsers(usersRes.data.data?.users || []);
@@ -471,6 +437,7 @@ function AdminPanel() {
                         order.status,
                         money(order.total_amount),
                       ])}
+                      emptyMessage="No recent orders found"
                     />
                   </div>
                   <div className="admin-panel">
@@ -483,6 +450,7 @@ function AdminPanel() {
                         product.units_sold,
                         money(product.price),
                       ])}
+                      emptyMessage="No top products found"
                     />
                   </div>
                 </section>
@@ -514,106 +482,102 @@ function AdminPanel() {
                       <span>Category</span>
                       <span>Price</span>
                       <span>Stock</span>
-                      <span>Source</span>
                       <span>Action</span>
                     </div>
-                    {filteredProducts.map((product) => {
-                      const isClientProduct = product.source === "client";
-
-                      return (
-                        <article
-                          className={`admin-product-row ${isClientProduct ? "client-product" : ""}`}
-                          key={product.id}
-                        >
+                    {filteredProducts.length ? (
+                      filteredProducts.map((product) => (
+                        <article className="admin-product-row" key={product.id}>
                           <img src={product.primary_image || "/images/products/01.png"} alt={product.name} />
                           <div className="admin-product-info">
                             <strong>{product.name}</strong>
                             <span>{product.sku || product.brand_name || "No SKU"}</span>
                           </div>
                           <span className="admin-muted-cell">{product.category_name || product.brand_name || "Catalog"}</span>
-                          {isClientProduct ? (
-                            <strong className="admin-readonly-value">{money(product.price)}</strong>
-                          ) : (
-                            <input
-                              type="number"
-                              defaultValue={product.price}
-                              onBlur={(e) => updateProduct(product.id, { price: Number(e.target.value) })}
-                              aria-label="Price"
-                            />
-                          )}
-                          {isClientProduct ? (
-                            <span className="admin-readonly-value">{product.stock}</span>
-                          ) : (
-                            <input
-                              type="number"
-                              defaultValue={product.stock}
-                              onBlur={(e) => updateProduct(product.id, { stock: Number(e.target.value) })}
-                              aria-label="Stock"
-                            />
-                          )}
-                          <span className={`admin-source-badge ${isClientProduct ? "client" : "server"}`}>
-                            {isClientProduct ? "Client" : "Server"}
-                          </span>
+                          <input
+                            type="number"
+                            defaultValue={product.price}
+                            onBlur={(e) => updateProduct(product.id, { price: Number(e.target.value) })}
+                            aria-label="Price"
+                          />
+                          <input
+                            type="number"
+                            defaultValue={product.stock}
+                            onBlur={(e) => updateProduct(product.id, { stock: Number(e.target.value) })}
+                            aria-label="Stock"
+                          />
                           <button
                             type="button"
                             className="admin-icon danger"
-                            onClick={() => !isClientProduct && updateProduct(product.id, { is_active: false })}
-                            disabled={isClientProduct}
-                            title={isClientProduct ? "Static storefront catalog product" : "Deactivate product"}
+                            onClick={() => updateProduct(product.id, { is_active: false })}
+                            title="Deactivate product"
                           >
-                            {isClientProduct ? <ShieldCheck size={16} /> : <Trash2 size={16} />}
+                            <Trash2 size={16} />
                           </button>
                         </article>
-                      );
-                    })}
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No products found</div>
+                    )}
                   </div>
                 </div>
               </section>
             )}
 
             {activeTab === "orders" && !selectedOrderDetail && (
-              <section className="admin-panel">
-                <h2>Customer Orders</h2>
-                <div className="admin-list">
-                  {orders.map((order) => (
-                    <article
-                      className="admin-order-row admin-order-clickable"
-                      key={order.id}
-                      onClick={(e) => {
-                        if (e.target.tagName !== "SELECT" && e.target.tagName !== "OPTION") {
-                          loadOrderDetails(order.id);
-                        }
-                      }}
-                    >
-                      <div className="admin-order-info-click" title="View order details">
-                        <strong>#{order.order_number}</strong>
-                        <span>{order.first_name} {order.last_name} | {order.item_count || 0} items</span>
-                      </div>
-                      <strong>{money(order.total_amount)}</strong>
-                      <select
-                        value={order.status}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          updateOrder(order.id, e.target.value);
-                        }}
-                      >
-                        {statusOptions.map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="admin-view-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          loadOrderDetails(order.id);
-                        }}
-                        title="View Details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </article>
-                  ))}
+              <section className="admin-grid">
+                <div className="admin-panel">
+                  <div className="admin-panel-title-row">
+                    <div>
+                      <h2>Customer Orders</h2>
+                      <p className="admin-panel-subtitle">Manage customer orders and update delivery status.</p>
+                    </div>
+                    <span className="admin-count-badge">{orders.length} orders</span>
+                  </div>
+                  <div className="admin-list">
+                    {orders.length ? (
+                      orders.map((order) => (
+                        <article
+                          className="admin-order-row admin-order-clickable"
+                          key={order.id}
+                          onClick={(e) => {
+                            if (e.target.tagName !== "SELECT" && e.target.tagName !== "OPTION") {
+                              loadOrderDetails(order.id);
+                            }
+                          }}
+                        >
+                          <div className="admin-order-info-click" title="View order details">
+                            <strong>#{order.order_number}</strong>
+                            <span>{order.first_name} {order.last_name} | {order.item_count || 0} items</span>
+                          </div>
+                          <strong>{money(order.total_amount)}</strong>
+                          <select
+                            value={order.status}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateOrder(order.id, e.target.value);
+                            }}
+                          >
+                            {statusOptions.map((status) => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="admin-view-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              loadOrderDetails(order.id);
+                            }}
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No customer orders yet</div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
@@ -736,47 +700,51 @@ function AdminPanel() {
                     </div>
                   </div>
                   <div className="admin-material-list">
-                    {materials.map((material) => (
-                      <article className="admin-material-row" key={material.id}>
-                        <div>
-                          <strong>{material.name}</strong>
-                          <span>{material.code || material.slug || "MATERIAL"}</span>
-                        </div>
-                        <label>
-                          <span>Rs./g</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={material.price_per_gram}
-                            onBlur={(e) => updateMaterial(material.id, { price_per_gram: Number(e.target.value) })}
-                          />
-                        </label>
-                        <label>
-                          <span>Density</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={material.density_g_cm3}
-                            onBlur={(e) => updateMaterial(material.id, { density_g_cm3: Number(e.target.value) })}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className={`admin-toggle ${material.is_active ? "active" : ""}`}
-                          onClick={() => updateMaterial(material.id, { is_active: !material.is_active })}
-                        >
-                          {material.is_active ? "Active" : "Inactive"}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-icon danger"
-                          onClick={() => deleteMaterial(material.id)}
-                          title="Delete material"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </article>
-                    ))}
+                    {materials.length ? (
+                      materials.map((material) => (
+                        <article className="admin-material-row" key={material.id}>
+                          <div>
+                            <strong>{material.name}</strong>
+                            <span>{material.code || material.slug || "MATERIAL"}</span>
+                          </div>
+                          <label>
+                            <span>Rs./g</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              defaultValue={material.price_per_gram}
+                              onBlur={(e) => updateMaterial(material.id, { price_per_gram: Number(e.target.value) })}
+                            />
+                          </label>
+                          <label>
+                            <span>Density</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              defaultValue={material.density_g_cm3}
+                              onBlur={(e) => updateMaterial(material.id, { density_g_cm3: Number(e.target.value) })}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className={`admin-toggle ${material.is_active ? "active" : ""}`}
+                            onClick={() => updateMaterial(material.id, { is_active: !material.is_active })}
+                          >
+                            {material.is_active ? "Active" : "Inactive"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-icon danger"
+                            onClick={() => deleteMaterial(material.id)}
+                            title="Delete material"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No materials found</div>
+                    )}
                   </div>
                 </div>
                 )}
@@ -797,36 +765,40 @@ function AdminPanel() {
                     </div>
                   </div>
                   <div className="admin-color-grid">
-                    {colors.map((color) => (
-                      <article className="admin-color-row" key={color.id}>
-                        <span className="admin-color-dot" style={{ backgroundColor: color.hex_code }} />
-                        <div>
-                          <strong>{color.name}</strong>
-                          <span>{color.hex_code}</span>
-                        </div>
-                        <input
-                          type="color"
-                          defaultValue={color.hex_code || "#000000"}
-                          onBlur={(e) => updateColor(color.id, { hex_code: e.target.value })}
-                          aria-label={`${color.name} color`}
-                        />
-                        <button
-                          type="button"
-                          className={`admin-toggle ${color.is_active ? "active" : ""}`}
-                          onClick={() => updateColor(color.id, { is_active: !color.is_active })}
-                        >
-                          {color.is_active ? "Active" : "Inactive"}
-                        </button>
-                        <button
-                          type="button"
-                          className="admin-icon danger"
-                          onClick={() => deleteColor(color.id)}
-                          title="Delete color"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </article>
-                    ))}
+                    {colors.length ? (
+                      colors.map((color) => (
+                        <article className="admin-color-row" key={color.id}>
+                          <span className="admin-color-dot" style={{ backgroundColor: color.hex_code }} />
+                          <div>
+                            <strong>{color.name}</strong>
+                            <span>{color.hex_code}</span>
+                          </div>
+                          <input
+                            type="color"
+                            defaultValue={color.hex_code || "#000000"}
+                            onBlur={(e) => updateColor(color.id, { hex_code: e.target.value })}
+                            aria-label={`${color.name} color`}
+                          />
+                          <button
+                            type="button"
+                            className={`admin-toggle ${color.is_active ? "active" : ""}`}
+                            onClick={() => updateColor(color.id, { is_active: !color.is_active })}
+                          >
+                            {color.is_active ? "Active" : "Inactive"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-icon danger"
+                            onClick={() => deleteColor(color.id)}
+                            title="Delete color"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No colors found</div>
+                    )}
                   </div>
                 </div>
                 )}
@@ -835,26 +807,38 @@ function AdminPanel() {
             )}
 
             {activeTab === "users" && (
-              <section className="admin-panel">
-                <h2>Users</h2>
-                <div className="admin-list">
-                  {users.map((user) => (
-                    <article className="admin-user-row" key={user.id}>
-                      <div className="admin-avatar">{`${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`}</div>
-                      <div>
-                        <strong>{user.first_name} {user.last_name}</strong>
-                        <span>{user.email}</span>
-                      </div>
-                      <span className="admin-pill">{user.role}</span>
-                      <button
-                        type="button"
-                        className="admin-secondary"
-                        onClick={() => adminService.updateUser(user.id, { is_active: !user.is_active }).then(loadAdminData)}
-                      >
-                        {user.is_active ? "Deactivate" : "Activate"}
-                      </button>
-                    </article>
-                  ))}
+              <section className="admin-grid">
+                <div className="admin-panel">
+                  <div className="admin-panel-title-row">
+                    <div>
+                      <h2>Users</h2>
+                      <p className="admin-panel-subtitle">Manage customer and administrative accounts.</p>
+                    </div>
+                    <span className="admin-count-badge">{users.length} users</span>
+                  </div>
+                  <div className="admin-list">
+                    {users.length ? (
+                      users.map((user) => (
+                        <article className="admin-user-row" key={user.id}>
+                          <div className="admin-avatar">{`${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`}</div>
+                          <div>
+                            <strong>{user.first_name} {user.last_name}</strong>
+                            <span>{user.email}</span>
+                          </div>
+                          <span className="admin-pill">{user.role}</span>
+                          <button
+                            type="button"
+                            className="admin-secondary"
+                            onClick={() => adminService.updateUser(user.id, { is_active: !user.is_active }).then(loadAdminData)}
+                          >
+                            {user.is_active ? "Deactivate" : "Activate"}
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No users found</div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}
@@ -867,17 +851,24 @@ function AdminPanel() {
                       <h2>Coupons</h2>
                       <p className="admin-panel-subtitle">Create and review active promotional offers.</p>
                     </div>
-                    <button type="button" className="admin-primary" onClick={() => setActiveModal("coupon")}>
-                      <Plus size={16} />
-                      <span>Add Coupon</span>
-                    </button>
+                    <div className="admin-actions compact">
+                      <span className="admin-count-badge">{coupons.length} coupons</span>
+                      <button type="button" className="admin-primary" onClick={() => setActiveModal("coupon")}>
+                        <Plus size={16} />
+                        <span>Add Coupon</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="admin-chip-list">
-                    {coupons.map((coupon) => (
-                      <span className="admin-chip" key={coupon.id}>
-                        {coupon.code} | {coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : money(coupon.discount_value)}
-                      </span>
-                    ))}
+                    {coupons.length ? (
+                      coupons.map((coupon) => (
+                        <span className="admin-chip" key={coupon.id}>
+                          {coupon.code} | {coupon.discount_type === "percentage" ? `${coupon.discount_value}%` : money(coupon.discount_value)}
+                        </span>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No coupons found</div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -891,17 +882,24 @@ function AdminPanel() {
                       <h2>Categories</h2>
                       <p className="admin-panel-subtitle">Manage catalog categories used by storefront products.</p>
                     </div>
-                    <button type="button" className="admin-primary" onClick={() => setActiveModal("category")}>
-                      <Plus size={16} />
-                      <span>Add Category</span>
-                    </button>
+                    <div className="admin-actions compact">
+                      <span className="admin-count-badge">{categories.length} categories</span>
+                      <button type="button" className="admin-primary" onClick={() => setActiveModal("category")}>
+                        <Plus size={16} />
+                        <span>Add Category</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="admin-chip-list">
-                    {categories.map((category) => (
-                      <span className="admin-chip" key={category.id}>
-                        {category.name} | {category.product_count || 0}
-                      </span>
-                    ))}
+                    {categories.length ? (
+                      categories.map((category) => (
+                        <span className="admin-chip" key={category.id}>
+                          {category.name} | {category.product_count || 0}
+                        </span>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No categories found</div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1059,7 +1057,7 @@ function AdminModal({ open, title, subtitle, children, onClose }) {
   );
 }
 
-function AdminTable({ columns, rows }) {
+function AdminTable({ columns, rows, emptyMessage = "No records yet" }) {
   return (
     <div className="admin-table">
       <div className="admin-table-head" style={{ gridTemplateColumns: `repeat(${columns.length}, 1fr)` }}>
@@ -1069,7 +1067,7 @@ function AdminTable({ columns, rows }) {
         <div className="admin-table-row" style={{ gridTemplateColumns: `repeat(${columns.length}, 1fr)` }} key={index}>
           {row.map((cell, cellIndex) => <span key={cellIndex}>{cell}</span>)}
         </div>
-      )) : <div className="admin-empty small">No records yet</div>}
+      )) : <div className="admin-empty small">{emptyMessage}</div>}
     </div>
   );
 }

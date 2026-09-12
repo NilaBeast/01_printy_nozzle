@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "../../public/css/product.css";
-import productData from "../data/products.json";
 import SkeletonCard from "../components/Loaders/SkeletonCard";
 import catalogService, { normalizeProduct } from "../services/catalog.service";
 import cartService from "../services/cart.service";
@@ -47,7 +46,7 @@ export default function Product() {
   const [viewMode, setViewMode] = useState("grid"); // "grid" | "list"
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllBrands, setShowAllBrands] = useState(false);
-  const [catalogProducts, setCatalogProducts] = useState(productData);
+  const [catalogProducts, setCatalogProducts] = useState([]);
 
   // UX & Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -70,12 +69,12 @@ export default function Product() {
           search: searchQuery || undefined,
         });
         const products = (response.data.products || []).map(normalizeProduct);
-        if (active && products.length > 0) {
+        if (active) {
           setCatalogProducts(products);
         }
       } catch (error) {
         if (active) {
-          setCatalogProducts(productData);
+          setCatalogProducts([]);
         }
       } finally {
         if (active) {
@@ -101,15 +100,6 @@ export default function Product() {
       }
     }
   }, [categoryQuery]);
-
-  // Loading skeleton simulation on mount or category change
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [selectedCategory, searchQuery]);
 
   // Reset pagination when any filter changes
   useEffect(() => {

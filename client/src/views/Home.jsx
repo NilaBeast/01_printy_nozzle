@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../public/css/home.css";
 
-import productData from "../data/products.json";
 import catalogService, { normalizeProduct } from "../services/catalog.service";
 
 import SkeletonCard from "../components/Loaders/SkeletonCard";
@@ -14,7 +13,7 @@ export default function Home() {
   const navigate = useNavigate();
 
   const [featured, setFeatured] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   /* =====================================================
@@ -66,41 +65,29 @@ export default function Home() {
   };
 
   /* =====================================================
-     NORMALIZE PRODUCT DATA
-     Supports common JSON field names
+     LOAD PRODUCTS FROM DATABASE
   ===================================================== */
-
-  const products = useMemo(() => {
-    if (Array.isArray(productData)) {
-      return productData;
-    }
-
-    if (Array.isArray(productData?.products)) {
-      return productData.products;
-    }
-
-    if (Array.isArray(productData?.data)) {
-      return productData.data;
-    }
-
-    return [];
-  }, []);
-
-  const [catalogProducts, setCatalogProducts] = useState(products);
 
   useEffect(() => {
     let active = true;
 
     const loadHomeProducts = async () => {
       try {
-        const response = await catalogService.getProducts({ featured: true, limit: 6 });
+        setLoading(true);
+        setError("");
+        const response = await catalogService.getProducts({ limit: 6 });
         const items = (response.data.products || []).map(normalizeProduct);
-        if (active && items.length > 0) {
-          setCatalogProducts(items);
-        }
-      } catch (error) {
         if (active) {
-          setCatalogProducts(products);
+          setFeatured(items);
+        }
+      } catch (err) {
+        if (active) {
+          setFeatured([]);
+          setError("Unable to load products.");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
         }
       }
     };
@@ -109,32 +96,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [products]);
-
-  /* =====================================================
-     FEATURED PRODUCTS
-  ===================================================== */
-
-  useEffect(() => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const items = catalogProducts
-        .map((product, index) => ({
-          ...product,
-          _index: index,
-        }))
-        .slice(0, 6);
-
-      setFeatured(items);
-    } catch (err) {
-      console.error(err);
-      setError("Unable to load products.");
-    } finally {
-      setLoading(false);
-    }
-  }, [catalogProducts]);
+  }, []);
 
   /* =====================================================
      PRODUCT HELPERS
@@ -184,25 +146,6 @@ export default function Home() {
 
   const getProductId = (product, index) => {
     return product?.id ?? product?._id ?? index;
-  };
-
-  /* =====================================================
-     CATEGORY IMAGE FINDER
-  ===================================================== */
-
-  const findCategoryProduct = (keywords) => {
-    const found = products.find((product) => {
-      const category = getProductCategory(product).toLowerCase();
-      const name = getProductName(product).toLowerCase();
-
-      return keywords.some(
-        (keyword) =>
-          category.includes(keyword) ||
-          name.includes(keyword)
-      );
-    });
-
-    return found;
   };
 
   /* =====================================================
@@ -767,6 +710,12 @@ export default function Home() {
         ) : error ? (
 
           <ErrorState message={error} />
+
+        ) : featured.length === 0 ? (
+
+          <div className="home-empty-products text-center py-5">
+            <p className="text-muted fs-5">No products available at the moment.</p>
+          </div>
 
         ) : (
 
