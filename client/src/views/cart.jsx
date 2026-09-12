@@ -21,41 +21,6 @@ import "../../public/css/cart.css";
 import "../../public/css/skeleton.css";
 import cartService from "../services/cart.service";
 
-// Initial mock cart items matching the reference design exactly
-const INITIAL_CART_ITEMS = [
-  {
-    id: 1,
-    name: "ESP32 DevKit V1",
-    subtitle: "Microcontrollers",
-    image: "/images/products/01.png",
-    price: 499,
-    quantity: 1,
-  },
-  {
-    id: 2,
-    name: "PLA 3D Printer Filament",
-    subtitle: "Blue | 1kg",
-    image: "/images/products/blue_filament.png",
-    price: 899,
-    quantity: 2,
-  },
-  {
-    id: 3,
-    name: "Precision Screwdriver Set",
-    subtitle: "25 in 1",
-    image: "/images/products/screwdriver_set.png",
-    price: 299,
-    quantity: 1,
-  },
-  {
-    id: 4,
-    name: "HC-SR04 Ultrasonic Sensor",
-    subtitle: "Modules & Sensors",
-    image: "/images/products/06.png",
-    price: 149,
-    quantity: 1,
-  },
-];
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -71,7 +36,7 @@ export default function Cart() {
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_CART_ITEMS;
+    return [];
   });
   const [cartMeta, setCartMeta] = useState(null);
 
@@ -193,12 +158,6 @@ export default function Cart() {
         toast.error(error?.response?.data?.message || "Unable to clear cart");
       }
     }
-  };
-
-  // Reset to sample items (for quick testing)
-  const handleResetCart = () => {
-    setCartItems(INITIAL_CART_ITEMS);
-    toast.success("Sample items restored!");
   };
 
   return (
@@ -360,14 +319,6 @@ export default function Cart() {
                 <ShoppingBag size={18} />
                 <span>Explore Products</span>
               </Link>
-              <button
-                type="button"
-                className="btn-continue-shopping"
-                style={{ width: "auto", padding: "12px 24px" }}
-                onClick={handleResetCart}
-              >
-                Restore Sample Cart
-              </button>
             </div>
           </div>
         ) : (

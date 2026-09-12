@@ -31,167 +31,7 @@ import "../../public/css/orders.css";
 import orderService from "../services/order.service";
 import authServices from "../services/auth.service";
 
-// Sample order data using existing products & custom 3D prints
-export const INITIAL_ORDERS = [
-  {
-    id: "EL12456",
-    date: "12 Aug 2024",
-    placedDate: "12 Aug 2024, 10:24 AM",
-    status: "Delivered",
-    statusDate: "Delivered on 16 Aug 2024",
-    totalPrice: 1246,
-    itemCountText: "4 items",
-    itemsSummary: "ESP32 DevKit V1, PLA Filament (Red), Precision Screwdriver Set, Jumper Wires",
-    is3DPrint: false,
-    shippingAddress: "Diprati Das, 123 Maker Street, Koramangala, Bengaluru, Karnataka 560034",
-    paymentMethod: "UPI (Google Pay)",
-    thumbnails: [
-      { id: 1, name: "ESP32 DevKit V1", image: "/images/products/01.png", price: 499, qty: 1 },
-      { id: 2, name: "PLA Filament (Red)", image: "/images/products/05.png", price: 349, qty: 1 },
-      { id: 3, name: "Precision Screwdriver Set", image: "/images/products/screwdriver_set.png", price: 299, qty: 1 },
-    ],
-    overflowCount: 1,
-    allItems: [
-      { id: 1, name: "ESP32 DevKit V1", subtext: "Microcontrollers | Black", image: "/images/products/01.png", price: 499, qty: 1 },
-      { id: 2, name: "PLA Filament (Red)", subtext: "3D Printing | 1.75mm 1kg", image: "/images/products/05.png", price: 349, qty: 1 },
-      { id: 3, name: "Precision Screwdriver Set", subtext: "25 in 1 Multi-bit Kit", image: "/images/products/screwdriver_set.png", price: 299, qty: 1 },
-      { id: 4, name: "Premium Jumper Wires (40 pcs)", subtext: "Male to Female | 20cm", image: "/images/products/12.png", price: 99, qty: 1 },
-    ],
-    trackingSteps: [
-      { title: "Order Placed", time: "12 Aug 2024, 10:24 AM", completed: true, desc: "Your order has been placed successfully." },
-      { title: "Packed", time: "13 Aug 2024, 02:15 PM", completed: true, desc: "Carrier: BlueDart Express (AWB: BLR982131)" },
-      { title: "Shipped", time: "14 Aug 2024, 11:32 AM", completed: true, desc: "In transit to nearest distribution facility." },
-      { title: "Out for Delivery", time: "15 Aug 2024, 09:10 AM", completed: true, desc: "Courier partner is out for delivery." },
-      { title: "Delivered", time: "16 Aug 2024, 04:32 PM", completed: true, desc: "Package handed over to customer." },
-    ]
-  },
-  {
-    id: "EL12412",
-    date: "03 Aug 2024",
-    placedDate: "03 Aug 2024, 02:15 PM",
-    status: "Processing",
-    statusText: "In Production",
-    statusDate: "Expected by 07 Aug 2024",
-    totalPrice: 799,
-    itemCountText: "3D Printing Order",
-    itemsSummary: "Custom 3D Print (STL File)",
-    specsText: "Material: PLA  |  Color: White  |  Qty: 2",
-    is3DPrint: true,
-    shippingAddress: "Diprati Das, 123 Maker Street, Koramangala, Bengaluru, Karnataka 560034",
-    paymentMethod: "Credit Card (Mastercard **** 4012)",
-    thumbnails: [
-      { id: 10, name: "3D Custom Bust", image: "/images/products/20.png", price: 399, qty: 1 },
-      { id: 11, name: "White PLA Spool", image: "/images/products/blue_filament.png", price: 250, qty: 1 },
-      { id: 12, name: "Brass Nozzle 0.4mm", image: "/images/products/17.png", price: 150, qty: 1 },
-    ],
-    overflowCount: 2,
-    allItems: [
-      { id: 10, name: "Custom 3D Print - White Vase STL", subtext: "Material: PLA | Color: White", image: "/images/products/20.png", price: 499, qty: 1 },
-      { id: 11, name: "White PLA Filament 1kg", subtext: "1.75mm Spool", image: "/images/products/blue_filament.png", price: 200, qty: 1 },
-      { id: 12, name: "Precision 0.4mm Brass Extruder Nozzle", subtext: "3D Printer Spare Part", image: "/images/products/17.png", price: 100, qty: 1 },
-    ],
-    trackingSteps: [
-      { title: "Order Confirmed", time: "03 Aug 2024, 02:15 PM", completed: true, desc: "STL file verified and sliced." },
-      { title: "In Production", time: "04 Aug 2024, 08:00 AM", completed: true, current: true, desc: "Printing on Bambu Lab X1-Carbon (Layer 420/680)." },
-      { title: "Quality Check", time: "06 Aug 2024, 11:00 AM", completed: false, desc: "Dimensional accuracy verification." },
-      { title: "Out for Delivery", time: "Pending", completed: false, desc: "Dispatched to courier partner." },
-      { title: "Delivered", time: "Expected 07 Aug", completed: false, desc: "Standard courier delivery." },
-    ]
-  },
-  {
-    id: "EL12378",
-    date: "28 Jul 2024",
-    placedDate: "28 Jul 2024, 06:20 PM",
-    status: "Shipped",
-    statusDate: "Expected by 01 Aug 2024",
-    totalPrice: 1099,
-    itemCountText: "4 items",
-    itemsSummary: "Arduino UNO R3, HC-SR04 Sensor, Breadboard, LED Kit",
-    is3DPrint: false,
-    shippingAddress: "Diprati Das, XYZ Tech Park, Outer Ring Road, Bellandur, Bengaluru 560103",
-    paymentMethod: "UPI (PhonePe)",
-    thumbnails: [
-      { id: 20, name: "Arduino UNO R3", image: "/images/products/13.png", price: 649, qty: 1 },
-      { id: 21, name: "HC-SR04 Ultrasonic Sensor", image: "/images/products/14.png", price: 149, qty: 1 },
-      { id: 22, name: "830 Point Breadboard", image: "/images/products/15.png", price: 180, qty: 1 },
-    ],
-    overflowCount: 1,
-    allItems: [
-      { id: 20, name: "Arduino UNO R3 Original", subtext: "Microcontrollers | ATmega328P", image: "/images/products/13.png", price: 649, qty: 1 },
-      { id: 21, name: "HC-SR04 Ultrasonic Sensor Module", subtext: "Modules & Sensors | 5V", image: "/images/products/14.png", price: 149, qty: 1 },
-      { id: 22, name: "830 Point Solderless Breadboard", subtext: "Prototyping & Accessories", image: "/images/products/15.png", price: 180, qty: 1 },
-      { id: 23, name: "Assorted LED Prototyping Kit (50 pcs)", subtext: "5mm LEDs | Multi-color", image: "/images/products/02.png", price: 121, qty: 1 },
-    ],
-    trackingSteps: [
-      { title: "Order Confirmed", time: "28 Jul 2024, 06:20 PM", completed: true, desc: "Payment verified successfully." },
-      { title: "Packed & Ready", time: "29 Jul 2024, 11:00 AM", completed: true, desc: "Package sealed at Bengaluru Fulfillment Center." },
-      { title: "Shipped", time: "30 Jul 2024, 02:30 PM", completed: true, current: true, desc: "In transit via Delhivery Express (AWB: DEL78201)" },
-      { title: "Out for Delivery", time: "Pending", completed: false, desc: "Arrived at local hub." },
-      { title: "Delivered", time: "Expected 01 Aug", completed: false, desc: "Out for final delivery." },
-    ]
-  },
-  {
-    id: "EL12310",
-    date: "12 Jul 2024",
-    placedDate: "12 Jul 2024, 09:12 AM",
-    status: "Delivered",
-    statusDate: "Delivered on 15 Jul 2024",
-    totalPrice: 650,
-    itemCountText: "3D Printing Order",
-    itemsSummary: "Custom 3D Print (STL File)",
-    specsText: "Material: PETG  |  Color: Black  |  Qty: 1",
-    is3DPrint: true,
-    shippingAddress: "Diprati Das, 123 Maker Street, Koramangala, Bengaluru, Karnataka 560034",
-    paymentMethod: "Net Banking (HDFC)",
-    thumbnails: [
-      { id: 30, name: "Black Spool", image: "/images/products/blue_filament.png", price: 350, qty: 1 },
-      { id: 31, name: "Bracket Mount", image: "/images/products/16.png", price: 180, qty: 1 },
-      { id: 32, name: "Printed Figurine", image: "/images/products/21.png", price: 120, qty: 1 },
-    ],
-    overflowCount: 0,
-    allItems: [
-      { id: 30, name: "Custom PETG Industrial Bracket", subtext: "Material: PETG | Color: Black", image: "/images/products/blue_filament.png", price: 350, qty: 1 },
-      { id: 31, name: "MPU6050 Motion Sensor", subtext: "6-Axis Gyroscope & Accelerometer", image: "/images/products/16.png", price: 180, qty: 1 },
-      { id: 32, name: "Calibration Cube Sample", subtext: "20mm Test Print", image: "/images/products/21.png", price: 120, qty: 1 },
-    ],
-    trackingSteps: [
-      { title: "Order Confirmed", time: "12 Jul 2024, 09:12 AM", completed: true, desc: "3D Print job scheduled." },
-      { title: "Production Finished", time: "13 Jul 2024, 03:00 PM", completed: true, desc: "PETG print inspected and packaged." },
-      { title: "Shipped", time: "14 Jul 2024, 10:00 AM", completed: true, desc: "Dispatched with Shadowfax courier." },
-      { title: "Out for Delivery", time: "15 Jul 2024, 08:30 AM", completed: true, desc: "Courier partner out for delivery." },
-      { title: "Delivered", time: "15 Jul 2024, 01:15 PM", completed: true, desc: "Signed and delivered to Diprati Das." },
-    ]
-  },
-  {
-    id: "EL12298",
-    date: "05 Jul 2024",
-    placedDate: "05 Jul 2024, 04:40 PM",
-    status: "Cancelled",
-    statusDate: "Cancelled on 06 Jul 2024",
-    totalPrice: 420,
-    itemCountText: "3 items",
-    itemsSummary: "Soldering Iron Kit, Wire Cutter, Solder Wire",
-    is3DPrint: false,
-    shippingAddress: "Diprati Das, 123 Maker Street, Koramangala, Bengaluru, Karnataka 560034",
-    paymentMethod: "UPI (Google Pay) - Refunded",
-    thumbnails: [
-      { id: 40, name: "Soldering Iron", image: "/images/products/05.png", price: 220, qty: 1 },
-      { id: 41, name: "Wire Cutter", image: "/images/products/screwdriver_set.png", price: 110, qty: 1 },
-      { id: 42, name: "Solder Wire", image: "/images/products/18.png", price: 90, qty: 1 },
-    ],
-    overflowCount: 0,
-    allItems: [
-      { id: 40, name: "60W Adjustable Temp Soldering Iron", subtext: "Tools & Equipment | 220V", image: "/images/products/05.png", price: 220, qty: 1 },
-      { id: 41, name: "Precision Flush Wire Cutters", subtext: "Hand Tools | 5-inch", image: "/images/products/screwdriver_set.png", price: 110, qty: 1 },
-      { id: 42, name: "Lead-Free Rosin Core Solder Wire", subtext: "50g Spool | 0.8mm", image: "/images/products/18.png", price: 90, qty: 1 },
-    ],
-    trackingSteps: [
-      { title: "Order Placed", time: "05 Jul 2024, 04:40 PM", completed: true, desc: "Order received." },
-      { title: "Cancellation Requested", time: "06 Jul 2024, 09:15 AM", completed: true, desc: "Cancelled by user before dispatch." },
-      { title: "Refund Issued", time: "06 Jul 2024, 11:30 AM", completed: true, desc: "₹420 refunded back to source account." },
-    ]
-  }
-];
+export const INITIAL_ORDERS = [];
 
 function Orders() {
   const navigate = useNavigate();
@@ -210,7 +50,8 @@ function Orders() {
   const [activeTab, setActiveTab] = useState("All Orders");
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("Last 6 Months");
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -222,6 +63,7 @@ function Orders() {
       }
 
       try {
+        setLoading(true);
         const response = await orderService.getOrders({ limit: 50, time_range: "all" });
         const mapped = (response.data.orders || []).map((order) => {
           const normalizedStatus =
@@ -262,11 +104,18 @@ function Orders() {
           };
         });
 
-        if (active && mapped.length > 0) {
+        if (active) {
           setOrders(mapped);
         }
       } catch (error) {
-        toast.error(error?.response?.data?.message || "Unable to load orders");
+        if (active) {
+          setOrders([]);
+          toast.error(error?.response?.data?.message || "Unable to load orders");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -527,7 +376,12 @@ function Orders() {
 
             {/* Orders Feed Cards */}
             <div className="orders-list">
-              {filteredOrders.length > 0 ? (
+              {loading ? (
+                <div className="orders-empty-state text-center py-5">
+                  <RefreshCw className="animate-spin text-muted mb-2 mx-auto" size={32} />
+                  <p className="text-muted">Loading your orders...</p>
+                </div>
+              ) : filteredOrders.length > 0 ? (
                 filteredOrders.map((order) => {
                   const statusClass =
                     order.status === "Delivered"
@@ -1091,52 +945,9 @@ function Orders() {
                     marginBottom: 6,
                   }}
                 >
-                  <strong style={{ color: "#0f172a" }}>Home (Default)</strong>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      background: "#dbeafe",
-                      color: "#1e40af",
-                      padding: "2px 8px",
-                      borderRadius: "10px",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Default
-                  </span>
-                </div>
-                <p style={{ margin: "0 0 4px", fontSize: "0.85rem", color: "#475569" }}>
-                  Diprati Das — +91 98765 43210
-                </p>
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
-                  123, Maker Street, Koramangala, Bengaluru, Karnataka 560034
-                </p>
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  padding: "16px",
-                  background: "#ffffff",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 6,
-                  }}
-                >
-                  <strong style={{ color: "#0f172a" }}>Office</strong>
-                </div>
-                <p style={{ margin: "0 0 4px", fontSize: "0.85rem", color: "#475569" }}>
-                  Diprati Das — +91 98765 43210
-                </p>
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
-                  XYZ Tech Park, 5th Floor, Outer Ring Road, Bellandur, Bengaluru 560103
-                </p>
+                  <strong style={{ color: "#0f172a" }}>Current Delivery Address</strong></div>
+                <p style={{ margin: "0 0 4px", fontSize: "0.85rem", color: "#475569" }}>{user.name} {user.email ? `(${user.email})` : ""}</p>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>{selectedOrderDetails?.shippingAddress || "Delivery address registered on account"}</p>
               </div>
             </div>
             <div className="orders-modal-footer">

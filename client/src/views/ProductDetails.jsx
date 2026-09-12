@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "../../public/css/product.css";
 import "../../public/css/product-details.css";
-import productData from "../data/products.json";
 import catalogService, { normalizeProduct } from "../services/catalog.service";
 import cartService from "../services/cart.service";
 
@@ -14,11 +13,7 @@ export default function ProductDetails() {
   const [apiProduct, setApiProduct] = useState(null);
   const [detailLoading, setDetailLoading] = useState(true);
 
-  const fallbackProduct = useMemo(() => {
-    return productData.find((p) => p.id.toString() === id?.toString());
-  }, [id]);
-
-  const product = apiProduct || fallbackProduct;
+  const product = apiProduct;
 
   // Gallery state
   const [selectedImage, setSelectedImage] = useState("");
@@ -100,23 +95,8 @@ export default function ProductDetails() {
     ? product.gallery
     : [product.image];
 
-  // Related products (same category or others, excluding current)
-  const relatedProducts = (product.related_products || []).map(normalizeProduct).length
-    ? (product.related_products || []).map(normalizeProduct)
-    : productData
-    .filter((p) => p.id !== product.id && (p.category === product.category || !product.category))
-    .slice(0, 6);
-
-  // If less than 6, append other items to ensure rich 6-item row
-  const fillRelatedProducts =
-    relatedProducts.length >= 6
-      ? relatedProducts
-      : [
-          ...relatedProducts,
-          ...productData
-            .filter((p) => p.id !== product.id && !relatedProducts.some((r) => r.id === p.id))
-            .slice(0, 6 - relatedProducts.length),
-        ];
+  // Related products from DB
+  const fillRelatedProducts = (product.related_products || []).map(normalizeProduct);
 
   // Percent-based Stars helper
   const renderStars = (ratingCount = 5) => {
@@ -698,47 +678,49 @@ export default function ProductDetails() {
         </div>
 
         {/* ================= RELATED PRODUCTS ================= */}
-        <div className="pd-related-wrapper">
-          <div className="pd-related-header">
-            <h2>Related Products</h2>
-            <Link to="/products" className="pd-related-view-all">
-              View All
-            </Link>
-          </div>
+        {fillRelatedProducts.length > 0 && (
+          <div className="pd-related-wrapper">
+            <div className="pd-related-header">
+              <h2>Related Products</h2>
+              <Link to="/products" className="pd-related-view-all">
+                View All
+              </Link>
+            </div>
 
-          <div className="pd-related-grid">
-            {fillRelatedProducts.map((relItem) => (
-              <div
-                key={relItem.id}
-                className="pd-related-card"
-                onClick={() => navigate(`/product/${relItem.id}`)}
-              >
-                <div className="pd-related-img-box">
-                  <img src={relItem.image} alt={relItem.name} loading="lazy" />
+            <div className="pd-related-grid">
+              {fillRelatedProducts.map((relItem) => (
+                <div
+                  key={relItem.id}
+                  className="pd-related-card"
+                  onClick={() => navigate(`/product/${relItem.id}`)}
+                >
+                  <div className="pd-related-img-box">
+                    <img src={relItem.image} alt={relItem.name} loading="lazy" />
+                  </div>
+                  <h4 className="pd-related-title" title={relItem.name}>
+                    {relItem.name}
+                  </h4>
+                  <div className="pd-related-price">₹{relItem.price.toLocaleString()}</div>
+                  <div className="pd-related-bottom">
+                    <div className="rating-stars-row">{renderStars(relItem.rating)}</div>
+                    <button
+                      type="button"
+                      className="btn-add-cart"
+                      style={{ width: "32px", height: "32px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.success(`Added "${relItem.name}" to cart!`);
+                      }}
+                      title="Add to cart"
+                    >
+                      <i className="bi bi-cart3"></i>
+                    </button>
+                  </div>
                 </div>
-                <h4 className="pd-related-title" title={relItem.name}>
-                  {relItem.name}
-                </h4>
-                <div className="pd-related-price">₹{relItem.price.toLocaleString()}</div>
-                <div className="pd-related-bottom">
-                  <div className="rating-stars-row">{renderStars(relItem.rating)}</div>
-                  <button
-                    type="button"
-                    className="btn-add-cart"
-                    style={{ width: "32px", height: "32px" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toast.success(`Added "${relItem.name}" to cart!`);
-                    }}
-                    title="Add to cart"
-                  >
-                    <i className="bi bi-cart3"></i>
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ================= TRUST BADGES BANNER ================= */}
         <div className="trust-badges-container">
