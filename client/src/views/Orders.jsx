@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -28,6 +28,8 @@ import {
   Package
 } from "lucide-react";
 import "../../public/css/orders.css";
+import orderService from "../services/order.service";
+import authServices from "../services/auth.service";
 
 // Sample order data using existing products & custom 3D prints
 export const INITIAL_ORDERS = [
@@ -195,17 +197,84 @@ function Orders() {
   const navigate = useNavigate();
 
   // User details
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const user = {
-    name: "Diprati Das",
-    email: "diprati@example.com",
-    initials: "DD",
+    name: storedUser
+      ? `${storedUser.first_name || ""} ${storedUser.last_name || ""}`.trim()
+      : "My Account",
+    email: storedUser?.email || "",
+    initials: `${storedUser?.first_name?.[0] || "M"}${storedUser?.last_name?.[0] || "A"}`.toUpperCase(),
   };
 
   // State management
   const [activeTab, setActiveTab] = useState("All Orders");
   const [searchQuery, setSearchQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState("Last 6 Months");
-  const [orders] = useState(INITIAL_ORDERS);
+  const [orders, setOrders] = useState(INITIAL_ORDERS);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOrders = async () => {
+      if (!localStorage.getItem("token")) {
+        navigate("/login", { state: { from: "/orders" } });
+        return;
+      }
+
+      try {
+        const response = await orderService.getOrders({ limit: 50, time_range: "all" });
+        const mapped = (response.data.orders || []).map((order) => {
+          const normalizedStatus =
+            order.status === "in_production" || order.status === "reviewing" || order.status === "printing"
+              ? "Processing"
+              : order.status
+              ? order.status.charAt(0).toUpperCase() + order.status.slice(1)
+              : "Processing";
+          const allItems = (order.items || []).map((item) => ({
+            id: item.id,
+            name: item.product_name || order.file_name,
+            subtext: item.variant_value || item.category_name || order.material_name || "PrintyNozzle",
+            image: item.image_url || "/images/products/01.png",
+            price: Number(item.price || order.total_amount || 0),
+            qty: Number(item.quantity || order.quantity || 1),
+          }));
+
+          return {
+            id: order.order_number,
+            date: order.formatted_date || "",
+            placedDate: order.formatted_date || "",
+            status: normalizedStatus,
+            statusText: order.status_label,
+            statusDate: order.expected_delivery || "",
+            totalPrice: Number(order.total_amount || 0),
+            itemCountText: order.is_3d_print ? "3D Printing Order" : `${order.items_count || allItems.length} items`,
+            itemsSummary: order.items_summary || order.file_name || "Order items",
+            specsText: order.is_3d_print
+              ? `Material: ${order.material_name || "-"} | Color: ${order.color_name || "-"} | Qty: ${order.quantity || 1}`
+              : "",
+            is3DPrint: Boolean(order.is_3d_print),
+            shippingAddress: order.shipping_address?.formatted || "",
+            paymentMethod: order.payment_method_label || order.payment_method || "",
+            thumbnails: allItems.slice(0, 3),
+            overflowCount: Math.max(0, allItems.length - 3),
+            allItems,
+            trackingSteps: [],
+          };
+        });
+
+        if (active && mapped.length > 0) {
+          setOrders(mapped);
+        }
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to load orders");
+      }
+    };
+
+    loadOrders();
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   // Modals state
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
@@ -216,14 +285,26 @@ function Orders() {
   // Handlers
   const handleLogout = () => {
     toast.info("You have logged out successfully.");
+    authServices.logout();
   };
 
-  const handleBuyAgain = (order) => {
-    toast.success(`Items from Order #${order.id} added to your cart!`);
+  const handleBuyAgain = async (order) => {
+    try {
+      await orderService.reorder(order.id);
+      toast.success(`Items from Order #${order.id} added to your cart!`);
+      navigate("/cart");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to reorder");
+    }
   };
 
-  const handleDownloadInvoice = (orderId) => {
-    toast.success(`Downloading tax invoice for Order #${orderId}...`);
+  const handleDownloadInvoice = async (orderId) => {
+    try {
+      await orderService.getInvoice(orderId);
+      toast.success(`Invoice for Order #${orderId} is ready.`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to fetch invoice");
+    }
   };
 
   // Filter logic

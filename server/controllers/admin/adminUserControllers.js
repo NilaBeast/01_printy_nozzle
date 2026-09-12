@@ -33,7 +33,7 @@ const getAllUsers = async (req, res) => {
     const [users] = await db.query(
       `SELECT id, first_name, last_name, email, phone, role, is_active, created_at,
               (SELECT COUNT(*) FROM orders WHERE user_id = users.id) AS total_orders,
-              (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE user_id = users.id AND (payment_status = 'paid' OR order_status = 'delivered')) AS total_spent
+              (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE user_id = users.id AND (payment_status = 'paid' OR status = 'delivered')) AS total_spent
        FROM users
        WHERE ${whereSql}
        ORDER BY id DESC
@@ -81,14 +81,14 @@ const getUserById = async (req, res) => {
 
     // Recent orders
     const [orders] = await db.query(
-      "SELECT id, order_number, total_amount, order_status, payment_status, created_at FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+      "SELECT id, order_number, total_amount, status, payment_status, created_at FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 10",
       [id]
     );
     user.orders = orders;
 
     // 3D Print orders
     const [printOrders] = await db.query(
-      "SELECT id, order_number, total_price, order_status, payment_status, created_at FROM printing_orders WHERE user_id = ? ORDER BY id DESC LIMIT 10",
+      "SELECT id, order_number, total_amount, status, payment_status, created_at FROM printing_orders WHERE user_id = ? ORDER BY id DESC LIMIT 10",
       [id]
     );
     user.printOrders = printOrders;

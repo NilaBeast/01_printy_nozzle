@@ -12,7 +12,7 @@ const getAllProducts = async (req, res) => {
     let params = [];
 
     if (search) {
-      whereClauses.push("(p.title LIKE ? OR p.sku LIKE ? OR p.short_description LIKE ?)");
+      whereClauses.push("(p.name LIKE ? OR p.sku LIKE ? OR p.short_description LIKE ?)");
       const term = `%${search}%`;
       params.push(term, term, term);
     }
@@ -117,13 +117,13 @@ const getProductById = async (req, res) => {
 const createProduct = async (req, res) => {
   try {
     const {
-      title,
+      name,
       category_id,
       brand_id,
       sku,
       price,
       compare_price,
-      stock_quantity,
+      stock,
       short_description,
       description,
       specifications,
@@ -131,14 +131,14 @@ const createProduct = async (req, res) => {
       is_active,
     } = req.body;
 
-    if (!title || !price || !category_id) {
+    if (!name || !price || !category_id) {
       return res.status(400).json({
         success: false,
-        message: "Title, price, and category are required",
+        message: "Name, price, and category are required",
       });
     }
 
-    let slug = slugify(title, { lower: true, strict: true });
+    let slug = slugify(name, { lower: true, strict: true });
     // Check slug collision
     const [existingSlug] = await db.query("SELECT id FROM products WHERE slug = ?", [slug]);
     if (existingSlug.length > 0) {
@@ -147,17 +147,17 @@ const createProduct = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO products 
-       (title, slug, sku, category_id, brand_id, price, compare_price, stock_quantity, short_description, description, specifications, is_featured, is_active)
+       (name, slug, sku, category_id, brand_id, price, compare_price, stock, short_description, description, specifications, is_featured, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        title,
+        name,
         slug,
         sku || `SKU-${Date.now()}`,
         category_id,
         brand_id || null,
         price,
         compare_price || null,
-        stock_quantity || 0,
+        stock || 0,
         short_description || null,
         description || null,
         specifications ? (typeof specifications === "string" ? specifications : JSON.stringify(specifications)) : null,
@@ -196,13 +196,13 @@ const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
     const {
-      title,
+      name,
       category_id,
       brand_id,
       sku,
       price,
       compare_price,
-      stock_quantity,
+      stock,
       short_description,
       description,
       specifications,
@@ -210,14 +210,14 @@ const updateProduct = async (req, res) => {
       is_active,
     } = req.body;
 
-    const [existing] = await db.query("SELECT id, title FROM products WHERE id = ?", [id]);
+    const [existing] = await db.query("SELECT id, name FROM products WHERE id = ?", [id]);
     if (existing.length === 0) {
       return res.status(404).json({ success: false, message: "Product not found" });
     }
 
     let slug = undefined;
-    if (title && title !== existing[0].title) {
-      slug = slugify(title, { lower: true, strict: true });
+    if (name && name !== existing[0].name) {
+      slug = slugify(name, { lower: true, strict: true });
       const [slugCheck] = await db.query("SELECT id FROM products WHERE slug = ? AND id != ?", [slug, id]);
       if (slugCheck.length > 0) {
         slug = `${slug}-${Date.now()}`;
@@ -226,29 +226,29 @@ const updateProduct = async (req, res) => {
 
     await db.query(
       `UPDATE products SET
-         title = COALESCE(?, title),
+         name = COALESCE(?, name),
          slug = COALESCE(?, slug),
          sku = COALESCE(?, sku),
          category_id = COALESCE(?, category_id),
-         brand_id = ?,
+         brand_id = COALESCE(?, brand_id),
          price = COALESCE(?, price),
-         compare_price = ?,
-         stock_quantity = COALESCE(?, stock_quantity),
-         short_description = ?,
-         description = ?,
-         specifications = ?,
+         compare_price = COALESCE(?, compare_price),
+         stock = COALESCE(?, stock),
+         short_description = COALESCE(?, short_description),
+         description = COALESCE(?, description),
+         specifications = COALESCE(?, specifications),
          is_featured = COALESCE(?, is_featured),
          is_active = COALESCE(?, is_active)
        WHERE id = ?`,
       [
-        title || null,
+        name || null,
         slug || null,
         sku || null,
         category_id || null,
         brand_id !== undefined ? brand_id : null,
         price || null,
         compare_price !== undefined ? compare_price : null,
-        stock_quantity !== undefined ? stock_quantity : null,
+        stock !== undefined ? stock : null,
         short_description !== undefined ? short_description : null,
         description !== undefined ? description : null,
         specifications ? (typeof specifications === "string" ? specifications : JSON.stringify(specifications)) : null,
@@ -375,15 +375,15 @@ const setPrimaryImage = async (req, res) => {
 const addVariant = async (req, res) => {
   try {
     const { productId } = req.params;
-    const { title, sku, price, stock_quantity } = req.body;
+    const { variant_name, variant_value, sku, price_adjustment, stock } = req.body;
 
-    if (!title || price === undefined) {
-      return res.status(400).json({ success: false, message: "Title and price are required" });
+    if (!variant_name || !variant_value) {
+      return res.status(400).json({ success: false, message: "Variant name and value are required" });
     }
 
     const [result] = await db.query(
-      "INSERT INTO product_variants (product_id, title, sku, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
-      [productId, title, sku || null, price, stock_quantity || 0]
+      "INSERT INTO product_variants (product_id, variant_name, variant_value, sku, price_adjustment, stock) VALUES (?, ?, ?, ?, ?, ?)",
+      [productId, variant_name, variant_value, sku || null, price_adjustment || 0, stock || 0]
     );
 
     return res.status(201).json({
@@ -400,16 +400,17 @@ const addVariant = async (req, res) => {
 const updateVariant = async (req, res) => {
   try {
     const { variantId } = req.params;
-    const { title, sku, price, stock_quantity } = req.body;
+    const { variant_name, variant_value, sku, price_adjustment, stock } = req.body;
 
     const [result] = await db.query(
       `UPDATE product_variants SET
-         title = COALESCE(?, title),
+         variant_name = COALESCE(?, variant_name),
+         variant_value = COALESCE(?, variant_value),
          sku = COALESCE(?, sku),
-         price = COALESCE(?, price),
-         stock_quantity = COALESCE(?, stock_quantity)
+         price_adjustment = COALESCE(?, price_adjustment),
+         stock = COALESCE(?, stock)
        WHERE id = ?`,
-      [title || null, sku || null, price || null, stock_quantity !== undefined ? stock_quantity : null, variantId]
+      [variant_name || null, variant_value || null, sku || null, price_adjustment !== undefined ? price_adjustment : null, stock !== undefined ? stock : null, variantId]
     );
 
     if (result.affectedRows === 0) {

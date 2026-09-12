@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -18,17 +18,81 @@ import {
   ArrowRight
 } from "lucide-react";
 import { INITIAL_ORDERS } from "./Orders";
+import orderService from "../services/order.service";
 import "../../public/css/order-details.css";
 
 const OrderDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [serverOrder, setServerOrder] = useState(null);
 
   // Find the exact order from INITIAL_ORDERS by id, fallback to the first order
-  const order = useMemo(() => {
+  const fallbackOrder = useMemo(() => {
     const found = INITIAL_ORDERS.find((o) => o.id === id);
     return found || INITIAL_ORDERS[0];
   }, [id]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadOrder = async () => {
+      if (!localStorage.getItem("token")) {
+        navigate("/login", { state: { from: `/orders/${id}` } });
+        return;
+      }
+
+      try {
+        const response = await orderService.getOrder(id);
+        const data = response.data.order;
+        const status =
+          data.status === "in_production" || data.status === "reviewing" || data.status === "printing"
+            ? "Processing"
+            : data.status
+            ? data.status.charAt(0).toUpperCase() + data.status.slice(1)
+            : "Processing";
+
+        const mappedItems = (data.items || []).map((item) => ({
+          id: item.id,
+          name: item.product_name,
+          subtext: item.variant_value || item.category_name || "PrintyNozzle",
+          image: item.image_url || "/images/products/01.png",
+          price: Number(item.price || 0),
+          qty: Number(item.quantity || 1),
+        }));
+
+        if (active) {
+          setServerOrder({
+            id: data.order_number,
+            date: data.formatted_date,
+            placedDate: data.formatted_placed_at,
+            status,
+            totalPrice: Number(data.total_amount || 0),
+            allItems: mappedItems,
+            trackingSteps: (data.timeline || []).map((step) => ({
+              title: step.step,
+              time: step.timestamp || "Pending",
+              completed: step.is_completed,
+              desc: step.tracking_number
+                ? `${step.carrier || "Carrier"} (${step.tracking_number})`
+                : step.step,
+            })),
+            shippingAddress: data.shipping_address?.formatted,
+            paymentMethod: data.payment_method_label || data.payment_method,
+            summary: data.summary,
+          });
+        }
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to load order details");
+      }
+    };
+
+    loadOrder();
+    return () => {
+      active = false;
+    };
+  }, [id, navigate]);
+
+  const order = serverOrder || fallbackOrder;
 
   // Order items mapped with fallbacks
   const items = useMemo(() => {
@@ -79,12 +143,20 @@ const OrderDetails = () => {
 
   // Handlers
   const handleDownloadInvoice = () => {
-    toast.success(`Downloading tax invoice for Order #${order.id}...`);
+    orderService
+      .getInvoice(order.id)
+      .then(() => toast.success(`Invoice for Order #${order.id} is ready.`))
+      .catch((error) => toast.error(error?.response?.data?.message || "Unable to fetch invoice"));
   };
 
   const handleReorder = () => {
-    toast.success(`All ${items.length} items from Order #${order.id} added to your cart!`);
-    navigate("/cart");
+    orderService
+      .reorder(order.id)
+      .then(() => {
+        toast.success(`All ${items.length} items from Order #${order.id} added to your cart!`);
+        navigate("/cart");
+      })
+      .catch((error) => toast.error(error?.response?.data?.message || "Unable to reorder"));
   };
 
   // Status badge renderer

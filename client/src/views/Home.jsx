@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import "../../public/css/home.css";
 
 import productData from "../data/products.json";
+import catalogService, { normalizeProduct } from "../services/catalog.service";
 
 import SkeletonCard from "../components/Loaders/SkeletonCard";
 import ErrorState from "../components/ErrorState";
@@ -85,6 +86,31 @@ export default function Home() {
     return [];
   }, []);
 
+  const [catalogProducts, setCatalogProducts] = useState(products);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHomeProducts = async () => {
+      try {
+        const response = await catalogService.getProducts({ featured: true, limit: 6 });
+        const items = (response.data.products || []).map(normalizeProduct);
+        if (active && items.length > 0) {
+          setCatalogProducts(items);
+        }
+      } catch (error) {
+        if (active) {
+          setCatalogProducts(products);
+        }
+      }
+    };
+
+    loadHomeProducts();
+    return () => {
+      active = false;
+    };
+  }, [products]);
+
   /* =====================================================
      FEATURED PRODUCTS
   ===================================================== */
@@ -94,7 +120,7 @@ export default function Home() {
       setLoading(true);
       setError("");
 
-      const items = products
+      const items = catalogProducts
         .map((product, index) => ({
           ...product,
           _index: index,
@@ -108,7 +134,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [products]);
+  }, [catalogProducts]);
 
   /* =====================================================
      PRODUCT HELPERS

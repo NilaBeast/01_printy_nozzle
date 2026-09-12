@@ -5,7 +5,7 @@ const getDashboardStats = async (req, res) => {
   try {
     // Total Revenue (completed/delivered/paid orders)
     const [revenueRes] = await db.query(
-      "SELECT COALESCE(SUM(total_amount), 0) AS total_revenue FROM orders WHERE payment_status = 'paid' OR order_status = 'delivered'"
+      "SELECT COALESCE(SUM(total_amount), 0) AS total_revenue FROM orders WHERE payment_status = 'paid' OR status = 'delivered'"
     );
     const totalRevenue = revenueRes[0].total_revenue;
 
@@ -26,18 +26,18 @@ const getDashboardStats = async (req, res) => {
     const totalProducts = productsRes[0].total_products;
 
     // Low stock products count (< 5)
-    const [lowStockRes] = await db.query("SELECT COUNT(*) AS low_stock_count FROM products WHERE stock_quantity <= 5 AND is_active = 1");
+    const [lowStockRes] = await db.query("SELECT COUNT(*) AS low_stock_count FROM products WHERE stock <= low_stock_threshold AND is_active = 1");
     const lowStockCount = lowStockRes[0].low_stock_count;
 
     // Pending Orders count
     const [pendingOrdersRes] = await db.query(
-      "SELECT COUNT(*) AS pending_orders FROM orders WHERE order_status IN ('pending', 'confirmed', 'processing')"
+      "SELECT COUNT(*) AS pending_orders FROM orders WHERE status IN ('pending', 'confirmed', 'processing')"
     );
     const pendingOrders = pendingOrdersRes[0].pending_orders;
 
     // Recent 5 Product Orders
     const [recentOrders] = await db.query(
-      `SELECT o.id, o.order_number, o.total_amount, o.order_status, o.payment_status, o.payment_method, o.created_at,
+      `SELECT o.id, o.order_number, o.total_amount, o.status, o.payment_status, o.payment_method, o.created_at,
               u.first_name, u.last_name, u.email
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.id
@@ -47,7 +47,7 @@ const getDashboardStats = async (req, res) => {
 
     // Recent 5 Print Orders
     const [recentPrintOrders] = await db.query(
-      `SELECT po.id, po.order_number, po.file_name, po.total_price, po.order_status, po.payment_status, po.created_at,
+      `SELECT po.id, po.order_number, po.file_name, po.total_amount, po.status, po.payment_status, po.created_at,
               u.first_name, u.last_name, u.email,
               m.name AS material_name, c.name AS color_name
        FROM printing_orders po
@@ -60,7 +60,7 @@ const getDashboardStats = async (req, res) => {
 
     // Top Selling Products
     const [topProducts] = await db.query(
-      `SELECT p.id, p.title, p.price, p.slug, p.stock_quantity,
+      `SELECT p.id, p.name, p.price, p.slug, p.stock,
               COALESCE(SUM(oi.quantity), 0) AS units_sold,
               (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) AS image_url
        FROM products p
@@ -102,16 +102,16 @@ const getSalesChart = async (req, res) => {
          COALESCE(SUM(total_amount), 0) AS total_sales,
          COUNT(*) AS order_count
        FROM orders
-       WHERE YEAR(created_at) = YEAR(CURDATE()) AND (payment_status = 'paid' OR order_status = 'delivered')
+       WHERE YEAR(created_at) = YEAR(CURDATE()) AND (payment_status = 'paid' OR status = 'delivered')
        GROUP BY MONTH(created_at), MONTHNAME(created_at)
        ORDER BY month ASC`
     );
 
     // Order status distribution
     const [statusDistribution] = await db.query(
-      `SELECT order_status, COUNT(*) AS count
+      `SELECT status, COUNT(*) AS count
        FROM orders
-       GROUP BY order_status`
+       GROUP BY status`
     );
 
     return res.status(200).json({

@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 import ProtectedRoute from "./components/protected_routes/ProtectedRoute";
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
-// import Login from "./views/Login";
-// import Register from "./views/Register";
+import Login from "./views/Login";
+import Register from "./views/Register";
 import Home from "./views/Home";
 import Product from "./views/product";
 import ProductDetails from "./views/ProductDetails";
@@ -22,14 +22,20 @@ import Profile from "./views/Profile";
 import Orders from "./views/Orders";
 import OrderDetails from "./views/OrderDetails";
 import Printing from "./views/Printing";
+import AdminPanel from "./views/AdminPanel";
 
 function App() {
+  const location = useLocation();
+  const hidePublicShell =
+    ["/login", "/register"].includes(location.pathname) ||
+    location.pathname.startsWith("/admin");
+
   return (
     <>
       <ScrollToTop />
       <div className="app-root">
         <div className="app-main d-flex flex-column min-vh-100">
-        <Navbar />
+          {!hidePublicShell && <Navbar />}
           <main className="flex-grow-1">
             <Routes>
               <Route path="/" element={<Home />} />
@@ -46,17 +52,20 @@ function App() {
               <Route path="/my-orders" element={<Orders />} />
               <Route path="/orders/:id" element={<OrderDetails />} />
               <Route path="/order/:id" element={<OrderDetails />} />
-              {/* <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />*/}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
 
               {/* PROTECTED ROUTES */}
               <Route element={<ProtectedRoute />}>
                 {/* Add protected routes here once auth is wired up */}
               </Route>
+              <Route element={<ProtectedRoute roles={["admin"]} />}>
+                <Route path="/admin" element={<AdminPanel />} />
+              </Route>
             </Routes>
           </main>
-        <Footer />
+          {!hidePublicShell && <Footer />}
         </div>
       </div>
       {/* ✅ TOAST CONTAINER (GLOBAL) */}

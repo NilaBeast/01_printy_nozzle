@@ -4,6 +4,8 @@ import { toast } from "react-toastify";
 import "../../public/css/product.css";
 import productData from "../data/products.json";
 import SkeletonCard from "../components/Loaders/SkeletonCard";
+import catalogService, { normalizeProduct } from "../services/catalog.service";
+import cartService from "../services/cart.service";
 
 // Category configurations with appropriate icons
 const CATEGORIES = [
@@ -45,6 +47,7 @@ export default function Product() {
   const [viewMode, setViewMode] = useState("grid"); // "grid" | "list"
   const [currentPage, setCurrentPage] = useState(1);
   const [showAllBrands, setShowAllBrands] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState(productData);
 
   // UX & Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +58,37 @@ export default function Product() {
   // Search query from URL
   const searchQuery = searchParams.get("search") || "";
   const categoryQuery = searchParams.get("category") || "";
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProducts = async () => {
+      try {
+        setIsLoading(true);
+        const response = await catalogService.getProducts({
+          limit: 100,
+          search: searchQuery || undefined,
+        });
+        const products = (response.data.products || []).map(normalizeProduct);
+        if (active && products.length > 0) {
+          setCatalogProducts(products);
+        }
+      } catch (error) {
+        if (active) {
+          setCatalogProducts(productData);
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadProducts();
+    return () => {
+      active = false;
+    };
+  }, [searchQuery]);
 
   // Initialize filters from URL parameters if present
   useEffect(() => {
@@ -130,10 +164,22 @@ export default function Product() {
   };
 
   // Add to cart handler
-  const handleAddToCart = (e, product) => {
+  const handleAddToCart = async (e, product) => {
     e.stopPropagation();
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to add items to cart");
+      navigate("/login", { state: { from: "/products" } });
+      return;
+    }
+
     setAddedCartIds((prev) => [...prev, product.id]);
-    toast.success(`Added "${product.name}" to cart!`);
+
+    try {
+      await cartService.addItem({ product_id: product.id, quantity: 1 });
+      toast.success(`Added "${product.name}" to cart!`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to add item to cart");
+    }
 
     setTimeout(() => {
       setAddedCartIds((prev) => prev.filter((id) => id !== product.id));
@@ -149,33 +195,33 @@ export default function Product() {
   const brandCounts = useMemo(() => {
     const counts = {};
     BRANDS.forEach((brand) => {
-      counts[brand] = productData.filter((p) => p.brand === brand).length;
+      counts[brand] = catalogProducts.filter((p) => p.brand === brand).length;
     });
     return counts;
-  }, []);
+  }, [catalogProducts]);
 
   // Calculate availability counts
   const availabilityCounts = useMemo(() => {
     return {
-      "In Stock": productData.filter((p) => p.availability === "In Stock").length,
-      "Out of Stock": productData.filter((p) => p.availability === "Out of Stock").length,
+      "In Stock": catalogProducts.filter((p) => p.availability === "In Stock").length,
+      "Out of Stock": catalogProducts.filter((p) => p.availability === "Out of Stock").length,
     };
-  }, []);
+  }, [catalogProducts]);
 
   // Calculate rating counts
   const ratingCounts = useMemo(() => {
     return {
-      5: productData.filter((p) => p.rating === 5 || p.rating >= 4.5).length,
-      4: productData.filter((p) => p.rating >= 4 && p.rating < 4.5).length,
-      3: productData.filter((p) => p.rating >= 3 && p.rating < 4).length,
-      2: productData.filter((p) => p.rating >= 2 && p.rating < 3).length,
-      1: productData.filter((p) => p.rating >= 1 && p.rating < 2).length,
+      5: catalogProducts.filter((p) => p.rating === 5 || p.rating >= 4.5).length,
+      4: catalogProducts.filter((p) => p.rating >= 4 && p.rating < 4.5).length,
+      3: catalogProducts.filter((p) => p.rating >= 3 && p.rating < 4).length,
+      2: catalogProducts.filter((p) => p.rating >= 2 && p.rating < 3).length,
+      1: catalogProducts.filter((p) => p.rating >= 1 && p.rating < 2).length,
     };
-  }, []);
+  }, [catalogProducts]);
 
   // Filtered & Sorted products
   const filteredProducts = useMemo(() => {
-    return productData
+    return catalogProducts
       .filter((product) => {
         // Search filter
         if (searchQuery) {
@@ -231,6 +277,7 @@ export default function Product() {
     selectedRatings,
     searchQuery,
     sortBy,
+    catalogProducts,
   ]);
 
   // Paginated items

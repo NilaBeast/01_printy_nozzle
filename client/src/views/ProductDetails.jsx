@@ -4,15 +4,21 @@ import { toast } from "react-toastify";
 import "../../public/css/product.css";
 import "../../public/css/product-details.css";
 import productData from "../data/products.json";
+import catalogService, { normalizeProduct } from "../services/catalog.service";
+import cartService from "../services/cart.service";
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Find product by id
-  const product = useMemo(() => {
+  const [apiProduct, setApiProduct] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(true);
+
+  const fallbackProduct = useMemo(() => {
     return productData.find((p) => p.id.toString() === id?.toString());
   }, [id]);
+
+  const product = apiProduct || fallbackProduct;
 
   // Gallery state
   const [selectedImage, setSelectedImage] = useState("");
@@ -22,6 +28,33 @@ export default function ProductDetails() {
   const [deliveryStatus, setDeliveryStatus] = useState("");
   const [isWishlist, setIsWishlist] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProduct = async () => {
+      try {
+        setDetailLoading(true);
+        const response = await catalogService.getProduct(id);
+        if (active) {
+          setApiProduct(normalizeProduct(response.data.product));
+        }
+      } catch (error) {
+        if (active) {
+          setApiProduct(null);
+        }
+      } finally {
+        if (active) {
+          setDetailLoading(false);
+        }
+      }
+    };
+
+    loadProduct();
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   // Scroll to top and set default image on ID change
   useEffect(() => {
@@ -34,6 +67,14 @@ export default function ProductDetails() {
   }, [id, product]);
 
   // If product not found
+  if (detailLoading && !product) {
+    return (
+      <div className="product-details-page">
+        <div className="container py-5 text-center">Loading product...</div>
+      </div>
+    );
+  }
+
   if (!product) {
     return (
       <div className="product-details-page">
@@ -60,7 +101,9 @@ export default function ProductDetails() {
     : [product.image];
 
   // Related products (same category or others, excluding current)
-  const relatedProducts = productData
+  const relatedProducts = (product.related_products || []).map(normalizeProduct).length
+    ? (product.related_products || []).map(normalizeProduct)
+    : productData
     .filter((p) => p.id !== product.id && (p.category === product.category || !product.category))
     .slice(0, 6);
 
@@ -99,12 +142,23 @@ export default function ProductDetails() {
   };
 
   // Cart handling
-  const handleAddToCart = () => {
-    toast.success(`Added ${quantity}x "${product.name}" to cart!`);
+  const handleAddToCart = async () => {
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to add items to cart");
+      navigate("/login", { state: { from: `/product/${id}` } });
+      return;
+    }
+
+    try {
+      await cartService.addItem({ product_id: product.id, quantity });
+      toast.success(`Added ${quantity}x "${product.name}" to cart!`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to add item to cart");
+    }
   };
 
   const handleBuyNow = () => {
-    toast.success(`Proceeding to checkout with ${quantity}x "${product.name}"!`);
+    handleAddToCart().then(() => navigate("/checkout"));
   };
 
   // Wishlist toggle
@@ -128,13 +182,18 @@ export default function ProductDetails() {
   };
 
   // Pincode checker
-  const checkDelivery = (e) => {
+  const checkDelivery = async (e) => {
     e.preventDefault();
     if (!pincode || pincode.trim().length < 6) {
       toast.error("Please enter a valid 6-digit pincode.");
       return;
     }
-    setDeliveryStatus(`Delivery available to ${pincode}! Expected within 3-4 working days.`);
+    try {
+      const response = await catalogService.checkPincode(pincode);
+      setDeliveryStatus(response.data.message);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to check delivery");
+    }
   };
 
   // Highlight items fallback
