@@ -13,6 +13,7 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import "../../public/css/profile.css";
+import profileService from "../services/profile.service";
 
 function Profile() {
   const location = useLocation();
@@ -58,7 +59,7 @@ function Profile() {
     orderUpdates: true,
   });
 
-  const [addresses] = useState([
+  const [addresses, setAddresses] = useState([
     {
       id: 1,
       type: "Home",
@@ -84,6 +85,60 @@ function Profile() {
       phone: "+91 98765 43210",
     },
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfile = async () => {
+      if (!localStorage.getItem("token")) return;
+
+      try {
+        const [profileResponse, addressesResponse] = await Promise.all([
+          profileService.getProfile(),
+          profileService.getAddresses(),
+        ]);
+        const profilePayload = profileResponse.data.data;
+        const user = profilePayload.profile;
+        const nextProfile = {
+          firstName: user.first_name || "",
+          lastName: user.last_name || "",
+          email: user.email || "",
+          phone: user.phone || "",
+          dob: user.dob || "",
+          gender: user.gender || "Other",
+        };
+
+        if (!active) return;
+        setProfileData(nextProfile);
+        setEditData(nextProfile);
+        setPreferences({
+          emailNotifications: Boolean(profilePayload.preferences?.email_notifications ?? true),
+          marketingUpdates: Boolean(profilePayload.preferences?.marketing_updates),
+          orderUpdates: Boolean(profilePayload.preferences?.order_updates ?? true),
+        });
+        setAddresses(
+          (addressesResponse.data.addresses || []).map((address) => ({
+            id: address.id,
+            type: address.type,
+            isDefault: Boolean(address.is_default),
+            name: address.full_name,
+            street: address.address_line1,
+            area: address.address_line2 || "",
+            city: `${address.city}, ${address.state} ${address.pincode}`,
+            country: address.country || "India",
+            phone: address.phone,
+          }))
+        );
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to load profile");
+      }
+    };
+
+    loadProfile();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const summaryData = [
     { Icon: CreditCard, label: "Total Orders", value: "12" },
@@ -113,23 +168,44 @@ function Profile() {
     setIsEditing(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editData.firstName.trim() || !editData.lastName.trim()) {
       toast.warn("First name and last name are required.");
       return;
     }
-    setProfileData({ ...editData });
-    setIsEditing(false);
-    toast.success("Profile updated successfully!");
+    try {
+      await profileService.updateProfile({
+        first_name: editData.firstName,
+        last_name: editData.lastName,
+        phone: editData.phone,
+        dob: editData.dob || null,
+        gender: editData.gender,
+      });
+      setProfileData({ ...editData });
+      setIsEditing(false);
+      toast.success("Profile updated successfully!");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Profile update failed");
+    }
   };
 
   const handleFieldChange = (field, value) => {
     setEditData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const togglePreference = (key) => {
-    setPreferences((prev) => ({ ...prev, [key]: !prev[key] }));
-    toast.success("Preference updated!");
+  const togglePreference = async (key) => {
+    const next = { ...preferences, [key]: !preferences[key] };
+    setPreferences(next);
+    try {
+      await profileService.updatePreferences({
+        email_notifications: next.emailNotifications,
+        marketing_updates: next.marketingUpdates,
+        order_updates: next.orderUpdates,
+      });
+      toast.success("Preference updated!");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Preference update failed");
+    }
   };
 
   const handleAddAddress = () => {
@@ -141,7 +217,13 @@ function Profile() {
   };
 
   const handleRemoveAddress = (id) => {
-    toast.info("Remove address feature coming soon!");
+    profileService
+      .deleteAddress(id)
+      .then(() => {
+        setAddresses((prev) => prev.filter((address) => address.id !== id));
+        toast.success("Address removed");
+      })
+      .catch((error) => toast.error(error?.response?.data?.message || "Unable to remove address"));
   };
 
   const handleChangePassword = () => {

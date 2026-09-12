@@ -10,7 +10,7 @@ const getAllPrintOrders = async (req, res) => {
     let params = [];
 
     if (status) {
-      whereClauses.push("po.order_status = ?");
+      whereClauses.push("po.status = ?");
       params.push(status);
     }
 
@@ -102,7 +102,8 @@ const getPrintOrderDetails = async (req, res) => {
 const updatePrintOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { order_status, payment_status, tracking_number, shipping_carrier, admin_notes } = req.body;
+    const { status, order_status, payment_status, tracking_number, shipping_carrier, admin_notes } = req.body;
+    const nextStatus = status || order_status;
 
     const [existing] = await db.query("SELECT * FROM printing_orders WHERE id = ?", [id]);
     if (existing.length === 0) {
@@ -111,17 +112,13 @@ const updatePrintOrderStatus = async (req, res) => {
 
     await db.query(
       `UPDATE printing_orders SET
-         order_status = COALESCE(?, order_status),
+         status = COALESCE(?, status),
          payment_status = COALESCE(?, payment_status),
-         tracking_number = COALESCE(?, tracking_number),
-         shipping_carrier = COALESCE(?, shipping_carrier),
          admin_notes = COALESCE(?, admin_notes)
        WHERE id = ?`,
       [
-        order_status || null,
+        nextStatus || null,
         payment_status || null,
-        tracking_number || null,
-        shipping_carrier || null,
         admin_notes || null,
         id,
       ]
@@ -147,15 +144,15 @@ const getAllMaterials = async (req, res) => {
 
 const createMaterial = async (req, res) => {
   try {
-    const { name, code, description, price_per_gram, density_g_cm3, is_active } = req.body;
+    const { name, code, slug, description, price_per_gram, density_g_cm3, is_active } = req.body;
 
     if (!name || !code || !price_per_gram) {
       return res.status(400).json({ success: false, message: "Name, code, and price per gram are required" });
     }
 
     const [result] = await db.query(
-      "INSERT INTO printing_materials (name, code, description, price_per_gram, density_g_cm3, is_active) VALUES (?, ?, ?, ?, ?, ?)",
-      [name, code.toUpperCase(), description || null, price_per_gram, density_g_cm3 || 1.24, is_active !== undefined ? (is_active ? 1 : 0) : 1]
+      "INSERT INTO printing_materials (name, slug, code, description, price_per_gram, density_g_cm3, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [name, (slug || name).toLowerCase().replace(/\s+/g, "-"), code.toUpperCase(), description || null, price_per_gram, density_g_cm3 || 1.24, is_active !== undefined ? (is_active ? 1 : 0) : 1]
     );
 
     return res.status(201).json({ success: true, message: "Material created", data: { materialId: result.insertId } });
@@ -174,7 +171,7 @@ const updateMaterial = async (req, res) => {
       `UPDATE printing_materials SET
          name = COALESCE(?, name),
          code = COALESCE(?, code),
-         description = ?,
+         description = COALESCE(?, description),
          price_per_gram = COALESCE(?, price_per_gram),
          density_g_cm3 = COALESCE(?, density_g_cm3),
          is_active = COALESCE(?, is_active)

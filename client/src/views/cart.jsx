@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import "../../public/css/cart.css";
 import "../../public/css/skeleton.css";
+import cartService from "../services/cart.service";
 
 // Initial mock cart items matching the reference design exactly
 const INITIAL_CART_ITEMS = [
@@ -72,13 +73,46 @@ export default function Cart() {
     }
     return INITIAL_CART_ITEMS;
   });
+  const [cartMeta, setCartMeta] = useState(null);
 
-  // Simulate initial skeleton loading for smooth UX
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 450);
-    return () => clearTimeout(timer);
+    let active = true;
+
+    const loadCart = async () => {
+      if (!localStorage.getItem("token")) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await cartService.getCart();
+        const serverCart = response.data.cart;
+        if (!active) return;
+        setCartMeta(serverCart);
+        setCartItems(
+          (serverCart.items || []).map((item) => ({
+            id: item.id,
+            productId: item.product_id,
+            name: item.name,
+            subtitle: item.variant_value || item.category_name || item.slug,
+            image: item.image || "/images/products/01.png",
+            price: Number(item.unit_price || item.price || 0),
+            quantity: Number(item.quantity || 1),
+          }))
+        );
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to load cart");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadCart();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Save changes to localStorage
@@ -102,15 +136,18 @@ export default function Cart() {
   const discount = 0;
   const isFreeShipping = subtotal > 0;
   const gstTax = useMemo(() => {
-    return +(subtotal * 0.18).toFixed(2);
-  }, [subtotal]);
+    return cartMeta?.taxAmount ?? +(subtotal * 0.18).toFixed(2);
+  }, [cartMeta, subtotal]);
 
   const grandTotal = useMemo(() => {
-    return +(subtotal + gstTax - discount).toFixed(2);
-  }, [subtotal, gstTax, discount]);
+    return cartMeta?.totalAmount ?? +(subtotal + gstTax - discount).toFixed(2);
+  }, [cartMeta, subtotal, gstTax, discount]);
 
   // Quantity updates
-  const handleQuantityChange = (id, change) => {
+  const handleQuantityChange = async (id, change) => {
+    const current = cartItems.find((item) => item.id === id);
+    const quantity = Math.max(1, Number(current?.quantity || 1) + change);
+
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
@@ -120,19 +157,41 @@ export default function Cart() {
         return item;
       })
     );
+
+    if (localStorage.getItem("token")) {
+      try {
+        await cartService.updateItem(id, quantity);
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to update cart");
+      }
+    }
   };
 
   // Remove single item
-  const handleRemoveItem = (id, name) => {
+  const handleRemoveItem = async (id, name) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
-    toast.info(`Removed "${name}" from cart`);
+    try {
+      if (localStorage.getItem("token")) {
+        await cartService.removeItem(id);
+      }
+      toast.info(`Removed "${name}" from cart`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to remove item");
+    }
   };
 
   // Clear all items
-  const handleClearCart = () => {
+  const handleClearCart = async () => {
     if (window.confirm("Are you sure you want to clear your cart?")) {
       setCartItems([]);
-      toast.success("Cart cleared");
+      try {
+        if (localStorage.getItem("token")) {
+          await cartService.clear();
+        }
+        toast.success("Cart cleared");
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to clear cart");
+      }
     }
   };
 

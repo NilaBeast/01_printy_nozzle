@@ -1,8 +1,9 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 
-function ProtectedRoute() {
+function ProtectedRoute({ roles }) {
   const token = localStorage.getItem("token");
+  const user = JSON.parse(localStorage.getItem("user") || "null");
   const location = useLocation();
 
   if (!token) {
@@ -18,6 +19,13 @@ function ProtectedRoute() {
         state={{ from: location.pathname }}
       />
     );
+  }
+
+  if (roles?.length && !roles.includes(user?.role)) {
+    toast.error("You do not have permission to access this page", {
+      toastId: "role-required",
+    });
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;

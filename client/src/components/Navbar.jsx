@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import "../../public/css/navbar.css";
+import authServices from "../services/auth.service";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -31,25 +32,25 @@ function Navbar() {
 
   const [search, setSearch] = useState("");
 
-  /* =====================================================
-     LOGIN STATE
+  const [authState, setAuthState] = useState(() => {
+    const token = localStorage.getItem("token");
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    return { isLoggedIn: Boolean(token), user };
+  });
 
-     Change this manually for testing:
+  const cartCount = (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("printy_cart") || "[]");
+      return Array.isArray(saved)
+        ? saved.reduce((total, item) => total + Number(item.quantity || 1), 0)
+        : 0;
+    } catch (error) {
+      return 0;
+    }
+  })();
 
-     true  = logged in
-     false = not logged in
-     ===================================================== */
-
-  const isLoggedIn = true;
-
-  /* =====================================================
-     CART COUNT
-
-     Replace this later with your actual cart
-     state/context.
-     ===================================================== */
-
-  const cartCount = 2;
+  const isLoggedIn = authState.isLoggedIn;
+  const user = authState.user;
 
   /* =====================================================
      CLOSE EVERYTHING
@@ -68,6 +69,23 @@ function Navbar() {
   /* =====================================================
      OUTSIDE CLICK + ESCAPE
      ===================================================== */
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const token = localStorage.getItem("token");
+      const nextUser = JSON.parse(localStorage.getItem("user") || "null");
+      setAuthState({ isLoggedIn: Boolean(token), user: nextUser });
+    };
+
+    window.addEventListener("authChange", syncAuth);
+    window.addEventListener("storage", syncAuth);
+    syncAuth();
+
+    return () => {
+      window.removeEventListener("authChange", syncAuth);
+      window.removeEventListener("storage", syncAuth);
+    };
+  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -518,9 +536,13 @@ function Navbar() {
                     </div>
 
                     <div className="account-dropdown-user">
-                      <strong>My Account</strong>
+                      <strong>
+                        {user?.first_name
+                          ? `${user.first_name} ${user.last_name || ""}`.trim()
+                          : "My Account"}
+                      </strong>
 
-                      <span>Manage your account</span>
+                      <span>{user?.email || "Manage your account"}</span>
                     </div>
                   </div>
 
@@ -596,6 +618,34 @@ function Navbar() {
                     <span>My Orders</span>
                   </NavLink>
 
+                  {user?.role === "admin" && (
+                    <NavLink
+                      to="/admin"
+                      className="mobile-account-button"
+                      onClick={closeNavbar}
+                    >
+                      <span className="mobile-account-icon">
+                        <i className="bi bi-speedometer2"></i>
+                      </span>
+
+                      <span>Admin Panel</span>
+                    </NavLink>
+                  )}
+
+                  {user?.role === "admin" && (
+                    <NavLink
+                      to="/admin"
+                      className="account-dropdown-item"
+                      onClick={closeNavbar}
+                    >
+                      <span className="account-dropdown-icon">
+                        <i className="bi bi-speedometer2"></i>
+                      </span>
+
+                      <span>Admin Panel</span>
+                    </NavLink>
+                  )}
+
                   {/* =================================================
                       COUPONS
                       ================================================= */}
@@ -611,6 +661,21 @@ function Navbar() {
 
                     <span>Coupons</span>
                   </NavLink>
+
+                  <button
+                    type="button"
+                    className="account-dropdown-item"
+                    onClick={() => {
+                      closeNavbar();
+                      authServices.logout();
+                    }}
+                  >
+                    <span className="account-dropdown-icon">
+                      <i className="bi bi-box-arrow-right"></i>
+                    </span>
+
+                    <span>Logout</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -937,6 +1002,21 @@ function Navbar() {
 
                     <span>Coupons</span>
                   </NavLink>
+
+                  <button
+                    type="button"
+                    className="mobile-account-button"
+                    onClick={() => {
+                      closeNavbar();
+                      authServices.logout();
+                    }}
+                  >
+                    <span className="mobile-account-icon">
+                      <i className="bi bi-box-arrow-right"></i>
+                    </span>
+
+                    <span>Logout</span>
+                  </button>
                 </>
               )}
             </div>

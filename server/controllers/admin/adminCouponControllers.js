@@ -19,7 +19,7 @@ const createCoupon = async (req, res) => {
       discount_type,
       discount_value,
       min_order_amount,
-      max_discount_amount,
+      max_discount,
       usage_limit,
       valid_from,
       valid_until,
@@ -42,14 +42,14 @@ const createCoupon = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO coupons 
-       (code, discount_type, discount_value, min_order_amount, max_discount_amount, usage_limit, valid_from, valid_until, is_active)
+       (code, discount_type, discount_value, min_order_amount, max_discount, usage_limit, valid_from, valid_until, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         upperCode,
         discount_type,
         discount_value,
         min_order_amount || 0,
-        max_discount_amount || null,
+        max_discount || null,
         usage_limit || null,
         valid_from || null,
         valid_until || null,
@@ -77,7 +77,7 @@ const updateCoupon = async (req, res) => {
       discount_type,
       discount_value,
       min_order_amount,
-      max_discount_amount,
+      max_discount,
       usage_limit,
       valid_from,
       valid_until,
@@ -90,7 +90,7 @@ const updateCoupon = async (req, res) => {
          discount_type = COALESCE(?, discount_type),
          discount_value = COALESCE(?, discount_value),
          min_order_amount = COALESCE(?, min_order_amount),
-         max_discount_amount = ?,
+         max_discount = ?,
          usage_limit = ?,
          valid_from = ?,
          valid_until = ?,
@@ -101,7 +101,7 @@ const updateCoupon = async (req, res) => {
         discount_type || null,
         discount_value || null,
         min_order_amount !== undefined ? min_order_amount : null,
-        max_discount_amount !== undefined ? max_discount_amount : null,
+        max_discount !== undefined ? max_discount : null,
         usage_limit !== undefined ? usage_limit : null,
         valid_from !== undefined ? valid_from : null,
         valid_until !== undefined ? valid_until : null,

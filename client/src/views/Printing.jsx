@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import defaultPricingData from "../data/materialPrices.json";
 import ModelViewer3D from "../components/ModelViewer3D";
+import printingService from "../services/printing.service";
 import "../../public/css/printing.css";
 
 // Maximum Printable Dimensions from .env (-1 means no limit)
@@ -41,6 +42,8 @@ export default function Printing() {
   /* =========================================================
      PRICING CONFIGURATION (JSON Controlled)
      ========================================================= */
+  const [serverMaterials, setServerMaterials] = useState(null);
+  const [serverColors, setServerColors] = useState(null);
   const pricingConfig = defaultPricingData;
   const [isInfillModalOpen, setIsInfillModalOpen] = useState(false);
 
@@ -83,8 +86,8 @@ export default function Printing() {
   /* =========================================================
      PRINT OPTIONS STATE
      ========================================================= */
-  const materials = pricingConfig.materials || defaultPricingData.materials;
-  const colors = pricingConfig.colors || defaultPricingData.colors;
+  const materials = serverMaterials || pricingConfig.materials || defaultPricingData.materials;
+  const colors = serverColors || pricingConfig.colors || defaultPricingData.colors;
   const infillOptions = pricingConfig.infillOptions || defaultPricingData.infillOptions;
   const surfaceFinishes = pricingConfig.surfaceFinishes || defaultPricingData.surfaceFinishes;
 
@@ -94,6 +97,59 @@ export default function Printing() {
   const [selectedInfillId, setSelectedInfillId] = useState("50");
   const [selectedFinishId, setSelectedFinishId] = useState("standard");
   const [quantity, setQuantity] = useState(1);
+  const [placingPrintOrder, setPlacingPrintOrder] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadPrintingOptions = async () => {
+      try {
+        const [materialsResponse, colorsResponse] = await Promise.all([
+          printingService.getMaterials(),
+          printingService.getColors(),
+        ]);
+
+        if (!active) return;
+
+        const mappedMaterials = (materialsResponse.data.materials || []).map((material) => ({
+          id: material.id,
+          slug: material.slug,
+          name: material.name,
+          description: material.description,
+          pricePerGram: Number(material.price_per_gram || 0),
+          density: Number(material.density_g_cm3 || 1.24),
+          bestFor: material.best_for,
+          image: "/images/products/blue_filament.png",
+        }));
+
+        const mappedColors = (colorsResponse.data.colors || []).map((color) => ({
+          id: color.id,
+          name: color.name,
+          hex: color.hex_code,
+          priceAdjustment: Number(color.price_adjustment || 0),
+        }));
+
+        if (mappedMaterials.length > 0) {
+          setServerMaterials(mappedMaterials);
+          setSelectedMaterialId(mappedMaterials[0].id);
+        }
+
+        if (mappedColors.length > 0) {
+          setServerColors(mappedColors);
+          setSelectedColorHex(mappedColors[0].hex);
+        }
+      } catch (error) {
+        setServerMaterials(null);
+        setServerColors(null);
+      }
+    };
+
+    loadPrintingOptions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Selected option objects
   const selectedMaterial = useMemo(() => {
@@ -166,6 +222,28 @@ export default function Printing() {
       grandTotal,
     };
   }, [modelAnalysis, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig]);
+
+  const hasUploadedModel = Boolean(uploadedFile && !useSample);
+  const summaryModel = hasUploadedModel
+    ? modelAnalysis
+    : {
+        ...modelAnalysis,
+        dimensions: { x: 0, y: 0, z: 0 },
+      };
+  const summaryCalculations = hasUploadedModel
+    ? calculations
+    : {
+        weight: 0,
+        materialCost: 0,
+        colorCost: 0,
+        infillCost: 0,
+        finishCost: 0,
+        unitPrice: 0,
+        subtotal: 0,
+        gstAmount: 0,
+        grandTotal: 0,
+      };
+  const summaryQuantity = hasUploadedModel ? quantity : 0;
 
   /* =========================================================
      FILE UPLOAD HANDLERS
@@ -270,7 +348,7 @@ export default function Printing() {
   };
 
   const handleAddToCart = () => {
-    if (!modelAnalysis || modelAnalysis.weightGrams <= 0) {
+    if (!hasUploadedModel || !modelAnalysis || modelAnalysis.weightGrams <= 0) {
       toast.warning("Please upload a 3D model first.");
       return;
     }
@@ -294,9 +372,14 @@ export default function Printing() {
     }
   };
 
-  const handleBuyNow = () => {
-    if (!modelAnalysis || modelAnalysis.weightGrams <= 0) {
+  const handleBuyNow = async () => {
+    if (!hasUploadedModel || !modelAnalysis || modelAnalysis.weightGrams <= 0) {
       toast.warning("Please upload a 3D model first.");
+      return;
+    }
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login before placing a 3D print order");
+      navigate("/login", { state: { from: "/3d-printing" } });
       return;
     }
     if (isOversized) {
@@ -305,8 +388,39 @@ export default function Printing() {
       );
       return;
     }
-    handleAddToCart();
-    navigate("/checkout");
+    setPlacingPrintOrder(true);
+    try {
+      let uploaded = null;
+      if (uploadedFile) {
+        const uploadResponse = await printingService.uploadFile(uploadedFile);
+        uploaded = uploadResponse.data.file;
+      }
+
+      const response = await printingService.createOrder({
+        file_name: uploaded?.name || modelAnalysis.fileName || "rocket.stl",
+        file_url: uploaded?.url || `${window.location.origin}/images/rocket.png`,
+        file_public_id: uploaded?.public_id || null,
+        file_size: uploaded?.size || modelAnalysis.fileSizeMB,
+        dimension_x: modelAnalysis.dimensions.x,
+        dimension_y: modelAnalysis.dimensions.y,
+        dimension_z: modelAnalysis.dimensions.z,
+        material_id: selectedMaterial.id,
+        color_id: selectedColor.id === "custom" ? null : selectedColor.id,
+        custom_color_hex: selectedColor.id === "custom" ? selectedColorHex : null,
+        infill_density: Number(selectedInfill.id || 50),
+        surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
+        quantity,
+        estimated_weight: calculations.weight,
+        payment_method: "cod",
+      });
+
+      toast.success(response.data.message || "3D print order placed");
+      navigate("/orders");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to place 3D print order");
+    } finally {
+      setPlacingPrintOrder(false);
+    }
   };
 
   return (
@@ -486,6 +600,9 @@ export default function Printing() {
                         <div className="viewer-meta-bar">
                           <div className="viewer-meta-left">
                             <span className="viewer-filename">{modelAnalysis.fileName}</span>
+                            {useSample && (
+                              <span className="viewer-demo-badge">Demo model</span>
+                            )}
                             <div className="viewer-specs">
                               <span>Size: {modelAnalysis.fileSizeMB} MB</span>
                               <span className={isOversized ? "text-danger fw-semibold" : ""}>
@@ -708,15 +825,15 @@ export default function Printing() {
                     />
                   </div>
                   <div className="summary-model-details">
-                    <div className="summary-model-filename">{modelAnalysis.fileName}</div>
+                    <div className="summary-model-filename">{summaryModel.fileName}</div>
                     <div className="summary-model-dim">
-                      {modelAnalysis.dimensions.x} x {modelAnalysis.dimensions.y} x{" "}
-                      {modelAnalysis.dimensions.z} mm
+                      {summaryModel.dimensions.x} x {summaryModel.dimensions.y} x{" "}
+                      {summaryModel.dimensions.z} mm
                     </div>
                     <div className="summary-model-tags">
                       {selectedMaterial.name} • {selectedColor.name} • {selectedInfill.label} Infill
                     </div>
-                    <div className="summary-model-qty">Qty: {quantity}</div>
+                    <div className="summary-model-qty">Qty: {summaryQuantity}</div>
                     <button
                       type="button"
                       className="btn-summary-edit"
@@ -734,8 +851,8 @@ export default function Printing() {
                   <div className="breakdown-row">
                     <span className="breakdown-label">Material ({selectedMaterial.name})</span>
                     <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{calculations.weight}g</span>
-                      <span className="breakdown-price">₹{calculations.materialCost}</span>
+                      <span className="breakdown-weight">{summaryCalculations.weight}g</span>
+                      <span className="breakdown-price">₹{summaryCalculations.materialCost}</span>
                     </div>
                   </div>
 
@@ -751,7 +868,7 @@ export default function Printing() {
                     <span className="breakdown-label">Infill Density ({selectedInfill.label})</span>
                     <div className="breakdown-value-group">
                       <span className="breakdown-weight">{selectedInfill.tag || `${selectedInfill.percentage}%`}</span>
-                      <span className="breakdown-price">₹{calculations.infillCost}</span>
+                      <span className="breakdown-price">₹{summaryCalculations.infillCost}</span>
                     </div>
                   </div>
 
@@ -759,7 +876,7 @@ export default function Printing() {
                     <span className="breakdown-label">Surface Finish</span>
                     <div className="breakdown-value-group">
                       <span className="breakdown-weight">{selectedFinish.name}</span>
-                      <span className="breakdown-price">₹{calculations.finishCost}</span>
+                      <span className="breakdown-price">₹{summaryCalculations.finishCost}</span>
                     </div>
                   </div>
                 </div>
@@ -769,12 +886,12 @@ export default function Printing() {
                 {/* Subtotal & GST */}
                 <div className="summary-subtotal-row">
                   <span>Subtotal</span>
-                  <span className="fw-semibold">₹{calculations.subtotal}</span>
+                  <span className="fw-semibold">₹{summaryCalculations.subtotal}</span>
                 </div>
 
                 <div className="summary-subtotal-row">
                   <span>GST (18%)</span>
-                  <span className="fw-semibold">₹{calculations.gstAmount.toFixed(2)}</span>
+                  <span className="fw-semibold">₹{summaryCalculations.gstAmount.toFixed(2)}</span>
                 </div>
 
                 <div className="summary-divider" />
@@ -782,7 +899,7 @@ export default function Printing() {
                 {/* Grand Total */}
                 <div className="summary-total-row">
                   <span className="summary-total-label">Total</span>
-                  <span className="summary-total-value">₹{calculations.grandTotal.toFixed(2)}</span>
+                  <span className="summary-total-value">₹{summaryCalculations.grandTotal.toFixed(2)}</span>
                 </div>
 
                 {/* Delivery Guarantee Pill */}
@@ -798,7 +915,7 @@ export default function Printing() {
                 </div>
 
                 {/* Oversized Warning Alert */}
-                {isOversized && (
+                {hasUploadedModel && isOversized && (
                   <div className="summary-oversized-alert">
                     <AlertTriangle size={18} className="flex-shrink-0" />
                     <span>
@@ -817,7 +934,7 @@ export default function Printing() {
                     type="button"
                     className="btn-add-to-cart"
                     onClick={handleAddToCart}
-                    disabled={isOversized}
+                    disabled={!hasUploadedModel || isOversized}
                   >
                     <ShoppingCart size={18} />
                     <span>Add to Cart</span>
@@ -827,9 +944,9 @@ export default function Printing() {
                     type="button"
                     className="btn-buy-now"
                     onClick={handleBuyNow}
-                    disabled={isOversized}
+                    disabled={!hasUploadedModel || isOversized}
                   >
-                    <span>Buy Now</span>
+                    <span>{placingPrintOrder ? "Placing..." : "Buy Now"}</span>
                   </button>
                 </div>
 

@@ -23,10 +23,10 @@ function Register() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  /* 🔐 Auth check */
   useEffect(() => {
     const token = localStorage.getItem("token");
-    token ? navigate("/") : setCheckingAuth(false);
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    token ? navigate(user?.role === "admin" ? "/admin" : "/") : setCheckingAuth(false);
   }, [navigate]);
 
   const handleChange = (e) =>
@@ -43,7 +43,7 @@ function Register() {
       localStorage.setItem("user", JSON.stringify(res.data.user));
       window.dispatchEvent(new Event("authChange"));
 
-      toast.success("Account created successfully 🎉");
+      toast.success("Account created successfully");
       navigate(redirectTo, { replace: true });
     } catch (err) {
       toast.error(
@@ -61,106 +61,134 @@ function Register() {
 
   return (
     <section className="auth-page">
-      <div className="auth-card auth-card-wide">
-        <h3>Create your account</h3>
-        <p className="auth-muted">
-          Join us to explore destinations & book amazing stays ✨
-        </p>
+      <div className="auth-shell">
+        <aside className="auth-brand-panel">
+          <Link to="/" className="auth-logo">
+            <img src="/images/logo.png" alt="Printy Nozzles" />
+            <span>PrintyNozzle</span>
+          </Link>
+          <div>
+            <span className="auth-kicker">Create your workspace</span>
+            <h1>Build faster with parts, prints, and order history together.</h1>
+            <p>
+              Your account keeps shopping, custom 3D print requests, and profile
+              details synced across the store.
+            </p>
+          </div>
+          <div className="auth-feature-list">
+            <span>Saved addresses</span>
+            <span>Faster checkout</span>
+            <span>Print order updates</span>
+          </div>
+        </aside>
 
-        <form onSubmit={handleSubmit}>
-          {/* NAME */}
-          <div className="row">
-            <div className="col-md-6">
+        <div className="auth-form-panel">
+          <div className="auth-card auth-card-wide">
+            <span className="auth-kicker">New account</span>
+            <h3>Create your account</h3>
+            <p className="auth-muted">
+              Start ordering electronics and custom 3D printed parts.
+            </p>
+
+            <form onSubmit={handleSubmit}>
+              <div className="auth-form-grid">
+                <div>
+                  <label className="auth-field-label" htmlFor="first-name">First name</label>
+                  <div className="auth-input">
+                    <i className="bx bx-user auth-icon"></i>
+                    <input
+                      id="first-name"
+                      name="first_name"
+                      placeholder="First name"
+                      required
+                      value={form.first_name}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="auth-field-label" htmlFor="last-name">Last name</label>
+                  <div className="auth-input">
+                    <i className="bx bx-user auth-icon"></i>
+                    <input
+                      id="last-name"
+                      name="last_name"
+                      placeholder="Last name"
+                      required
+                      value={form.last_name}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <label className="auth-field-label" htmlFor="register-email">Email</label>
               <div className="auth-input">
-                <i className="bx bx-user auth-icon"></i>
+                <i className="bx bx-envelope auth-icon"></i>
                 <input
-                  name="first_name"
-                  placeholder="First name"
+                  id="register-email"
+                  type="email"
+                  name="email"
+                  placeholder="you@example.com"
                   required
-                  value={form.first_name}
+                  value={form.email}
                   onChange={handleChange}
                 />
               </div>
-            </div>
 
-            <div className="col-md-6">
+              <label className="auth-field-label" htmlFor="register-phone">Phone</label>
               <div className="auth-input">
-                <i className="bx bx-user auth-icon"></i>
+                <i className="bx bx-phone auth-icon"></i>
                 <input
-                  name="last_name"
-                  placeholder="Last name"
-                  required
-                  value={form.last_name}
+                  id="register-phone"
+                  name="phone"
+                  placeholder="Phone number"
+                  value={form.phone}
                   onChange={handleChange}
                 />
               </div>
-            </div>
+
+              <label className="auth-field-label" htmlFor="register-password">Password</label>
+              <div className="auth-input">
+                <i className="bx bx-lock-alt auth-icon"></i>
+                <input
+                  id="register-password"
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Create password"
+                  required
+                  value={form.password}
+                  onChange={handleChange}
+                />
+                <button
+                  type="button"
+                  className="auth-eye"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  <i className={`bx ${showPassword ? "bx-hide" : "bx-show"}`}></i>
+                </button>
+              </div>
+
+              <small className="auth-hint">
+                Min 8 chars | uppercase | lowercase | number | special character
+              </small>
+
+              <LoadingButton
+                type="submit"
+                loading={loading}
+                text="Create Account"
+                loadingText="Creating..."
+                className="btn btn-warning w-100 auth-submit"
+              />
+            </form>
+
+            <p className="auth-footer">
+              Already have an account? <Link to="/login">Login</Link>
+            </p>
           </div>
-
-          {/* EMAIL */}
-          <div className="auth-input">
-            <i className="bx bx-envelope auth-icon"></i>
-            <input
-              type="email"
-              name="email"
-              placeholder="Email address"
-              required
-              value={form.email}
-              onChange={handleChange}
-            />
-          </div>
-
-          {/* PHONE */}
-          <div className="auth-input">
-            <i className="bx bx-phone auth-icon"></i>
-            <input
-              name="phone"
-              placeholder="Phone number"
-              value={form.phone}
-              onChange={handleChange}
-            />
-          </div>
-
-          {/* PASSWORD */}
-          <div className="auth-input">
-            <i className="bx bx-lock-alt auth-icon"></i>
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              placeholder="Password"
-              required
-              value={form.password}
-              onChange={handleChange}
-            />
-            <button
-              type="button"
-              className="auth-eye"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              <i
-                className={`bx ${
-                  showPassword ? "bx-hide" : "bx-show"
-                }`}
-              ></i>
-            </button>
-          </div>
-
-          <small className="auth-hint">
-            Min 8 chars · uppercase · lowercase · number · special character
-          </small>
-
-          <LoadingButton
-            type="submit"
-            loading={loading}
-            text="Create Account"
-            loadingText="Creating..."
-            className="btn btn-warning w-100 mt-3"
-          />
-        </form>
-
-        <p className="auth-footer">
-          Already have an account? <Link to="/login">Login</Link>
-        </p>
+        </div>
       </div>
     </section>
   );

@@ -10,7 +10,7 @@ const getAllOrders = async (req, res) => {
     let params = [];
 
     if (status) {
-      whereClauses.push("o.order_status = ?");
+      whereClauses.push("o.status = ?");
       params.push(status);
     }
 
@@ -119,7 +119,8 @@ const getOrderDetails = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { order_status, payment_status, tracking_number, shipping_carrier, notes } = req.body;
+    const { status, order_status, payment_status, tracking_number, shipping_carrier, notes } = req.body;
+    const nextStatus = status || order_status;
 
     const [existing] = await db.query("SELECT * FROM orders WHERE id = ?", [id]);
     if (existing.length === 0) {
@@ -128,14 +129,14 @@ const updateOrderStatus = async (req, res) => {
 
     await db.query(
       `UPDATE orders SET
-         order_status = COALESCE(?, order_status),
+         status = COALESCE(?, status),
          payment_status = COALESCE(?, payment_status),
          tracking_number = COALESCE(?, tracking_number),
          shipping_carrier = COALESCE(?, shipping_carrier),
          notes = COALESCE(?, notes)
        WHERE id = ?`,
       [
-        order_status || null,
+        nextStatus || null,
         payment_status || null,
         tracking_number || null,
         shipping_carrier || null,

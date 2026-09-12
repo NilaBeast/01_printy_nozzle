@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
   withCredentials: true, // for cookies (JWT / sessions)
   headers: {
     "Content-Type": "application/json",
@@ -29,6 +29,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       console.warn("Unauthorized - logging out");
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.dispatchEvent(new Event("authChange"));
     }
     return Promise.reject(error);
   }

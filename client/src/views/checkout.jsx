@@ -21,6 +21,8 @@ import {
   Info,
 } from "lucide-react";
 import "../../public/css/checkout.css";
+import cartService from "../services/cart.service";
+import checkoutService from "../services/checkout.service";
 
 // Default items if cart is empty, exactly matching the screenshot
 const DEFAULT_CHECKOUT_ITEMS = [
@@ -85,6 +87,7 @@ export default function Checkout() {
     }
     return DEFAULT_CHECKOUT_ITEMS;
   });
+  const [placingOrder, setPlacingOrder] = useState(false);
 
   // Shipping Form State
   const [formData, setFormData] = useState({
@@ -109,6 +112,63 @@ export default function Checkout() {
   // Coupon State
   const [couponCode, setCouponCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [serverDiscount, setServerDiscount] = useState(0);
+  const [serverTax, setServerTax] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCheckout = async () => {
+      if (!localStorage.getItem("token")) return;
+
+      try {
+        const [cartResponse, checkoutResponse] = await Promise.all([
+          cartService.getCart(),
+          checkoutService.initiate(),
+        ]);
+        const serverCart = cartResponse.data.cart;
+        const checkout = checkoutResponse.data.checkout;
+        if (!active) return;
+
+        setCheckoutItems(
+          (serverCart.items || []).map((item) => ({
+            id: item.id,
+            productId: item.product_id,
+            name: item.name,
+            subtitle: item.variant_value || item.category_name || item.slug,
+            image: item.image || "/images/products/01.png",
+            price: Number(item.unit_price || item.price || 0),
+            quantity: Number(item.quantity || 1),
+          }))
+        );
+        setServerDiscount(Number(checkout.discount || serverCart.discount || 0));
+        setServerTax(Number(serverCart.taxAmount || 0));
+
+        const defaultAddress = checkout.savedAddresses?.find((address) => address.is_default) || checkout.savedAddresses?.[0];
+        if (defaultAddress) {
+          setFormData((prev) => ({
+            ...prev,
+            fullName: defaultAddress.full_name || prev.fullName,
+            phoneNumber: defaultAddress.phone || prev.phoneNumber,
+            emailAddress: defaultAddress.email || prev.emailAddress,
+            pincode: defaultAddress.pincode || prev.pincode,
+            addressLine1: defaultAddress.address_line1 || prev.addressLine1,
+            addressLine2: defaultAddress.address_line2 || prev.addressLine2,
+            city: defaultAddress.city || prev.city,
+            state: defaultAddress.state || prev.state,
+            country: defaultAddress.country || prev.country,
+          }));
+        }
+      } catch (error) {
+        toast.error(error?.response?.data?.message || "Unable to load checkout");
+      }
+    };
+
+    loadCheckout();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Financial calculations
   const subtotal = useMemo(() => {
@@ -122,12 +182,12 @@ export default function Checkout() {
   }, [shippingOption]);
 
   const discount = useMemo(() => {
-    return +(subtotal * (discountPercent / 100)).toFixed(2);
-  }, [subtotal, discountPercent]);
+    return serverDiscount || +(subtotal * (discountPercent / 100)).toFixed(2);
+  }, [subtotal, discountPercent, serverDiscount]);
 
   const gstTax = useMemo(() => {
-    return +((subtotal - discount) * 0.18).toFixed(2);
-  }, [subtotal, discount]);
+    return serverTax ?? +((subtotal - discount) * 0.18).toFixed(2);
+  }, [subtotal, discount, serverTax]);
 
   const grandTotal = useMemo(() => {
     return +(subtotal - discount + gstTax + shippingFee).toFixed(2);
@@ -149,34 +209,74 @@ export default function Checkout() {
     toast.success(`PIN code ${formData.pincode} is serviceable for Fast Delivery!`);
   };
 
-  const handleApplyCoupon = (e) => {
+  const handleApplyCoupon = async (e) => {
     e.preventDefault();
     const code = couponCode.trim().toUpperCase();
     if (!code) {
       toast.warn("Please enter a coupon code");
       return;
     }
-    if (code === "PRINTY10" || code === "ELECTRO10" || code === "SAVE10") {
-      setDiscountPercent(10);
-      toast.success(`Coupon ${code} applied! 10% discount added.`);
-    } else {
-      toast.error("Invalid coupon code. Try 'PRINTY10'");
+    try {
+      if (localStorage.getItem("token")) {
+        const response = await cartService.applyCoupon(code);
+        setServerDiscount(Number(response.data.coupon?.discount_amount || 0));
+        toast.success(response.data.message || `Coupon ${code} applied!`);
+      } else if (code === "PRINTY10" || code === "ELECTRO10" || code === "SAVE10") {
+        setDiscountPercent(10);
+        toast.success(`Coupon ${code} applied! 10% discount added.`);
+      } else {
+        toast.error("Invalid coupon code. Try 'PRINTY10'");
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Invalid coupon code");
     }
   };
 
-  const handlePlaceOrder = (e) => {
+  const handlePlaceOrder = async (e) => {
     e.preventDefault();
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login before placing your order");
+      navigate("/login", { state: { from: "/checkout" } });
+      return;
+    }
+
     if (!formData.fullName || !formData.phoneNumber || !formData.addressLine1 || !formData.pincode) {
       toast.warn("Please fill in all required shipping information fields.");
       return;
     }
-    toast.success("Order Placed Successfully! Thank you for shopping with PrintyNozzle.");
+
+    const paymentMap = {
+      upi: "upi",
+      cards: "card",
+      netbanking: "net_banking",
+      wallets: "wallet",
+      cod: "cod",
+    };
+
+    setPlacingOrder(true);
     try {
+      const response = await checkoutService.placeOrder({
+        shipping_name: formData.fullName,
+        shipping_phone: formData.phoneNumber,
+        shipping_email: formData.emailAddress,
+        shipping_address1: formData.addressLine1,
+        shipping_address2: formData.addressLine2,
+        shipping_city: formData.city,
+        shipping_state: formData.state,
+        shipping_pincode: formData.pincode,
+        shipping_country: formData.country,
+        delivery_option: shippingOption === "sameday" ? "same_day" : shippingOption,
+        payment_method: paymentMap[paymentMethod] || "cod",
+      });
+
       localStorage.removeItem("printy_cart");
-    } catch (err) {}
-    setTimeout(() => {
-      navigate("/");
-    }, 1800);
+      toast.success(response.data.message || "Order placed successfully!");
+      navigate(`/orders/${response.data.order.order_number}`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Order creation failed");
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   return (
@@ -897,7 +997,7 @@ export default function Checkout() {
 
               {/* Continue to Payment / Place Order CTA button */}
               <button type="submit" className="btn-checkout-primary">
-                <span>Continue to Payment</span>
+                <span>{placingOrder ? "Placing Order..." : "Continue to Payment"}</span>
                 <ArrowRight size={18} />
               </button>
             </div>
