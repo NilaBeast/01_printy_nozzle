@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   uploadPrintFile,
+  getPrintingConfig,
   getMaterials,
   getColors,
   calculatePrice,
@@ -15,6 +16,7 @@ const { printFileUpload } = require("../middlewares/uploadMiddleware");
 // Public endpoints
 router.get("/materials", getMaterials);
 router.get("/colors", getColors);
+router.get("/config", getPrintingConfig);
 router.post("/calculate-price", calculatePrice);
 router.post("/upload", printFileUpload.single("file"), uploadPrintFile);
 

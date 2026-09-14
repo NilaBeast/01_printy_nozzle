@@ -698,6 +698,17 @@
   box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
 }
 
+.order-btn-cancel {
+  border-color: #fecaca;
+  color: #d11f1f;
+}
+
+.order-btn-cancel:hover {
+  background: #fef2f2;
+  border-color: #d11f1f;
+  color: #d11f1f;
+}
+
 /* Empty State */
 .orders-empty-state {
   background: var(--ord-card-bg);

@@ -146,7 +146,7 @@ const uploadAvatar = async (req, res) => {
       return res.status(400).json({ success: false, message: "Please upload an image file (JPG, PNG up to 2MB)" });
     }
 
-    const uploadRes = await uploadFile(req.file.buffer, "avatars", "image");
+    const uploadRes = await uploadFile(req.file, "avatars", "image");
 
     await db.query("UPDATE users SET avatar_url = ? WHERE id = ?", [uploadRes.secure_url, userId]);
 

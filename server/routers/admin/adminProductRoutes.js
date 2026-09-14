@@ -20,8 +20,14 @@ router.use(protect, authorizeRoles("admin"));
 
 router.get("/", getAllProducts);
 router.get("/:id", getProductById);
-router.post("/", productImageUpload.array("images", 5), createProduct);
-router.put("/:id", updateProduct);
+router.post("/", productImageUpload.fields([
+  { name: "images", maxCount: 5 },
+  { name: "pinout_image", maxCount: 1 },
+]), createProduct);
+router.put("/:id", productImageUpload.fields([
+  { name: "images", maxCount: 5 },
+  { name: "pinout_image", maxCount: 1 },
+]), updateProduct);
 router.delete("/:id", deleteProduct);
 
 // Product images

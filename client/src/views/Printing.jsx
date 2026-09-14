@@ -13,7 +13,6 @@ import {
   Layers,
   HelpCircle,
   Check,
-  ShoppingCart,
   ArrowRight,
   RotateCcw,
   Sparkles,
@@ -24,6 +23,9 @@ import {
 import defaultPricingData from "../data/materialPrices.json";
 import ModelViewer3D from "../components/ModelViewer3D";
 import printingService from "../services/printing.service";
+import catalogService from "../services/catalog.service";
+import cartService from "../services/cart.service";
+import { syncCartBadge } from "../utils/cartSync";
 import "../../public/css/printing.css";
 
 // Maximum Printable Dimensions from .env (-1 means no limit)
@@ -40,11 +42,40 @@ export default function Printing() {
   const optionsSectionRef = useRef(null);
 
   /* =========================================================
-     PRICING CONFIGURATION (JSON Controlled)
+     PRICING CONFIGURATION (DB settings with JSON fallback)
      ========================================================= */
   const [serverMaterials, setServerMaterials] = useState(null);
   const [serverColors, setServerColors] = useState(null);
-  const pricingConfig = defaultPricingData;
+  const [serverSiteSettings, setServerSiteSettings] = useState(null);
+  const defaultPricingConfig = defaultPricingData;
+  const pricingConfig = {
+    ...defaultPricingConfig,
+    siteSettings: {
+      ...defaultPricingConfig.siteSettings,
+      ...(serverSiteSettings || {}),
+      gstRate: serverSiteSettings?.gstRate ?? defaultPricingConfig.siteSettings?.gstRate ?? 0.18,
+      estimatedDeliveryDays:
+        serverSiteSettings?.estimatedDeliveryDays ??
+        defaultPricingConfig.siteSettings?.estimatedDeliveryDays ??
+        "3 – 5 Working Days",
+      deliveryRegion:
+        serverSiteSettings?.deliveryRegion ??
+        defaultPricingConfig.siteSettings?.deliveryRegion ??
+        "Across India",
+    },
+    surfaceFinishes: (defaultPricingConfig.surfaceFinishes || []).map((finish) =>
+      finish.id === "smooth"
+        ? {
+            ...finish,
+            pricePerGram:
+              serverSiteSettings?.smoothFinishPerGram !== undefined
+                ? serverSiteSettings.smoothFinishPerGram
+                : finish.pricePerGram,
+            tag: `+ ₹${serverSiteSettings?.smoothFinishPerGram ?? finish.pricePerGram} / gram`,
+          }
+        : finish
+    ),
+  };
   const [isInfillModalOpen, setIsInfillModalOpen] = useState(false);
 
   /* =========================================================
@@ -98,18 +129,29 @@ export default function Printing() {
   const [selectedFinishId, setSelectedFinishId] = useState("standard");
   const [quantity, setQuantity] = useState(1);
   const [placingPrintOrder, setPlacingPrintOrder] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     const loadPrintingOptions = async () => {
       try {
-        const [materialsResponse, colorsResponse] = await Promise.all([
+        const [materialsResponse, colorsResponse, configResponse] = await Promise.all([
           printingService.getMaterials(),
           printingService.getColors(),
+          catalogService.getPrintingConfig(),
         ]);
 
         if (!active) return;
+
+        const serverConfig = configResponse.data.settings || {};
+        setServerSiteSettings({
+          gstRate: serverConfig.gst_rate !== undefined ? Number(serverConfig.gst_rate) / 100 : undefined,
+          smoothFinishPerGram: serverConfig.smooth_finish_per_gram !== undefined ? Number(serverConfig.smooth_finish_per_gram) : undefined,
+          freeShippingThreshold: serverConfig.free_shipping_threshold !== undefined ? Number(serverConfig.free_shipping_threshold) : undefined,
+          estimatedDeliveryDays: serverConfig.printing_delivery_days || undefined,
+          deliveryRegion: serverConfig.printing_delivery_region || undefined,
+        });
 
         const mappedMaterials = (materialsResponse.data.materials || []).map((material) => ({
           id: material.id,
@@ -170,9 +212,22 @@ export default function Printing() {
     return surfaceFinishes.find((f) => f.id === selectedFinishId) || surfaceFinishes[0];
   }, [surfaceFinishes, selectedFinishId]);
 
+  // Infill multipliers mirror the server price calculator so the on-screen
+  // quote matches what is actually charged (server scales base weight).
+  const INFILL_MULTIPLIERS = { 10: 0.4, 20: 0.55, 30: 0.7, 50: 1.0, 100: 1.5 };
+
+  const getBaseWeight = () =>
+    Math.max(2, Math.round(modelAnalysis?.fileName?.includes("rocket") ? 20 : modelAnalysis?.weightGrams || 20));
+
+  const getInfillMultiplier = (inf) => {
+    const key = Number(inf?.id);
+    if (INFILL_MULTIPLIERS[key] !== undefined) return INFILL_MULTIPLIERS[key];
+    return inf?.factor || 1.0;
+  };
+
   const getInfillCardPrice = (inf) => {
-    const baseWeight = modelAnalysis?.fileName?.includes("rocket") ? 20 : (modelAnalysis?.weightGrams || 20);
-    const weight = Math.max(2, Math.round(baseWeight * (inf.factor || 1.0)));
+    const baseWeight = getBaseWeight();
+    const weight = Math.max(2, Math.round(baseWeight * getInfillMultiplier(inf)));
     const matCost = Math.round(weight * (selectedMaterial?.pricePerGram || 12));
     const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
     return matCost + finishCost + (inf.priceAdjustment || 0);
@@ -183,7 +238,10 @@ export default function Printing() {
      ========================================================= */
   const calculations = useMemo(() => {
     const baseWeight = modelAnalysis?.fileName?.includes("rocket") ? 20 : (modelAnalysis?.weightGrams || 20);
-    const weight = Math.max(2, Math.round(baseWeight * (selectedInfill?.factor || 1.0)));
+    const safeBase = Math.max(2, Math.round(baseWeight));
+    const key = Number(selectedInfill?.id);
+    const multiplier = INFILL_MULTIPLIERS[key] !== undefined ? INFILL_MULTIPLIERS[key] : selectedInfill?.factor || 1.0;
+    const weight = Math.max(2, Math.round(safeBase * multiplier));
 
     // Material cost = weight * pricePerGram
     const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 12));
@@ -211,6 +269,7 @@ export default function Printing() {
     const grandTotal = +(subtotal + gstAmount).toFixed(2);
 
     return {
+      baseWeight: safeBase,
       weight,
       materialCost,
       colorCost,
@@ -233,6 +292,7 @@ export default function Printing() {
   const summaryCalculations = hasUploadedModel
     ? calculations
     : {
+        baseWeight: 0,
         weight: 0,
         materialCost: 0,
         colorCost: 0,
@@ -320,74 +380,72 @@ export default function Printing() {
   };
 
   /* =========================================================
-     CART & CHECKOUT INTEGRATION
+     3D PRINT ORDER — supports both Add to Cart (unified checkout
+     with products, coupons incl. GST, shipping) and direct order
      ========================================================= */
-  const generateCartItem = () => {
-    return {
-      id: `print-${Date.now()}`,
-      name: `3D Print: ${modelAnalysis.fileName}`,
-      subtitle: `${selectedMaterial.name} • ${selectedColor.name} • ${selectedInfill.label} Infill`,
-      image: "/images/rocket.png",
-      price: calculations.unitPrice,
-      quantity: quantity,
-      isCustomPrint: true,
-      customPrintDetails: {
-        fileName: modelAnalysis.fileName,
-        fileSizeMB: modelAnalysis.fileSizeMB,
-        dimensions: `${modelAnalysis.dimensions.x} x ${modelAnalysis.dimensions.y} x ${modelAnalysis.dimensions.z} mm`,
-        volumeCm3: modelAnalysis.volumeCm3,
-        estimatedWeight: `${calculations.weight}g`,
-        material: selectedMaterial.name,
-        materialPricePerGram: selectedMaterial.pricePerGram,
-        color: selectedColor.name,
-        colorHex: selectedColorHex,
-        infill: selectedInfill.label,
-        surfaceFinish: selectedFinish.name,
-      },
-    };
-  };
+  const buildPrintPayload = (uploaded) => ({
+    file_name: uploaded?.name || modelAnalysis.fileName || "model.stl",
+    file_url: uploaded?.url,
+    file_public_id: uploaded?.public_id || null,
+    file_size: uploaded?.size || modelAnalysis.fileSizeMB,
+    dimension_x: modelAnalysis.dimensions.x,
+    dimension_y: modelAnalysis.dimensions.y,
+    dimension_z: modelAnalysis.dimensions.z,
+    material_id: selectedMaterial.id,
+    color_id: selectedColor.id === "custom" ? null : selectedColor.id,
+    custom_color_hex: selectedColor.id === "custom" ? selectedColorHex : null,
+    infill_density: Number(selectedInfill.id || 50),
+    surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
+    quantity,
+    // Base (unscaled) weight — the server applies its infill multiplier
+    estimated_weight: calculations.baseWeight,
+  });
 
-  const handleAddToCart = () => {
+  const validatePrintSelection = () => {
     if (!hasUploadedModel || !modelAnalysis || modelAnalysis.weightGrams <= 0) {
       toast.warning("Please upload a 3D model first.");
-      return;
+      return false;
     }
-
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login before ordering a 3D print");
+      navigate("/login", { state: { from: "/3d-printing" } });
+      return false;
+    }
     if (isOversized) {
       toast.error(
         `Model exceeds maximum printable volume (${MAX_PRINT_WIDTH_MM === -1 ? "No limit" : MAX_PRINT_WIDTH_MM + "mm"} × ${MAX_PRINT_DEPTH_MM === -1 ? "No limit" : MAX_PRINT_DEPTH_MM + "mm"} × ${MAX_PRINT_HEIGHT_MM === -1 ? "No limit" : MAX_PRINT_HEIGHT_MM + "mm"}). Please scale down your model.`
       );
-      return;
+      return false;
     }
+    if (typeof selectedMaterial?.id !== "number") {
+      toast.warning("Pricing data is still loading. Please wait a moment and try again.");
+      return false;
+    }
+    return true;
+  };
 
+  const handleAddToCart = async () => {
+    if (!validatePrintSelection()) return;
+    setAddingToCart(true);
     try {
-      const existingCart = JSON.parse(localStorage.getItem("printy_cart") || "[]");
-      const newItem = generateCartItem();
-      const updatedCart = [newItem, ...existingCart];
-      localStorage.setItem("printy_cart", JSON.stringify(updatedCart));
-      toast.success("3D print model added to your cart!");
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to add to cart.");
+      let uploaded = null;
+      if (uploadedFile) {
+        const uploadResponse = await printingService.uploadFile(uploadedFile);
+        uploaded = uploadResponse.data.file;
+      }
+      await cartService.addPrintItem(buildPrintPayload(uploaded));
+      await syncCartBadge();
+      toast.success("Custom 3D print added to cart!");
+      navigate("/cart");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to add 3D print to cart");
+    } finally {
+      setAddingToCart(false);
     }
   };
 
   const handleBuyNow = async () => {
-    if (!hasUploadedModel || !modelAnalysis || modelAnalysis.weightGrams <= 0) {
-      toast.warning("Please upload a 3D model first.");
-      return;
-    }
-    if (!localStorage.getItem("token")) {
-      toast.info("Please login before placing a 3D print order");
-      navigate("/login", { state: { from: "/3d-printing" } });
-      return;
-    }
-    if (isOversized) {
-      toast.error(
-        `Model exceeds maximum printable volume (${MAX_PRINT_WIDTH_MM === -1 ? "No limit" : MAX_PRINT_WIDTH_MM + "mm"} × ${MAX_PRINT_DEPTH_MM === -1 ? "No limit" : MAX_PRINT_DEPTH_MM + "mm"} × ${MAX_PRINT_HEIGHT_MM === -1 ? "No limit" : MAX_PRINT_HEIGHT_MM + "mm"}). Please scale down your model.`
-      );
-      return;
-    }
+    if (!validatePrintSelection()) return;
     setPlacingPrintOrder(true);
     try {
       let uploaded = null;
@@ -397,25 +455,13 @@ export default function Printing() {
       }
 
       const response = await printingService.createOrder({
-        file_name: uploaded?.name || modelAnalysis.fileName || "rocket.stl",
-        file_url: uploaded?.url || `${window.location.origin}/images/rocket.png`,
-        file_public_id: uploaded?.public_id || null,
-        file_size: uploaded?.size || modelAnalysis.fileSizeMB,
-        dimension_x: modelAnalysis.dimensions.x,
-        dimension_y: modelAnalysis.dimensions.y,
-        dimension_z: modelAnalysis.dimensions.z,
-        material_id: selectedMaterial.id,
-        color_id: selectedColor.id === "custom" ? null : selectedColor.id,
-        custom_color_hex: selectedColor.id === "custom" ? selectedColorHex : null,
-        infill_density: Number(selectedInfill.id || 50),
-        surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
-        quantity,
-        estimated_weight: calculations.weight,
+        ...buildPrintPayload(uploaded),
         payment_method: "cod",
       });
 
       toast.success(response.data.message || "3D print order placed");
-      navigate("/orders");
+      const orderNumber = response.data.order?.order_number;
+      navigate(orderNumber ? `/orders/${orderNumber}` : "/orders");
     } catch (error) {
       toast.error(error?.response?.data?.message || "Unable to place 3D print order");
     } finally {
@@ -890,7 +936,7 @@ export default function Printing() {
                 </div>
 
                 <div className="summary-subtotal-row">
-                  <span>GST (18%)</span>
+                  <span>GST ({Math.round((pricingConfig.siteSettings?.gstRate || 0.18) * 100)}%)</span>
                   <span className="fw-semibold">₹{summaryCalculations.gstAmount.toFixed(2)}</span>
                 </div>
 
@@ -929,24 +975,25 @@ export default function Printing() {
                 )}
 
                 {/* CTA Buttons */}
-                <div className="summary-actions">
+                <div className="summary-actions" style={{ display: "flex", gap: "10px" }}>
                   <button
                     type="button"
-                    className="btn-add-to-cart"
+                    className="btn-buy-now"
                     onClick={handleAddToCart}
-                    disabled={!hasUploadedModel || isOversized}
+                    disabled={!hasUploadedModel || isOversized || addingToCart || placingPrintOrder}
+                    style={{ flex: 1, background: "#ffffff", color: "#2563eb", border: "1.5px solid #2563eb" }}
+                    title="Add this 3D model configuration to cart"
                   >
-                    <ShoppingCart size={18} />
-                    <span>Add to Cart</span>
+                    <span>{addingToCart ? "Adding..." : "Add to Cart"}</span>
                   </button>
-
                   <button
                     type="button"
                     className="btn-buy-now"
                     onClick={handleBuyNow}
-                    disabled={!hasUploadedModel || isOversized}
+                    disabled={!hasUploadedModel || isOversized || addingToCart || placingPrintOrder}
+                    style={{ flex: 1 }}
                   >
-                    <span>{placingPrintOrder ? "Placing..." : "Buy Now"}</span>
+                    <span>{placingPrintOrder ? "Placing..." : "Place 3D Print Order"}</span>
                   </button>
                 </div>
 

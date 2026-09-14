@@ -2,6 +2,76 @@
    CART PAGE STYLING - EXACT SPECIFICATION & RESPONSIVE DESIGN
    ========================================================================== */
 
+.cart-coupon-form {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.cart-coupon-form input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #dbe5f1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  text-transform: uppercase;
+  outline: none;
+}
+
+.cart-coupon-form input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.cart-coupon-form button {
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cart-coupon-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cart-coupon-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.8px;
+  color: #0a2244;
+  background: linear-gradient(135deg, #fff7e0, #ffefc2);
+  border: 1px dashed #e0b73c;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.cart-coupon-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: #d11f1f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cart-coupon-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cart-page-wrapper {
   width: 100%;
   min-height: 80vh;

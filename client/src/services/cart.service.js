@@ -4,6 +4,7 @@ const cartService = {
   getCart: () => api.get("/cart"),
   addItem: ({ product_id, variant_id, quantity = 1 }) =>
     api.post("/cart/add", { product_id, variant_id, quantity }),
+  addPrintItem: (payload) => api.post("/cart/print", payload),
   updateItem: (item_id, quantity) => api.put(`/cart/item/${item_id}`, { item_id, quantity }),
   removeItem: (id) => api.delete(`/cart/item/${id}`),
   clear: () => api.delete("/cart/clear"),

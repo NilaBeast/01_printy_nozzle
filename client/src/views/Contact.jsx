@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
+import catalogService from "../services/catalog.service";
+import useSiteSettings from "../hooks/useSiteSettings";
 import {
   Headphones,
   Clock,
@@ -68,6 +70,31 @@ export default function Contact() {
     subject: "",
     message: "",
   });
+  const [sending, setSending] = useState(false);
+  const [contactInfo, setContactInfo] = useState(null);
+  const { freeShippingThreshold } = useSiteSettings();
+
+  // Live contact details from Admin → Settings (falls back to static text)
+  useEffect(() => {
+    let active = true;
+    catalogService
+      .getContactInfo()
+      .then((res) => {
+        if (active && res.data?.data?.contactInfo) {
+          setContactInfo(res.data.data.contactInfo);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const infoPhone = contactInfo?.phone || "+91 98765 43210";
+  const infoEmail = contactInfo?.email || "support@electrolab.in";
+  const infoWhatsapp = contactInfo?.whatsapp || "+91 98765 43210";
+  const infoHours = contactInfo?.businessHours || "Mon - Sat: 10:00 AM - 7:00 PM";
+  const infoCompany = contactInfo?.companyName || "PrintyNozzle";
 
   // Accordion State
   const [openFaq, setOpenFaq] = useState(null);
@@ -81,19 +108,35 @@ export default function Contact() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const SUBJECT_LABELS = {
+    general: "General Inquiry",
+    order: "Order Status & Tracking",
+    "3d-printing": "3D Printing Custom Service",
+    technical: "Product Technical Support",
+    bulk: "Bulk Orders & B2B Partnerships",
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.fullName || !formData.email || !formData.message) {
       toast.warn("Please fill in all required fields.");
       return;
     }
-    toast.success("Thank you! Your message has been sent successfully. We'll be in touch soon.");
-    setFormData({
-      fullName: "",
-      email: "",
-      subject: "",
-      message: "",
-    });
+    setSending(true);
+    try {
+      const res = await catalogService.submitContact({
+        name: formData.fullName.trim(),
+        email: formData.email.trim(),
+        subject: SUBJECT_LABELS[formData.subject] || "General Inquiry",
+        message: formData.message.trim(),
+      });
+      toast.success(res.data?.message || "Thank you! Your message has been sent successfully.");
+      setFormData({ fullName: "", email: "", subject: "", message: "" });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to send message. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -266,9 +309,9 @@ export default function Contact() {
 
               {/* Submit Button */}
               <div className="contact-form-full">
-                <button type="submit" className="btn-send-message">
+                <button type="submit" className="btn-send-message" disabled={sending}>
                   <Send size={16} />
-                  <span>Send Message</span>
+                  <span>{sending ? "Sending..." : "Send Message"}</span>
                 </button>
               </div>
             </form>
@@ -292,7 +335,7 @@ export default function Contact() {
                 </div>
                 <div className="contact-info-texts">
                   <span className="contact-info-label">Visit Us</span>
-                  <span className="contact-info-primary">PrintyNozzle</span>
+                  <span className="contact-info-primary">{infoCompany}</span>
                   <span className="contact-info-sub">View on Google Maps &rarr;</span>
                 </div>
               </a>
@@ -304,8 +347,8 @@ export default function Contact() {
                 </div>
                 <div className="contact-info-texts">
                   <span className="contact-info-label">Call Us</span>
-                  <span className="contact-info-primary">+91 98765 43210</span>
-                  <span className="contact-info-sub">Mon - Sat: 10:00 AM - 7:00 PM</span>
+                  <span className="contact-info-primary">{infoPhone}</span>
+                  <span className="contact-info-sub">{infoHours}</span>
                 </div>
               </div>
 
@@ -316,7 +359,7 @@ export default function Contact() {
                 </div>
                 <div className="contact-info-texts">
                   <span className="contact-info-label">Email Us</span>
-                  <span className="contact-info-primary">support@electrolab.in</span>
+                  <span className="contact-info-primary">{infoEmail}</span>
                   <span className="contact-info-sub">We reply within a few hours</span>
                 </div>
               </div>
@@ -328,7 +371,7 @@ export default function Contact() {
                 </div>
                 <div className="contact-info-texts">
                   <span className="contact-info-label">WhatsApp</span>
-                  <span className="contact-info-primary">+91 98765 43210</span>
+                  <span className="contact-info-primary">{infoWhatsapp}</span>
                   <span className="contact-info-sub">Quick chat support</span>
                 </div>
               </div>
@@ -340,7 +383,7 @@ export default function Contact() {
                 </div>
                 <div className="contact-info-texts">
                   <span className="contact-info-label">Business Hours</span>
-                  <span className="contact-info-primary">Mon - Sat: 10:00 AM - 7:00 PM</span>
+                  <span className="contact-info-primary">{infoHours}</span>
                   <span className="contact-info-sub">Sunday: Closed</span>
                 </div>
               </div>
@@ -478,7 +521,7 @@ export default function Contact() {
             </div>
             <div className="contact-trust-info">
               <span className="contact-trust-heading">Free Shipping</span>
-              <span className="contact-trust-sub">On orders over ₹999</span>
+              <span className="contact-trust-sub">On orders over ₹{freeShippingThreshold}</span>
             </div>
           </div>
 

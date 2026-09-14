@@ -20,10 +20,15 @@ import {
 import "../../public/css/cart.css";
 import "../../public/css/skeleton.css";
 import cartService from "../services/cart.service";
+import useSiteSettings from "../hooks/useSiteSettings";
+import { notifyCartChange } from "../utils/cartSync";
 
 
 export default function Cart() {
   const navigate = useNavigate();
+  const { freeShippingThreshold, gstRate } = useSiteSettings();
+  const [couponCode, setCouponCode] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showSuccessBanner, setShowSuccessBanner] = useState(true);
   const [cartItems, setCartItems] = useState(() => {
@@ -31,7 +36,11 @@ export default function Cart() {
       const saved = localStorage.getItem("printy_cart");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        // Keep both regular products and custom 3D prints — prints are now
+        // orderable through the unified cart/checkout.
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(e);
@@ -55,15 +64,39 @@ export default function Cart() {
         if (!active) return;
         setCartMeta(serverCart);
         setCartItems(
-          (serverCart.items || []).map((item) => ({
-            id: item.id,
-            productId: item.product_id,
-            name: item.name,
-            subtitle: item.variant_value || item.category_name || item.slug,
-            image: item.image || "/images/products/01.png",
-            price: Number(item.unit_price || item.price || 0),
-            quantity: Number(item.quantity || 1),
-          }))
+          (serverCart.items || []).map((item) => {
+            const isPrint = item.item_type === "print" || item.is_print || item.product_id == null;
+            if (isPrint) {
+              const material = item.material_name || "3D Print";
+              const colorLabel = item.color_name || item.custom_color_hex || "Custom";
+              const infill = item.infill_density || 50;
+              const finish = item.surface_finish === "smooth" ? "Smooth" : "Standard";
+              return {
+                id: item.id,
+                productId: null,
+                name: item.name || (item.file_name ? `3D Print — ${item.file_name}` : "Custom 3D Print"),
+                subtitle: item.variant_value || `${material} • ${colorLabel} • ${infill}% • ${finish}`,
+                image: item.image || "/images/rocket.png",
+                price: Number(item.unit_price ?? item.print_unit_price ?? item.price ?? 0),
+                quantity: Number(item.quantity || 1),
+                isCustomPrint: true,
+                isPrint: true,
+                fileName: item.file_name,
+                materialName: material,
+              };
+            }
+            return {
+              id: item.id,
+              productId: item.product_id,
+              name: item.name,
+              subtitle: item.variant_value || item.category_name || item.slug,
+              image: item.image || "/images/products/01.png",
+              price: Number(item.unit_price || item.price || 0),
+              quantity: Number(item.quantity || 1),
+              isCustomPrint: false,
+              isPrint: false,
+            };
+          })
         );
       } catch (error) {
         toast.error(error?.response?.data?.message || "Unable to load cart");
@@ -84,6 +117,7 @@ export default function Cart() {
   useEffect(() => {
     try {
       localStorage.setItem("printy_cart", JSON.stringify(cartItems));
+      notifyCartChange();
     } catch (e) {
       console.error(e);
     }
@@ -98,11 +132,12 @@ export default function Cart() {
     return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   }, [cartItems]);
 
-  const discount = 0;
-  const isFreeShipping = subtotal > 0;
+  const discount = Number(cartMeta?.discount || 0);
+  const appliedCoupon = cartMeta?.coupon || null;
+  const isFreeShipping = subtotal > 0 && subtotal >= freeShippingThreshold;
   const gstTax = useMemo(() => {
-    return cartMeta?.taxAmount ?? +(subtotal * 0.18).toFixed(2);
-  }, [cartMeta, subtotal]);
+    return cartMeta?.taxAmount ?? +(subtotal * (Number(gstRate || 18) / 100)).toFixed(2);
+  }, [cartMeta, subtotal, gstRate]);
 
   const grandTotal = useMemo(() => {
     return cartMeta?.totalAmount ?? +(subtotal + gstTax - discount).toFixed(2);
@@ -126,6 +161,8 @@ export default function Cart() {
     if (localStorage.getItem("token")) {
       try {
         await cartService.updateItem(id, quantity);
+        const response = await cartService.getCart();
+        setCartMeta(response.data.cart);
       } catch (error) {
         toast.error(error?.response?.data?.message || "Unable to update cart");
       }
@@ -138,10 +175,52 @@ export default function Cart() {
     try {
       if (localStorage.getItem("token")) {
         await cartService.removeItem(id);
+        const response = await cartService.getCart();
+        setCartMeta(response.data.cart);
       }
       toast.info(`Removed "${name}" from cart`);
     } catch (error) {
       toast.error(error?.response?.data?.message || "Unable to remove item");
+    }
+  };
+
+  const handleApplyCoupon = async (e) => {
+    e.preventDefault();
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      toast.warn("Please enter a coupon code");
+      return;
+    }
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to apply a coupon");
+      navigate("/login", { state: { from: "/cart" } });
+      return;
+    }
+    setCouponBusy(true);
+    try {
+      const response = await cartService.applyCoupon(code);
+      const cartResponse = await cartService.getCart();
+      setCartMeta(cartResponse.data.cart);
+      setCouponCode("");
+      toast.success(response.data.message || `Coupon ${code} applied!`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Invalid coupon code");
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const handleRemoveCoupon = async () => {
+    setCouponBusy(true);
+    try {
+      await cartService.removeCoupon();
+      const cartResponse = await cartService.getCart();
+      setCartMeta(cartResponse.data.cart);
+      toast.success("Coupon removed");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to remove coupon");
+    } finally {
+      setCouponBusy(false);
     }
   };
 
@@ -319,6 +398,9 @@ export default function Cart() {
                 <ShoppingBag size={18} />
                 <span>Explore Products</span>
               </Link>
+              <Link to="/3d-printing" className="btn-continue-shopping" style={{ padding: "12px 28px" }}>
+                Custom 3D Print
+              </Link>
             </div>
           </div>
         ) : (
@@ -343,22 +425,30 @@ export default function Cart() {
                     <div key={item.id} className="cart-item-row">
                       {/* Product Thumbnail & Names */}
                       <div className="cart-product-info">
-                        <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.id}`} className="cart-thumb-wrapper">
+                        <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.productId}`} className="cart-thumb-wrapper">
                           <img
                             src={item.image}
                             alt={item.name}
                             className="cart-thumb-img"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = "/images/products/01.png";
+                              e.target.src = item.isCustomPrint ? "/images/rocket.png" : "/images/products/01.png";
                             }}
                           />
                         </Link>
                         <div className="cart-product-details">
-                          <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.id}`} className="cart-product-name">
+                          <Link to={item.isCustomPrint ? "/3d-printing" : `/product/${item.productId}`} className="cart-product-name">
                             {item.name}
                           </Link>
                           <span className="cart-product-sub">{item.subtitle}</span>
+                          {item.isCustomPrint && (
+                            <span
+                              className="cart-coupon-chip"
+                              style={{ marginTop: "6px", alignSelf: "flex-start" }}
+                            >
+                              3D Print • Qty applies to same config
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -443,18 +533,55 @@ export default function Cart() {
                     <span>Discount</span>
                     <Tag size={14} color="#2563eb" />
                   </span>
-                  <span className="cart-summary-val">-₹0</span>
+                  <span className="cart-summary-val">-₹{discount.toLocaleString("en-IN")}</span>
+                </div>
+
+                {/* Coupon */}
+                <div className="cart-summary-row">
+                  {appliedCoupon ? (
+                    <>
+                      <span className="cart-summary-label">
+                        <span className="cart-coupon-chip">{appliedCoupon.code}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="cart-coupon-remove"
+                        onClick={handleRemoveCoupon}
+                        disabled={couponBusy}
+                      >
+                        <X size={13} /> Remove
+                      </button>
+                    </>
+                  ) : (
+                    <form onSubmit={handleApplyCoupon} className="cart-coupon-form">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        placeholder="Coupon code"
+                        aria-label="Coupon code"
+                        disabled={couponBusy}
+                      />
+                      <button type="submit" disabled={couponBusy}>
+                        {couponBusy ? "..." : "Apply"}
+                      </button>
+                    </form>
+                  )}
                 </div>
 
                 {/* Shipping */}
                 <div className="cart-summary-row">
                   <span className="cart-summary-label">Shipping</span>
-                  <span className="cart-summary-val cart-shipping-free">FREE</span>
+                  {isFreeShipping ? (
+                    <span className="cart-summary-val cart-shipping-free">FREE</span>
+                  ) : (
+                    <span className="cart-summary-val">Calculated at checkout</span>
+                  )}
                 </div>
 
-                {/* Tax (18% GST) */}
+                {/* Tax (GST) */}
                 <div className="cart-summary-row">
-                  <span className="cart-summary-label">Tax (18% GST)</span>
+                  <span className="cart-summary-label">Tax ({Number(gstRate || 18)}% GST)</span>
                   <span className="cart-summary-val">₹{gstTax.toFixed(2)}</span>
                 </div>
               </div>
@@ -478,12 +605,25 @@ export default function Cart() {
                   <Truck size={20} />
                 </div>
                 <div className="cart-promo-text">
-                  <div className="cart-promo-main">
-                    Yay! You're eligible for free shipping.
-                  </div>
-                  <div className="cart-promo-sub">
-                    Add ₹254 more to get extra discounts!
-                  </div>
+                  {isFreeShipping ? (
+                    <>
+                      <div className="cart-promo-main">
+                        Yay! You're eligible for free shipping.
+                      </div>
+                      <div className="cart-promo-sub">
+                        Your order qualifies for FREE standard delivery.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="cart-promo-main">
+                        Add ₹{Math.max(0, freeShippingThreshold - subtotal).toLocaleString("en-IN")} more for free shipping.
+                      </div>
+                      <div className="cart-promo-sub">
+                        Free standard delivery on orders over ₹{freeShippingThreshold.toLocaleString("en-IN")}.
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

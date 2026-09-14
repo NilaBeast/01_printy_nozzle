@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getCart,
   addToCart,
+  addPrintToCart,
   updateCartItem,
   removeCartItem,
   clearCart,
@@ -15,6 +16,7 @@ router.use(protect); // All cart routes require user login
 
 router.get("/", getCart);
 router.post("/add", addToCart);
+router.post("/print", addPrintToCart);
 router.put("/item/:id", updateCartItem);
 router.delete("/item/:id", removeCartItem);
 router.delete("/clear", clearCart);

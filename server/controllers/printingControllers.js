@@ -3,6 +3,40 @@ const crypto = require("crypto");
 const { uploadFile } = require("../utils/cloudinaryUploader");
 const { calculatePrintPrice } = require("../utils/priceCalculator");
 
+/* ===================== HELPERS ===================== */
+const formatDateTime = (dt) => {
+  if (!dt) return null;
+  try {
+    return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return null;
+  }
+};
+
+const PRINT_STATUS_ORDER = ["confirmed", "reviewing", "in_production", "printing", "quality_check", "shipped", "delivered"];
+
+const buildPrintTimeline = (order) => {
+  if (order.status === "cancelled") {
+    return [
+      { step: "Order Placed", key: "placed", timestamp: formatDateTime(order.created_at), is_completed: true },
+      { step: "Cancelled", key: "cancelled", timestamp: formatDateTime(order.updated_at), is_completed: true },
+    ];
+  }
+
+  const currentIdx = PRINT_STATUS_ORDER.indexOf(order.status);
+  const steps = [
+    { step: "Order Placed", key: "placed", timestamp: formatDateTime(order.created_at), is_completed: true },
+    { step: "Reviewing", key: "reviewing", timestamp: null, is_completed: currentIdx >= 1 },
+    { step: "In Production", key: "in_production", timestamp: null, is_completed: currentIdx >= 2 },
+    { step: "Printing", key: "printing", timestamp: null, is_completed: currentIdx >= 3 },
+    { step: "Quality Check", key: "quality_check", timestamp: null, is_completed: currentIdx >= 4 },
+    { step: "Shipped", key: "shipped", timestamp: null, is_completed: currentIdx >= 5 },
+    { step: "Delivered", key: "delivered", timestamp: null, is_completed: currentIdx >= 6 },
+  ];
+
+  return steps;
+};
+
 /* ===================== UPLOAD PRINT FILE ===================== */
 const uploadPrintFile = async (req, res) => {
   try {
@@ -31,6 +65,22 @@ const uploadPrintFile = async (req, res) => {
   } catch (error) {
     console.error("Upload print file error:", error);
     return res.status(500).json({ success: false, message: "File upload failed" });
+  }
+};
+
+/* ===================== GET PRINTING CONFIG ===================== */
+const getPrintingConfig = async (req, res) => {
+  try {
+    const [settings] = await db.query(
+      "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('gst_rate', 'smooth_finish_per_gram', 'free_shipping_threshold', 'printing_delivery_days', 'printing_delivery_region')"
+    );
+    const settingsMap = {};
+    settings.forEach((s) => (settingsMap[s.setting_key] = s.setting_value));
+
+    return res.status(200).json({ success: true, settings: settingsMap });
+  } catch (error) {
+    console.error("Get printing config error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -193,7 +243,7 @@ const createPrintOrder = async (req, res) => {
         payment_method, payment_status, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        req.user.id, orderNumber, "pending",
+        req.user.id, orderNumber, "confirmed",
         file_name, file_url, file_public_id || null, file_size || null,
         dimension_x || null, dimension_y || null, dimension_z || null,
         material_id, color_id || null, custom_color_hex || null,
@@ -245,9 +295,14 @@ const getUserPrintOrders = async (req, res) => {
       [req.user.id, parseInt(limit), offset]
     );
 
+    const ordersWithTimeline = orders.map((o) => ({
+      ...o,
+      timeline: buildPrintTimeline(o),
+    }));
+
     return res.status(200).json({
       success: true,
-      orders,
+      orders: ordersWithTimeline,
       pagination: {
         total: countResult[0].total,
         page: parseInt(page),
@@ -265,6 +320,9 @@ const getUserPrintOrders = async (req, res) => {
 const getPrintOrderById = async (req, res) => {
   try {
     const { id } = req.params;
+    // Support lookup by numeric id or order_number (e.g. 3DABC123)
+    const isNumeric = /^\d+$/.test(String(id).trim());
+    const queryField = isNumeric ? "po.id = ?" : "po.order_number = ?";
 
     const [orders] = await db.query(
       `SELECT po.*, pm.name as material_name, pm.price_per_gram,
@@ -272,15 +330,18 @@ const getPrintOrderById = async (req, res) => {
        FROM printing_orders po
        JOIN printing_materials pm ON po.material_id = pm.id
        LEFT JOIN printing_colors pc ON po.color_id = pc.id
-       WHERE po.id = ? AND po.user_id = ?`,
-      [id, req.user.id]
+       WHERE ${queryField} AND po.user_id = ?`,
+      [String(id).trim(), req.user.id]
     );
 
     if (orders.length === 0) {
       return res.status(404).json({ success: false, message: "Print order not found" });
     }
 
-    return res.status(200).json({ success: true, order: orders[0] });
+    const order = orders[0];
+    order.timeline = buildPrintTimeline(order);
+
+    return res.status(200).json({ success: true, order });
   } catch (error) {
     console.error("Get print order by ID error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -289,6 +350,7 @@ const getPrintOrderById = async (req, res) => {
 
 module.exports = {
   uploadPrintFile,
+  getPrintingConfig,
   getMaterials,
   getColors,
   calculatePrice,

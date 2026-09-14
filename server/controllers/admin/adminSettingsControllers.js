@@ -55,15 +55,16 @@ const createHeroBanner = async (req, res) => {
       return res.status(400).json({ success: false, message: "Banner image is required" });
     }
 
-    const uploadRes = await uploadFile(req.file.buffer, "banners", "image");
+const uploadRes = await uploadFile(req.file, "banners", "image");
 
     const [result] = await db.query(
-      `INSERT INTO hero_banners (title, subtitle, image_url, link_url, button_text, sort_order, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO hero_banners (title, subtitle, image_url, public_id, link_url, button_text, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title || null,
         subtitle || null,
         uploadRes.secure_url,
+        uploadRes.public_id || null,
         link_url || null,
         button_text || "Shop Now",
         sort_order || 0,
@@ -89,7 +90,7 @@ const updateHeroBanner = async (req, res) => {
 
     let imageUrl = undefined;
     if (req.file) {
-      const uploadRes = await uploadFile(req.file.buffer, "banners", "image");
+      const uploadRes = await uploadFile(req.file, "banners", "image");
       imageUrl = uploadRes.secure_url;
     }
 

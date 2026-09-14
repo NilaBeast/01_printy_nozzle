@@ -1,6 +1,9 @@
 const db = require("../config/db");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
+const { calculateCouponTotals, round2 } = require("../utils/couponHelper");
+const { ensurePrintCartSchema } = require("../utils/printCartSchema");
+const { sendPaymentConfirmationMail } = require("../utils/mailer");
 require("dotenv").config();
 
 const razorpay = new Razorpay({
@@ -11,29 +14,51 @@ const razorpay = new Razorpay({
 /* ===================== INITIATE CHECKOUT ===================== */
 const initiateCheckout = async (req, res) => {
   try {
-    // Get cart and items
+    await ensurePrintCartSchema().catch(() => {});
+    // Get cart and items (products + custom 3D prints)
     const [carts] = await db.query("SELECT * FROM cart WHERE user_id = ?", [req.user.id]);
     if (carts.length === 0) {
       return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    const [items] = await db.query(
-      `SELECT ci.*, p.name, p.price, p.stock,
-              pv.price_adjustment, pv.stock as variant_stock
-       FROM cart_items ci
-       JOIN products p ON ci.product_id = p.id
-       LEFT JOIN product_variants pv ON ci.variant_id = pv.id
-       WHERE ci.cart_id = ?`,
-      [carts[0].id]
-    );
+    let items;
+    try {
+      [items] = await db.query(
+        `SELECT ci.*, p.name, p.price, p.stock,
+                pv.price_adjustment, pv.stock as variant_stock,
+                ci.item_type, ci.unit_price as print_unit_price, ci.product_id as print_product_id
+         FROM cart_items ci
+         LEFT JOIN products p ON ci.product_id = p.id
+         LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+         WHERE ci.cart_id = ?`,
+        [carts[0].id]
+      );
+    } catch (e) {
+      if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
+        [items] = await db.query(
+          `SELECT ci.*, p.name, p.price, p.stock,
+                  pv.price_adjustment, pv.stock as variant_stock
+           FROM cart_items ci
+           JOIN products p ON ci.product_id = p.id
+           LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+           WHERE ci.cart_id = ?`,
+          [carts[0].id]
+        );
+      } else {
+        throw e;
+      }
+    }
 
     if (items.length === 0) {
       return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    // Check all items are in stock
+    const isPrintItem = (it) => it.item_type === "print" || it.print_product_id == null || it.product_id == null;
+
+    // Check all product items are in stock (prints have no stock limit)
     for (const item of items) {
-      const availStock = item.variant_stock !== null ? item.variant_stock : item.stock;
+      if (isPrintItem(item)) continue;
+      const availStock = item.variant_stock !== null && item.variant_stock !== undefined ? item.variant_stock : item.stock;
       if (item.quantity > availStock) {
         return res.status(400).json({
           success: false,
@@ -42,11 +67,16 @@ const initiateCheckout = async (req, res) => {
       }
     }
 
-    // Calculate subtotal
+    // Calculate subtotal (products + prints)
     let subtotal = 0;
     items.forEach((item) => {
-      subtotal += (item.price + (item.price_adjustment || 0)) * item.quantity;
+      if (isPrintItem(item)) {
+        subtotal += Number(item.print_unit_price || item.unit_price || 0) * item.quantity;
+      } else {
+        subtotal += (Number(item.price || 0) + Number(item.price_adjustment || 0)) * item.quantity;
+      }
     });
+    subtotal = round2(subtotal);
 
     // Get settings
     const [settings] = await db.query(
@@ -55,26 +85,20 @@ const initiateCheckout = async (req, res) => {
     const settingsMap = {};
     settings.forEach((s) => (settingsMap[s.setting_key] = parseFloat(s.setting_value)));
 
-    // Coupon discount
-    let discount = 0;
+    const gstRate = settingsMap.gst_rate || 18;
+
+    // Coupon discount — applied on FULL price incl. GST
+    let couponRow = null;
     let couponInfo = null;
     if (carts[0].coupon_id) {
       const [coupons] = await db.query("SELECT * FROM coupons WHERE id = ? AND is_active = 1", [carts[0].coupon_id]);
       if (coupons.length > 0) {
-        const coupon = coupons[0];
-        couponInfo = { code: coupon.code, discount_type: coupon.discount_type, discount_value: coupon.discount_value };
-        if (subtotal >= coupon.min_order_amount) {
-          if (coupon.discount_type === "percentage") {
-            discount = (subtotal * coupon.discount_value) / 100;
-            if (coupon.max_discount && discount > coupon.max_discount) discount = coupon.max_discount;
-          } else {
-            discount = coupon.discount_value;
-          }
-        }
+        couponRow = coupons[0];
+        couponInfo = { code: couponRow.code, discount_type: couponRow.discount_type, discount_value: couponRow.discount_value };
       }
     }
-
-    const gstRate = settingsMap.gst_rate || 18;
+    const totals = calculateCouponTotals({ subtotal, gstRate, coupon: couponRow });
+    const discount = totals.discount;
     const freeShippingThreshold = settingsMap.free_shipping_threshold || 999;
 
     // Get user addresses
@@ -173,6 +197,7 @@ const verifyPayment = async (req, res) => {
     }
 
     // Payment success — update order
+    let confirmedOrder = null;
     if (order_id) {
       await db.query(
         `UPDATE orders SET payment_status = 'paid', status = 'confirmed',
@@ -180,6 +205,34 @@ const verifyPayment = async (req, res) => {
          WHERE id = ? AND user_id = ?`,
         [razorpay_payment_id, razorpay_signature, order_id, req.user.id]
       );
+      const [orderRows] = await db.query("SELECT * FROM orders WHERE id = ? AND user_id = ?", [
+        order_id,
+        req.user.id,
+      ]);
+      confirmedOrder = orderRows[0] || null;
+    }
+
+    // Payment confirmation email (fire-and-forget — never blocks the response)
+    if (confirmedOrder) {
+      try {
+        const [itemRows] = await db.query(
+          "SELECT product_name, variant_value, quantity, price, total FROM order_items WHERE order_id = ?",
+          [confirmedOrder.id]
+        );
+        const [userRows] = await db.query("SELECT first_name, last_name, email FROM users WHERE id = ?", [
+          req.user.id,
+        ]);
+        const customer = userRows[0] || {};
+        const recipient = confirmedOrder.shipping_email || customer.email;
+        sendPaymentConfirmationMail({
+          to: recipient,
+          name: confirmedOrder.shipping_name || `${customer.first_name || ""} ${customer.last_name || ""}`.trim(),
+          order: confirmedOrder,
+          items: itemRows,
+        }).catch(() => {});
+      } catch (mailError) {
+        console.error("Confirmation email lookup failed:", mailError.message);
+      }
     }
 
     return res.status(200).json({

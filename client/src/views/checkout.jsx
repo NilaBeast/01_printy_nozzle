@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Check,
+  CheckCircle2,
   ArrowRight,
   ArrowLeft,
   Truck,
@@ -13,44 +14,15 @@ import {
   Headphones,
   Lock,
   Tag,
-  CreditCard,
-  Building2,
-  Wallet,
-  Banknote,
-  QrCode,
   Info,
+  MapPin,
 } from "lucide-react";
 import "../../public/css/checkout.css";
 import cartService from "../services/cart.service";
 import checkoutService from "../services/checkout.service";
-
-// Default items if cart is empty, exactly matching the screenshot
-const DEFAULT_CHECKOUT_ITEMS = [
-  {
-    id: 1,
-    name: "ESP32 DevKit V1",
-    subtitle: "Microcontrollers",
-    image: "/images/products/01.png",
-    price: 499,
-    quantity: 1,
-  },
-  {
-    id: 2,
-    name: "PLA 3D Printer Filament",
-    subtitle: "Blue | 1kg",
-    image: "/images/products/blue_filament.png",
-    price: 899,
-    quantity: 1,
-  },
-  {
-    id: 3,
-    name: "Precision Screwdriver Set",
-    subtitle: "25 in 1",
-    image: "/images/products/screwdriver_set.png",
-    price: 299,
-    quantity: 1,
-  },
-];
+import catalogService from "../services/catalog.service";
+import profileService from "../services/profile.service";
+import { notifyCartChange } from "../utils/cartSync";
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -74,7 +46,7 @@ const INDIAN_STATES = [
 export default function Checkout() {
   const navigate = useNavigate();
 
-  // Load items from cart or fallback to initial 3 items matching screenshot
+  // Load items from the server cart (no fake fallback data)
   const [checkoutItems, setCheckoutItems] = useState(() => {
     try {
       const saved = localStorage.getItem("printy_cart");
@@ -85,9 +57,17 @@ export default function Checkout() {
     } catch (e) {
       console.error(e);
     }
-    return DEFAULT_CHECKOUT_ITEMS;
+    return [];
   });
   const [placingOrder, setPlacingOrder] = useState(false);
+
+  // Payment success popup (shown after verified Razorpay payment)
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [successOrder, setSuccessOrder] = useState(null);
+
+  // Saved addresses from the backend (My Profile → My Addresses)
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState("");
 
   // Shipping Form State
   const [formData, setFormData] = useState({
@@ -106,14 +86,26 @@ export default function Checkout() {
   // Shipping Option: "standard" | "express" | "sameday"
   const [shippingOption, setShippingOption] = useState("standard");
 
-  // Payment Method: "upi" | "cards" | "netbanking" | "wallets" | "cod"
-  const [paymentMethod, setPaymentMethod] = useState("upi");
+  // Payment is Razorpay-only (UPI / Cards / NetBanking / Wallets all processed
+  // securely through the Razorpay checkout — no other method is offered).
 
   // Coupon State
   const [couponCode, setCouponCode] = useState("");
-  const [discountPercent, setDiscountPercent] = useState(0);
   const [serverDiscount, setServerDiscount] = useState(0);
+  const [appliedCouponCode, setAppliedCouponCode] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
   const [serverTax, setServerTax] = useState(null);
+
+  // Store configuration from Admin → Settings (via checkout initiate)
+  const [storeConfig, setStoreConfig] = useState({
+    gstRate: 18,
+    freeShippingThreshold: 999,
+    shippingOptions: {
+      standard: { cost: 0, label: "Standard Delivery", eta: "3-5 Working Days" },
+      express: { cost: 99, label: "Express Delivery", eta: "1-2 Working Days" },
+      same_day: { cost: 149, label: "Same Day Delivery", eta: "Same day (Selected cities)" },
+    },
+  });
 
   useEffect(() => {
     let active = true;
@@ -131,21 +123,53 @@ export default function Checkout() {
         if (!active) return;
 
         setCheckoutItems(
-          (serverCart.items || []).map((item) => ({
-            id: item.id,
-            productId: item.product_id,
-            name: item.name,
-            subtitle: item.variant_value || item.category_name || item.slug,
-            image: item.image || "/images/products/01.png",
-            price: Number(item.unit_price || item.price || 0),
-            quantity: Number(item.quantity || 1),
-          }))
+          (serverCart.items || []).map((item) => {
+            const isPrint = item.item_type === "print" || item.is_print || item.product_id == null;
+            if (isPrint) {
+              const material = item.material_name || "3D Print";
+              const colorLabel = item.color_name || item.custom_color_hex || "Custom";
+              const infill = item.infill_density || 50;
+              const finish = item.surface_finish === "smooth" ? "Smooth" : "Standard";
+              return {
+                id: item.id,
+                productId: null,
+                name: item.name || (item.file_name ? `3D Print — ${item.file_name}` : "Custom 3D Print"),
+                subtitle: item.variant_value || `${material} • ${colorLabel} • ${infill}% • ${finish}`,
+                image: item.image || "/images/rocket.png",
+                price: Number(item.unit_price ?? item.print_unit_price ?? item.price ?? 0),
+                quantity: Number(item.quantity || 1),
+                isCustomPrint: true,
+              };
+            }
+            return {
+              id: item.id,
+              productId: item.product_id,
+              name: item.name,
+              subtitle: item.variant_value || item.category_name || item.slug,
+              image: item.image || "/images/products/01.png",
+              price: Number(item.unit_price || item.price || 0),
+              quantity: Number(item.quantity || 1),
+              isCustomPrint: false,
+            };
+          })
         );
         setServerDiscount(Number(checkout.discount || serverCart.discount || 0));
         setServerTax(Number(serverCart.taxAmount || 0));
+        setAppliedCouponCode(checkout.coupon?.code || serverCart.coupon?.code || "");
+        if (checkout.gstRate || checkout.freeShippingThreshold || checkout.shippingOptions) {
+          setStoreConfig((prev) => ({
+            gstRate: Number(checkout.gstRate || prev.gstRate),
+            freeShippingThreshold: Number(
+              checkout.freeShippingThreshold || prev.freeShippingThreshold
+            ),
+            shippingOptions: checkout.shippingOptions || prev.shippingOptions,
+          }));
+        }
 
         const defaultAddress = checkout.savedAddresses?.find((address) => address.is_default) || checkout.savedAddresses?.[0];
+        setSavedAddresses(checkout.savedAddresses || []);
         if (defaultAddress) {
+          setSelectedSavedAddressId(String(defaultAddress.id || ""));
           setFormData((prev) => ({
             ...prev,
             fullName: defaultAddress.full_name || prev.fullName,
@@ -176,18 +200,23 @@ export default function Checkout() {
   }, [checkoutItems]);
 
   const shippingFee = useMemo(() => {
-    if (shippingOption === "express") return 99;
-    if (shippingOption === "sameday") return 149;
-    return 0; // Standard is FREE for orders above ₹999
-  }, [shippingOption]);
+    const options = storeConfig.shippingOptions || {};
+    if (shippingOption === "express") return Number(options.express?.cost ?? 99);
+    if (shippingOption === "sameday") return Number(options.same_day?.cost ?? 149);
+    return Number(options.standard?.cost ?? 0);
+  }, [shippingOption, storeConfig]);
 
   const discount = useMemo(() => {
-    return serverDiscount || +(subtotal * (discountPercent / 100)).toFixed(2);
-  }, [subtotal, discountPercent, serverDiscount]);
+    return Number(serverDiscount || 0);
+  }, [serverDiscount]);
 
   const gstTax = useMemo(() => {
-    return serverTax ?? +((subtotal - discount) * 0.18).toFixed(2);
-  }, [subtotal, discount, serverTax]);
+    // GST is always on the full subtotal; coupon discount is applied on
+    // (subtotal + GST). Server provides the authoritative taxAmount.
+    if (serverTax != null) return Number(serverTax);
+    const rate = Number(storeConfig.gstRate || 18) / 100;
+    return +(subtotal * rate).toFixed(2);
+  }, [subtotal, serverTax, storeConfig]);
 
   const grandTotal = useMemo(() => {
     return +(subtotal - discount + gstTax + shippingFee).toFixed(2);
@@ -201,12 +230,21 @@ export default function Checkout() {
     }));
   };
 
-  const handleCheckPincode = () => {
-    if (!formData.pincode || formData.pincode.length < 6) {
+  const handleCheckPincode = async () => {
+    if (!formData.pincode || formData.pincode.trim().length < 6) {
       toast.error("Please enter a valid 6-digit PIN code");
       return;
     }
-    toast.success(`PIN code ${formData.pincode} is serviceable for Fast Delivery!`);
+    try {
+      const response = await catalogService.checkPincode(formData.pincode.trim());
+      if (response.data?.is_serviceable === false) {
+        toast.warn(response.data?.message || `PIN code ${formData.pincode} is not serviceable yet.`);
+      } else {
+        toast.success(response.data?.message || `PIN code ${formData.pincode} is serviceable for Fast Delivery!`);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to check PIN code serviceability");
+    }
   };
 
   const handleApplyCoupon = async (e) => {
@@ -216,20 +254,120 @@ export default function Checkout() {
       toast.warn("Please enter a coupon code");
       return;
     }
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to apply a coupon");
+      navigate("/login", { state: { from: "/checkout" } });
+      return;
+    }
+    setCouponBusy(true);
     try {
-      if (localStorage.getItem("token")) {
-        const response = await cartService.applyCoupon(code);
-        setServerDiscount(Number(response.data.coupon?.discount_amount || 0));
-        toast.success(response.data.message || `Coupon ${code} applied!`);
-      } else if (code === "PRINTY10" || code === "ELECTRO10" || code === "SAVE10") {
-        setDiscountPercent(10);
-        toast.success(`Coupon ${code} applied! 10% discount added.`);
-      } else {
-        toast.error("Invalid coupon code. Try 'PRINTY10'");
-      }
+      const response = await cartService.applyCoupon(code);
+      const cartResponse = await cartService.getCart();
+      const serverCart = cartResponse.data.cart;
+      setServerDiscount(Number(response.data.coupon?.discount_amount || serverCart.discount || 0));
+      setServerTax(Number(serverCart.taxAmount || 0));
+      setAppliedCouponCode(response.data.coupon?.code || code);
+      setCouponCode("");
+      toast.success(response.data.message || `Coupon ${code} applied!`);
     } catch (error) {
       toast.error(error?.response?.data?.message || "Invalid coupon code");
+    } finally {
+      setCouponBusy(false);
     }
+  };
+
+  const handleRemoveCoupon = async () => {
+    setCouponBusy(true);
+    try {
+      await cartService.removeCoupon();
+      const cartResponse = await cartService.getCart();
+      const serverCart = cartResponse.data.cart;
+      setServerDiscount(Number(serverCart.discount || 0));
+      setServerTax(Number(serverCart.taxAmount || 0));
+      setAppliedCouponCode("");
+      toast.success("Coupon removed");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to remove coupon");
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const loadRazorpayScript = () =>
+    new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const buildOrderPayload = () => ({
+    shipping_name: formData.fullName,
+    shipping_phone: formData.phoneNumber,
+    shipping_email: formData.emailAddress,
+    shipping_address1: formData.addressLine1,
+    shipping_address2: formData.addressLine2,
+    shipping_city: formData.city,
+    shipping_state: formData.state,
+    shipping_pincode: formData.pincode,
+    shipping_country: formData.country,
+    delivery_option: shippingOption === "sameday" ? "same_day" : shippingOption,
+    // Razorpay-only checkout — stored as a generic online payment.
+    payment_method: "upi",
+  });
+
+  // Persist the typed checkout address into My Profile → My Addresses.
+  // Returns true when saved (or when the user opted out).
+  const saveTypedAddress = async () => {
+    if (!formData.saveAddress) return true;
+    try {
+      await profileService.addAddress({
+        type: "Home",
+        full_name: formData.fullName,
+        phone: formData.phoneNumber,
+        email: formData.emailAddress || undefined,
+        address_line1: formData.addressLine1,
+        address_line2: formData.addressLine2 || undefined,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        country: formData.country || "India",
+        is_default: false,
+      });
+      // Refresh the saved-address picker so the new address appears immediately.
+      try {
+        const res = await profileService.getAddresses();
+        setSavedAddresses(res.data?.addresses || []);
+      } catch (e) {
+        /* picker refresh is best-effort */
+      }
+      return true;
+    } catch (error) {
+      toast.warn(error?.response?.data?.message || "Order placed, but the address could not be saved to your profile.");
+      return false;
+    }
+  };
+
+  const applySavedAddress = (id) => {
+    setSelectedSavedAddressId(id);
+    if (!id) return;
+    const addr = savedAddresses.find((a) => String(a.id) === String(id));
+    if (!addr) return;
+    setFormData((prev) => ({
+      ...prev,
+      fullName: addr.full_name || prev.fullName,
+      phoneNumber: addr.phone || prev.phoneNumber,
+      emailAddress: addr.email || prev.emailAddress,
+      pincode: addr.pincode || prev.pincode,
+      addressLine1: addr.address_line1 || prev.addressLine1,
+      addressLine2: addr.address_line2 || prev.addressLine2,
+      city: addr.city || prev.city,
+      state: addr.state || prev.state,
+      country: addr.country || prev.country,
+    }));
+    toast.success("Saved address applied");
   };
 
   const handlePlaceOrder = async (e) => {
@@ -240,38 +378,113 @@ export default function Checkout() {
       return;
     }
 
-    if (!formData.fullName || !formData.phoneNumber || !formData.addressLine1 || !formData.pincode) {
-      toast.warn("Please fill in all required shipping information fields.");
+    if (!formData.fullName?.trim() || !formData.phoneNumber?.trim() || !formData.addressLine1?.trim() || !formData.city?.trim() || !formData.pincode?.trim()) {
+      toast.warn("Please fill in your name, phone, address, city and pincode.");
+      return;
+    }
+    if (formData.phoneNumber.replace(/\D/g, "").length < 10) {
+      toast.warn("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (formData.pincode.trim().length !== 6) {
+      toast.warn("Please enter a valid 6-digit pincode.");
       return;
     }
 
-    const paymentMap = {
-      upi: "upi",
-      cards: "card",
-      netbanking: "net_banking",
-      wallets: "wallet",
-      cod: "cod",
-    };
-
     setPlacingOrder(true);
     try {
-      const response = await checkoutService.placeOrder({
-        shipping_name: formData.fullName,
-        shipping_phone: formData.phoneNumber,
-        shipping_email: formData.emailAddress,
-        shipping_address1: formData.addressLine1,
-        shipping_address2: formData.addressLine2,
-        shipping_city: formData.city,
-        shipping_state: formData.state,
-        shipping_pincode: formData.pincode,
-        shipping_country: formData.country,
-        delivery_option: shippingOption === "sameday" ? "same_day" : shippingOption,
-        payment_method: paymentMap[paymentMethod] || "cod",
+      // Razorpay gateway must be available before we start.
+      const sdkLoaded = await loadRazorpayScript();
+      if (!sdkLoaded) {
+        toast.error("Payment gateway failed to load. Please check your connection and try again.");
+        return;
+      }
+
+      // 1️⃣ Create the order FIRST (payment pending). It is visible under
+      // My Orders no matter what happens with the gateway afterwards.
+      let placedOrder;
+      try {
+        const orderResponse = await checkoutService.placeOrder(buildOrderPayload());
+        placedOrder = orderResponse.data.order;
+      } catch (orderError) {
+        toast.error(orderError?.response?.data?.message || "Order creation failed. No payment was taken.");
+        return;
+      }
+
+      // Stock is now reserved — clear the cart and persist the address.
+      localStorage.removeItem("printy_cart");
+      notifyCartChange();
+      await saveTypedAddress();
+
+      // 2️⃣ Create the linked Razorpay order.
+      let gateway;
+      try {
+        const rzResponse = await checkoutService.createRazorpayOrder({
+          amount: grandTotal,
+          order_id: placedOrder.id,
+        });
+        gateway = rzResponse.data;
+      } catch (gatewayError) {
+        toast.warn("Order placed! Online payment is temporarily unavailable — complete it from My Orders.");
+        navigate(`/orders/${placedOrder.order_number}`);
+        return;
+      }
+
+      // 3️⃣ Open the Razorpay popup (UPI / cards / netbanking / wallets).
+      const paymentResult = await new Promise((resolve) => {
+        const rzp = new window.Razorpay({
+          key: gateway.key_id,
+          amount: gateway.amount,
+          currency: gateway.currency || "INR",
+          name: "PrintyNozzle",
+          description: `Order ${placedOrder.order_number}`,
+          order_id: gateway.razorpay_order_id,
+          prefill: {
+            name: formData.fullName,
+            email: formData.emailAddress,
+            contact: formData.phoneNumber,
+          },
+          theme: { color: "#2563eb" },
+          handler: (resp) => resolve({ ok: true, resp }),
+          modal: { ondismiss: () => resolve({ ok: false }) },
+        });
+        rzp.on("payment.failed", () => resolve({ ok: false, failed: true }));
+        rzp.open();
       });
 
-      localStorage.removeItem("printy_cart");
-      toast.success(response.data.message || "Order placed successfully!");
-      navigate(`/orders/${response.data.order.order_number}`);
+      if (!paymentResult.ok) {
+        if (paymentResult.failed) {
+          toast.error("Payment failed. Your order is saved under My Orders — please try again.");
+        } else {
+          toast.info("Payment window closed. Your order is saved under My Orders.");
+        }
+        navigate(`/orders/${placedOrder.order_number}`);
+        return;
+      }
+
+      // 4️⃣ Verify the payment signature with the backend.
+      try {
+        await checkoutService.verifyPayment({
+          razorpay_order_id: paymentResult.resp.razorpay_order_id,
+          razorpay_payment_id: paymentResult.resp.razorpay_payment_id,
+          razorpay_signature: paymentResult.resp.razorpay_signature,
+          order_id: placedOrder.id,
+        });
+      } catch (verifyError) {
+        toast.warn("Payment received but verification is pending. Our support team will confirm shortly.");
+        navigate(`/orders/${placedOrder.order_number}`);
+        return;
+      }
+
+      // 5️⃣ Success! Show the payment-success popup (confirmation email
+      // is sent by the server). Navigation happens from the popup.
+      setSuccessOrder({
+        order_number: placedOrder.order_number,
+        total: grandTotal,
+        payment_id: paymentResult.resp.razorpay_payment_id,
+        email: formData.emailAddress,
+      });
+      setShowSuccessPopup(true);
     } catch (error) {
       toast.error(error?.response?.data?.message || "Order creation failed");
     } finally {
@@ -279,9 +492,83 @@ export default function Checkout() {
     }
   };
 
+  const closeSuccessPopup = (destination) => {
+    setShowSuccessPopup(false);
+    if (destination === "order" && successOrder?.order_number) {
+      navigate(`/orders/${successOrder.order_number}`);
+    } else {
+      navigate("/products");
+    }
+  };
+
+// Show an empty-cart state instead of checkout with no items
+  if (checkoutItems.length === 0) {
+    return (
+      <div className="checkout-page-wrapper">
+        <div className="checkout-page-container">
+          <div className="checkout-header">
+            <h1 className="checkout-title">Checkout</h1>
+          </div>
+          <div className="p-5 text-center">
+            <i className="bi bi-cart-x text-warning display-4 d-block mb-3"></i>
+            <h2>Your cart is empty</h2>
+            <p className="text-muted">Add some products before proceeding to checkout.</p>
+            <Link to="/products" className="btn btn-primary px-4 py-2 mt-3">
+              Browse Products
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="checkout-page-wrapper">
       <div className="checkout-page-container">
+        {/* ================= PAYMENT SUCCESS POPUP ================= */}
+        {showSuccessPopup && successOrder && (
+          <div className="pay-success-backdrop" onClick={() => closeSuccessPopup("order")}>
+            <div className="pay-success-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Payment successful">
+              <div className="pay-success-icon">
+                <CheckCircle2 size={54} strokeWidth={2.2} />
+              </div>
+              <h2 className="pay-success-title">Payment Successful!</h2>
+              <p className="pay-success-sub">
+                Thank you! Your order <strong>#{successOrder.order_number}</strong> is confirmed.
+                {successOrder.email ? (
+                  <>
+                    <br />A confirmation email was sent to <strong>{successOrder.email}</strong>.
+                  </>
+                ) : null}
+              </p>
+              <div className="pay-success-details">
+                <div className="pay-success-row">
+                  <span>Order ID</span>
+                  <strong>#{successOrder.order_number}</strong>
+                </div>
+                <div className="pay-success-row">
+                  <span>Amount Paid</span>
+                  <strong>₹{Number(successOrder.total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </div>
+                {successOrder.payment_id && (
+                  <div className="pay-success-row">
+                    <span>Payment ID</span>
+                    <strong className="pay-success-payid">{successOrder.payment_id}</strong>
+                  </div>
+                )}
+              </div>
+              <div className="pay-success-actions">
+                <button type="button" className="btn-checkout-primary" onClick={() => closeSuccessPopup("order")}>
+                  <span>View My Order</span>
+                  <ArrowRight size={18} />
+                </button>
+                <button type="button" className="btn-continue-shopping" onClick={() => closeSuccessPopup("shop")}>
+                  Continue Shopping
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* ================= HEADER & BREADCRUMB ================= */}
         <div className="checkout-header">
           <h1 className="checkout-title">Checkout</h1>
@@ -338,6 +625,28 @@ export default function Checkout() {
                   <h2 className="checkout-card-title">Shipping Information</h2>
                   <p className="checkout-card-sub">Enter your delivery address</p>
                 </div>
+
+                {savedAddresses.length > 0 && (
+                  <div className="checkout-field-group" style={{ marginBottom: "16px" }}>
+                    <label className="checkout-label">
+                      <MapPin size={14} />
+                      <span>Use a saved address</span>
+                    </label>
+                    <select
+                      className="checkout-select"
+                      value={selectedSavedAddressId}
+                      onChange={(e) => applySavedAddress(e.target.value)}
+                    >
+                      <option value="">Type a new address below…</option>
+                      {savedAddresses.map((addr) => (
+                        <option key={addr.id} value={addr.id}>
+                          {addr.full_name} — {addr.address_line1}, {addr.city} {addr.pincode}
+                          {addr.is_default ? " (Default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="checkout-form-grid">
                   {/* Full Name */}
@@ -542,13 +851,19 @@ export default function Checkout() {
                         <Truck size={20} />
                       </div>
                       <div className="shipping-opt-info">
-                        <span className="shipping-opt-title">Standard Delivery</span>
-                        <span className="shipping-opt-time">3 - 5 Working Days</span>
+                        <span className="shipping-opt-title">{storeConfig.shippingOptions?.standard?.label || "Standard Delivery"}</span>
+                        <span className="shipping-opt-time">{storeConfig.shippingOptions?.standard?.eta || "3-5 Working Days"}</span>
                       </div>
                     </div>
                     <div className="shipping-opt-price-group">
-                      <span className="shipping-opt-price free">FREE</span>
-                      <div className="shipping-opt-threshold">on orders above ₹999</div>
+                      {Number(storeConfig.shippingOptions?.standard?.cost || 0) === 0 ? (
+                        <>
+                          <span className="shipping-opt-price free">FREE</span>
+                          <div className="shipping-opt-threshold">on orders above ₹{storeConfig.freeShippingThreshold}</div>
+                        </>
+                      ) : (
+                        <span className="shipping-opt-price">₹{storeConfig.shippingOptions.standard.cost}</span>
+                      )}
                     </div>
                   </div>
 
@@ -565,12 +880,12 @@ export default function Checkout() {
                         <Zap size={20} />
                       </div>
                       <div className="shipping-opt-info">
-                        <span className="shipping-opt-title">Express Delivery</span>
-                        <span className="shipping-opt-time">1 - 2 Working Days</span>
+                        <span className="shipping-opt-title">{storeConfig.shippingOptions?.express?.label || "Express Delivery"}</span>
+                        <span className="shipping-opt-time">{storeConfig.shippingOptions?.express?.eta || "1-2 Working Days"}</span>
                       </div>
                     </div>
                     <div className="shipping-opt-price-group">
-                      <span className="shipping-opt-price">₹99</span>
+                      <span className="shipping-opt-price">₹{storeConfig.shippingOptions?.express?.cost ?? 99}</span>
                     </div>
                   </div>
 
@@ -587,12 +902,12 @@ export default function Checkout() {
                         <Clock size={20} />
                       </div>
                       <div className="shipping-opt-info">
-                        <span className="shipping-opt-title">Same Day Delivery</span>
-                        <span className="shipping-opt-time">Within same day (Selected cities only)</span>
+                        <span className="shipping-opt-title">{storeConfig.shippingOptions?.same_day?.label || "Same Day Delivery"}</span>
+                        <span className="shipping-opt-time">{storeConfig.shippingOptions?.same_day?.eta || "Within same day (Selected cities only)"}</span>
                       </div>
                     </div>
                     <div className="shipping-opt-price-group">
-                      <span className="shipping-opt-price">₹149</span>
+                      <span className="shipping-opt-price">₹{storeConfig.shippingOptions?.same_day?.cost ?? 149}</span>
                     </div>
                   </div>
                 </div>
@@ -604,89 +919,30 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Card 3: Payment Methods */}
+              {/* Card 3: Payment Method (Razorpay only) */}
               <div className="checkout-card">
                 <div className="checkout-card-header">
-                  <h2 className="checkout-card-title">Payment Methods</h2>
-                  <p className="checkout-card-sub">Select a payment method</p>
+                  <h2 className="checkout-card-title">Payment Method</h2>
+                  <p className="checkout-card-sub">100% secure online payment via Razorpay</p>
                 </div>
 
-                <div className="payment-methods-wrapper">
-                  {/* Left Sidebar Tabs */}
-                  <div className="payment-sidebar">
-                    <button
-                      type="button"
-                      className={`payment-tab-btn ${paymentMethod === "upi" ? "active" : ""}`}
-                      onClick={() => setPaymentMethod("upi")}
-                    >
-                      <div className="payment-tab-icon-wrap">
-                        <QrCode size={18} />
-                      </div>
-                      <div className="payment-tab-texts">
-                        <span className="payment-tab-name">UPI</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`payment-tab-btn ${paymentMethod === "cards" ? "active" : ""}`}
-                      onClick={() => setPaymentMethod("cards")}
-                    >
-                      <div className="payment-tab-icon-wrap">
-                        <CreditCard size={18} />
-                      </div>
-                      <div className="payment-tab-texts">
-                        <span className="payment-tab-name">Cards</span>
-                        <span className="payment-tab-desc">Visa, MasterCard, RuPay</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`payment-tab-btn ${paymentMethod === "netbanking" ? "active" : ""}`}
-                      onClick={() => setPaymentMethod("netbanking")}
-                    >
-                      <div className="payment-tab-icon-wrap">
-                        <Building2 size={18} />
-                      </div>
-                      <div className="payment-tab-texts">
-                        <span className="payment-tab-name">Net Banking</span>
-                        <span className="payment-tab-desc">All major banks</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`payment-tab-btn ${paymentMethod === "wallets" ? "active" : ""}`}
-                      onClick={() => setPaymentMethod("wallets")}
-                    >
-                      <div className="payment-tab-icon-wrap">
-                        <Wallet size={18} />
-                      </div>
-                      <div className="payment-tab-texts">
-                        <span className="payment-tab-name">Wallets</span>
-                        <span className="payment-tab-desc">PhonePe, Paytm, etc.</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`payment-tab-btn ${paymentMethod === "cod" ? "active" : ""}`}
-                      onClick={() => setPaymentMethod("cod")}
-                    >
-                      <div className="payment-tab-icon-wrap">
-                        <Banknote size={18} />
-                      </div>
-                      <div className="payment-tab-texts">
-                        <span className="payment-tab-name">COD</span>
-                        <span className="payment-tab-desc">Cash on Delivery</span>
-                      </div>
-                    </button>
+                <div className="razorpay-only-box">
+                  <div className="razorpay-only-badge">
+                    <Lock size={18} />
+                    <div>
+                      <span className="razorpay-only-title">Razorpay Secure Checkout</span>
+                      <span className="razorpay-only-sub">
+                        Pay with UPI, credit / debit cards, net banking or wallets — all inside Razorpay's protected popup. No card details are ever stored on our servers.
+                      </span>
+                    </div>
                   </div>
-
-                  {/* Right Tab Content */}
-                  <div className="payment-content-body">
-                    {paymentMethod === "upi" && (
+                  <div className="razorpay-only-note">
+                    <ShieldCheck size={15} />
+                    <span>256-bit SSL encrypted • PCI-DSS compliant • Instant email confirmation after payment</span>
+                  </div>
+                </div>
+              </div>
+                    {/* Razorpay-only checkout — legacy method panels disabled */ false && (
                       <div>
                         <div className="upi-section-title">Pay using UPI</div>
                         <div className="upi-apps-row">
@@ -738,7 +994,7 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    {paymentMethod === "cards" && (
+                    {false && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                         <div className="checkout-field-group">
                           <label className="checkout-label">Card Number</label>
@@ -761,7 +1017,7 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    {paymentMethod === "netbanking" && (
+                    {false && (
                       <div>
                         <div className="upi-section-title">Select Popular Banks</div>
                         <div className="upi-apps-row">
@@ -782,7 +1038,7 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    {paymentMethod === "wallets" && (
+                    {false && (
                       <div>
                         <div className="upi-section-title">Select Wallet</div>
                         <div className="upi-apps-row">
@@ -794,17 +1050,14 @@ export default function Checkout() {
                       </div>
                     )}
 
-                    {paymentMethod === "cod" && (
+                    {false && (
                       <div>
                         <div className="upi-section-title">Cash on Delivery</div>
                         <p style={{ fontSize: "13px", color: "#475569", lineHeight: "1.5" }}>
-                          Pay in cash or through UPI QR code when your package is delivered to your address.
+                          Cash on Delivery is no longer offered. All payments go through Razorpay.
                         </p>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
 
               {/* Back to Cart link */}
               <div>
@@ -843,7 +1096,7 @@ export default function Checkout() {
                           className="summary-item-thumb"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = "/images/products/01.png";
+                            e.target.src = item.isCustomPrint ? "/images/rocket.png" : "/images/products/01.png";
                           }}
                         />
                         <div className="summary-item-meta">
@@ -883,7 +1136,7 @@ export default function Checkout() {
                   </div>
 
                   <div className="summary-fin-row">
-                    <span className="summary-fin-label">Tax (18% GST)</span>
+                    <span className="summary-fin-label">Tax ({Number(storeConfig.gstRate || 18)}% GST)</span>
                     <span className="summary-fin-val">₹{gstTax.toFixed(2)}</span>
                   </div>
 
@@ -908,22 +1161,38 @@ export default function Checkout() {
                     Have a coupon code?
                   </h3>
                 </div>
-                <div className="coupon-input-group">
-                  <input
-                    type="text"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    placeholder="Enter coupon code"
-                    className="checkout-input"
-                  />
-                  <button
-                    type="button"
-                    className="btn-apply-coupon"
-                    onClick={handleApplyCoupon}
-                  >
-                    Apply
-                  </button>
-                </div>
+                {appliedCouponCode ? (
+                  <div className="coupon-applied-row">
+                    <span className="cart-coupon-chip">{appliedCouponCode}</span>
+                    <button
+                      type="button"
+                      className="cart-coupon-remove"
+                      onClick={handleRemoveCoupon}
+                      disabled={couponBusy}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="coupon-input-group">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="Enter coupon code"
+                      className="checkout-input"
+                      disabled={couponBusy}
+                    />
+                    <button
+                      type="button"
+                      className="btn-apply-coupon"
+                      onClick={handleApplyCoupon}
+                      disabled={couponBusy}
+                    >
+                      {couponBusy ? "..." : "Apply"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Card 3: Secure Checkout */}
@@ -995,9 +1264,14 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* Continue to Payment / Place Order CTA button */}
-              <button type="submit" className="btn-checkout-primary">
-                <span>{placingOrder ? "Placing Order..." : "Continue to Payment"}</span>
+              {/* Pay securely with Razorpay */}
+              <button type="submit" className="btn-checkout-primary" disabled={placingOrder}>
+                <Lock size={16} />
+                <span>
+                  {placingOrder
+                    ? "Processing Payment..."
+                    : `Pay ₹${grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Securely`}
+                </span>
                 <ArrowRight size={18} />
               </button>
             </div>
@@ -1012,7 +1286,7 @@ export default function Checkout() {
             </div>
             <div className="checkout-trust-info">
               <span className="checkout-trust-heading">Free Shipping</span>
-              <span className="checkout-trust-sub">On orders over ₹999</span>
+              <span className="checkout-trust-sub">On orders over ₹{storeConfig.freeShippingThreshold}</span>
             </div>
           </div>
 

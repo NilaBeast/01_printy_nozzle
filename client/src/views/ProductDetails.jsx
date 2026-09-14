@@ -5,10 +5,14 @@ import "../../public/css/product.css";
 import "../../public/css/product-details.css";
 import catalogService, { normalizeProduct } from "../services/catalog.service";
 import cartService from "../services/cart.service";
+import profileService from "../services/profile.service";
+import { syncCartBadge } from "../utils/cartSync";
+import useSiteSettings from "../hooks/useSiteSettings";
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { freeShippingThreshold } = useSiteSettings();
 
   const [apiProduct, setApiProduct] = useState(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -23,6 +27,73 @@ export default function ProductDetails() {
   const [deliveryStatus, setDeliveryStatus] = useState("");
   const [isWishlist, setIsWishlist] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+
+  // Review modal state
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  const reloadProduct = async () => {
+    try {
+      const response = await catalogService.getProduct(id);
+      setApiProduct(normalizeProduct(response.data.product));
+    } catch (error) {
+      /* keep current product on refresh failure */
+    }
+  };
+
+  // Sync wishlist state from server
+  useEffect(() => {
+    let active = true;
+    if (!localStorage.getItem("token")) {
+      setIsWishlist(false);
+      return;
+    }
+    profileService
+      .getWishlist()
+      .then((res) => {
+        if (!active) return;
+        const items = res.data?.wishlist || [];
+        setIsWishlist(items.some((item) => Number(item.product_id || item.id) === Number(id)));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!localStorage.getItem("token")) {
+      toast.warn("Please login to write a review.");
+      navigate("/login");
+      return;
+    }
+    if (!reviewRating || reviewRating < 1 || reviewRating > 5) {
+      toast.warn("Please select a rating between 1 and 5 stars.");
+      return;
+    }
+    setReviewSubmitting(true);
+    try {
+      const res = await catalogService.submitReview(id, {
+        rating: reviewRating,
+        title: reviewTitle.trim(),
+        comment: reviewComment.trim(),
+      });
+      toast.success(res.data?.message || "Review submitted! It will appear after approval.");
+      setReviewOpen(false);
+      setReviewTitle("");
+      setReviewComment("");
+      setReviewRating(5);
+      reloadProduct();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to submit review. Please try again.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -126,28 +197,54 @@ export default function ProductDetails() {
     if (!localStorage.getItem("token")) {
       toast.info("Please login to add items to cart");
       navigate("/login", { state: { from: `/product/${id}` } });
-      return;
+      return false;
     }
 
     try {
       await cartService.addItem({ product_id: product.id, quantity });
       toast.success(`Added ${quantity}x "${product.name}" to cart!`);
+      syncCartBadge();
+      return true;
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to add item to cart");
+      return false;
+    }
+  };
+
+  const handleBuyNow = async () => {
+    const added = await handleAddToCart();
+    if (added) navigate("/checkout");
+  };
+
+  const handleRelatedAddToCart = async (relatedItem) => {
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to add items to cart");
+      navigate("/login", { state: { from: `/product/${id}` } });
+      return;
+    }
+    try {
+      await cartService.addItem({ product_id: relatedItem.id, quantity: 1 });
+      toast.success(`Added "${relatedItem.name}" to cart!`);
+      syncCartBadge();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Unable to add item to cart");
     }
   };
 
-  const handleBuyNow = () => {
-    handleAddToCart().then(() => navigate("/checkout"));
-  };
-
-  // Wishlist toggle
-  const toggleWishlist = () => {
-    setIsWishlist(!isWishlist);
-    if (!isWishlist) {
-      toast.info(`Added "${product.name}" to your wishlist!`);
-    } else {
-      toast.info(`Removed "${product.name}" from wishlist.`);
+  // Wishlist toggle (server-backed)
+  const toggleWishlist = async () => {
+    if (!localStorage.getItem("token")) {
+      toast.info("Please login to use your wishlist");
+      navigate("/login", { state: { from: `/product/${id}` } });
+      return;
+    }
+    try {
+      const res = await profileService.toggleWishlist(product.id);
+      const inWishlist = Boolean(res.data?.in_wishlist ?? !isWishlist);
+      setIsWishlist(inWishlist);
+      toast.success(res.data?.message || (inWishlist ? `Added "${product.name}" to your wishlist!` : `Removed "${product.name}" from wishlist.`));
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to update wishlist");
     }
   };
 
@@ -176,14 +273,8 @@ export default function ProductDetails() {
     }
   };
 
-  // Highlight items fallback
-  const highlights = product.highlights || [
-    { icon: "bi-cpu", title: "Dual Core", subtitle: "240 MHz" },
-    { icon: "bi-wifi", title: "Wi-Fi", subtitle: "802.11 b/g/n" },
-    { icon: "bi-bluetooth", title: "Bluetooth", subtitle: "v4.2 (BLE)" },
-    { icon: "bi-code-slash", title: "Arduino /", subtitle: "MicroPython" },
-    { icon: "bi-gear", title: "Wide", subtitle: "Community Support" },
-  ];
+  // Highlight items come from product data (added by admin)
+  const highlights = Array.isArray(product.highlights) ? product.highlights : [];
 
   return (
     <div className="product-details-page">
@@ -283,7 +374,7 @@ export default function ProductDetails() {
               <div className="pd-rating-block">
                 <div className="rating-stars-row">{renderStars(product.rating)}</div>
                 <span className="pd-rating-text">{product.rating}</span>
-                <span className="pd-review-count">({product.reviewCount || 128} reviews)</span>
+                <span className="pd-review-count">({product.reviewCount || 0} reviews)</span>
                 <span className="text-muted">|</span>
                 <a href="#reviews" onClick={() => setActiveTab("reviews")} className="pd-write-review">
                   Write a review
@@ -435,7 +526,7 @@ export default function ProductDetails() {
               className={`pd-tab-btn ${activeTab === "reviews" ? "active" : ""}`}
               onClick={() => setActiveTab("reviews")}
             >
-              Reviews ({product.reviewCount || 128})
+              Reviews ({product.reviewCount || 0})
             </button>
             <button
               type="button"
@@ -452,52 +543,44 @@ export default function ProductDetails() {
               <div className="pd-overview-grid">
                 <div>
                   <h3 className="pd-content-section-title">Product Description</h3>
-                  <p className="pd-prose-text">
-                    The {product.name} is a feature-rich development solution designed for makers,
-                    engineers, and hobbyists. It combines high performance, low power consumption,
-                    and reliable connectivity, making it perfect for IoT and embedded applications.
-                    With support for standard development environments, it is widely used by students,
-                    professionals, and hardware innovators worldwide.
-                  </p>
+                  {product.description ? (
+                    <p className="pd-prose-text">{product.description}</p>
+                  ) : (
+                    <p className="pd-prose-text text-muted">
+                      No description added for this product yet.
+                    </p>
+                  )}
 
-                  <h3 className="pd-content-section-title">Key Features</h3>
-                  <ul className="pd-features-list">
-                    {(product.keyFeatures || [
-                      "Powered by high-performance dual-core processing engine",
-                      "Integrated wireless connectivity with built-in antenna",
-                      "Multiple peripheral interfaces for sensors and actuators",
-                      "Supports standard development toolchains and IDEs",
-                      "On-board power management and communication bridge",
-                      "Compact and breadboard friendly layout",
-                    ]).map((feat, i) => (
-                      <li key={i} className="pd-feature-item">
-                        <i className="bi bi-check2"></i>
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {product.keyFeatures?.length > 0 && (
+                    <>
+                      <h3 className="pd-content-section-title">Key Features</h3>
+                      <ul className="pd-features-list">
+                        {product.keyFeatures.map((feat, i) => (
+                          <li key={i} className="pd-feature-item">
+                            <i className="bi bi-check2"></i>
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </div>
 
                 {/* Right side widgets */}
                 <div>
-                  <div className="pd-side-card">
-                    <h4 className="pd-side-title">Applications</h4>
-                    <ul className="pd-applications-list">
-                      {(product.applications || [
-                        "IoT Projects",
-                        "Home Automation",
-                        "Wireless Sensor Networks",
-                        "Robotics",
-                        "DIY Electronics",
-                        "Smart Wearables",
-                      ]).map((app, i) => (
-                        <li key={i} className="pd-application-item">
-                          <i className="bi bi-check-circle text-primary"></i>
-                          <span>{app}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {product.applications?.length > 0 && (
+                    <div className="pd-side-card">
+                      <h4 className="pd-side-title">Applications</h4>
+                      <ul className="pd-applications-list">
+                        {product.applications.map((app, i) => (
+                          <li key={i} className="pd-application-item">
+                            <i className="bi bi-check-circle text-primary"></i>
+                            <span>{app}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   <div className="pd-help-card">
                     <div className="pd-help-top">
@@ -549,17 +632,25 @@ export default function ProductDetails() {
             {activeTab === "pinout" && (
               <div>
                 <h3 className="pd-content-section-title">Pinout Diagram &amp; Schematic</h3>
-                <p className="pd-prose-text">
-                  Standard 2.54mm pitch GPIO header mapping. Connect power to VIN / 5V or 3.3V as
-                  specified in the hardware datasheet.
-                </p>
-                <div className="p-4 bg-light rounded text-center border">
-                  <i className="bi bi-diagram-3 fs-1 text-primary mb-2 d-block"></i>
-                  <p className="mb-0 text-muted fw-semibold">
-                    Detailed pinout mapping and high-resolution board diagram available for download in
-                    Resources tab.
-                  </p>
-                </div>
+                {product.pinout_image ? (
+                  <a href={product.pinout_image} target="_blank" rel="noopener noreferrer" className="d-block mb-3">
+                    <img
+                      src={product.pinout_image}
+                      alt={`${product.name} pinout diagram`}
+                      className="img-fluid border rounded w-100"
+                    />
+                  </a>
+                ) : (
+                  <div className="p-4 bg-light rounded text-center border">
+                    <i className="bi bi-diagram-3 fs-1 text-primary mb-2 d-block"></i>
+                    <p className="mb-0 text-muted fw-semibold">
+                      Pinout diagram not available for this product yet.
+                    </p>
+                  </div>
+                )}
+                {product.pinout_description && (
+                  <p className="pd-prose-text mt-3">{product.pinout_description}</p>
+                )}
               </div>
             )}
 
@@ -567,34 +658,51 @@ export default function ProductDetails() {
             {activeTab === "resources" && (
               <div>
                 <h3 className="pd-content-section-title">Datasheets &amp; Downloads</h3>
-                <ul className="list-group list-group-flush border rounded">
-                  <li className="list-group-item d-flex justify-content-between align-items-center py-3">
-                    <div>
-                      <i className="bi bi-file-earmark-pdf text-danger me-2 fs-5"></i>
-                      <strong>{product.name} Official Datasheet (PDF)</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => toast.info("Datasheet download link generated.")}
-                    >
-                      <i className="bi bi-download me-1"></i> Download
-                    </button>
-                  </li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center py-3">
-                    <div>
-                      <i className="bi bi-github me-2 fs-5"></i>
-                      <strong>Sample Code &amp; Libraries</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => toast.info("Redirecting to documentation repository.")}
-                    >
-                      View on GitHub
-                    </button>
-                  </li>
-                </ul>
+                {product.resources?.length > 0 ? (
+                  <ul className="list-group list-group-flush border rounded">
+                    {product.resources.map((res, idx) => {
+                      const type = String(res.type || "").toLowerCase();
+                      const icon =
+                        type === "pdf"
+                          ? "bi-file-earmark-pdf text-danger"
+                          : type === "github"
+                            ? "bi-github"
+                            : type === "image"
+                              ? "bi-image"
+                              : type === "file"
+                                ? "bi-file-earmark"
+                                : "bi-link-45deg";
+                      return (
+                        <li
+                          key={idx}
+                          className="list-group-item d-flex justify-content-between align-items-center py-3"
+                        >
+                          <div>
+                            <i className={`${icon} me-2 fs-5`}></i>
+                            <strong>{res.name || `Resource ${idx + 1}`}</strong>
+                          </div>
+                          {res.url && (
+                            <a
+                              href={res.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm btn-outline-primary"
+                            >
+                              <i className="bi bi-download me-1"></i> Download
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="p-4 bg-light rounded text-center border">
+                    <i className="bi bi-folder2-open fs-1 text-primary mb-2 d-block"></i>
+                    <p className="mb-0 text-muted fw-semibold">
+                      No resources available for this product yet.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -603,47 +711,58 @@ export default function ProductDetails() {
               <div>
                 <div className="d-flex align-items-center justify-content-between mb-4">
                   <h3 className="pd-content-section-title mb-0">
-                    Customer Reviews ({product.reviewCount || 128})
+                    Customer Reviews ({product.reviewCount || 0})
                   </h3>
                   <button
                     type="button"
                     className="btn btn-sm btn-primary"
-                    onClick={() => toast.info("Review submission modal opened.")}
+                    onClick={() => setReviewOpen(true)}
                   >
                     Write a Review
                   </button>
                 </div>
 
                 <div className="d-flex flex-column gap-3">
-                  <div className="p-3 border rounded bg-light">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <strong>Arun Kumar</strong>
-                        <span className="badge bg-success">Verified Buyer</span>
-                      </div>
-                      <small className="text-muted">2 days ago</small>
+                  {(product.recent_reviews || []).length > 0 ? (
+                    product.recent_reviews.map((review) => {
+                      const reviewerName = `${review.first_name || ""} ${review.last_name || ""}`.trim() || "Verified Customer";
+                      const reviewDate = review.created_at
+                        ? new Date(review.created_at).toLocaleDateString("en-IN", { dateStyle: "medium" })
+                        : "";
+                      return (
+                        <div key={review.id} className="p-3 border rounded bg-light">
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <div className="d-flex align-items-center gap-2">
+                              <div className="pd-reviewer-avatar">
+                                {review.avatar_url ? (
+                                  <img src={review.avatar_url} alt={reviewerName} />
+                                ) : (
+                                  <span>{reviewerName.charAt(0)}</span>
+                                )}
+                              </div>
+                              <strong>{reviewerName}</strong>
+                              {review.is_verified_purchase && (
+                                <span className="badge bg-success">Verified Buyer</span>
+                              )}
+                            </div>
+                            {reviewDate && <small className="text-muted">{reviewDate}</small>}
+                          </div>
+                          <div className="rating-stars-row mb-2">{renderStars(review.rating)}</div>
+                          {review.title && <h6 className="fw-semibold mb-1">{review.title}</h6>}
+                          {review.comment && (
+                            <p className="mb-0 text-secondary">{review.comment}</p>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 bg-light rounded text-center border">
+                      <i className="bi bi-chat-square-dots fs-1 text-primary mb-2 d-block"></i>
+                      <p className="mb-0 text-muted fw-semibold">
+                        No reviews yet. Be the first to review this product!
+                      </p>
                     </div>
-                    <div className="rating-stars-row mb-2">{renderStars(5)}</div>
-                    <p className="mb-0 text-secondary">
-                      Excellent quality board! Uploading sketch was smooth without any driver hassle.
-                      Fast delivery from Printy Nozzles as well.
-                    </p>
-                  </div>
-
-                  <div className="p-3 border rounded bg-light">
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <strong>Rohan Verma</strong>
-                        <span className="badge bg-success">Verified Buyer</span>
-                      </div>
-                      <small className="text-muted">1 week ago</small>
-                    </div>
-                    <div className="rating-stars-row mb-2">{renderStars(5)}</div>
-                    <p className="mb-0 text-secondary">
-                      Genuine components and very neatly packaged. Works perfectly for my IoT home
-                      automation system.
-                    </p>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
@@ -652,26 +771,26 @@ export default function ProductDetails() {
             {activeTab === "faqs" && (
               <div>
                 <h3 className="pd-content-section-title">Frequently Asked Questions</h3>
-                <div className="d-flex flex-column gap-3">
-                  {(product.faqs || [
-                    {
-                      q: "Is this board compatible with Arduino IDE?",
-                      a: "Yes, it is fully compatible with Arduino IDE, ESP-IDF, PlatformIO, and MicroPython.",
-                    },
-                    {
-                      q: "What is the warranty and return policy?",
-                      a: "We offer a 7-day hassle-free replacement or return warranty on any manufacturing defect.",
-                    },
-                  ]).map((faq, i) => (
-                    <div key={i} className="p-3 border rounded bg-light">
-                      <h5 className="fw-bold mb-2 text-dark">
-                        <i className="bi bi-question-circle-fill text-primary me-2"></i>
-                        {faq.q}
-                      </h5>
-                      <p className="mb-0 text-secondary ps-4">{faq.a}</p>
-                    </div>
-                  ))}
-                </div>
+                {(product.faqs || []).length > 0 ? (
+                  <div className="d-flex flex-column gap-3">
+                    {product.faqs.map((faq, i) => (
+                      <div key={i} className="p-3 border rounded bg-light">
+                        <h5 className="fw-bold mb-2 text-dark">
+                          <i className="bi bi-question-circle-fill text-primary me-2"></i>
+                          {faq.q || faq.question}
+                        </h5>
+                        <p className="mb-0 text-secondary ps-4">{faq.a || faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-light rounded text-center border">
+                    <i className="bi bi-question-circle fs-1 text-primary mb-2 d-block"></i>
+                    <p className="mb-0 text-muted fw-semibold">
+                      No FAQs available for this product yet.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -703,18 +822,18 @@ export default function ProductDetails() {
                   <div className="pd-related-price">₹{relItem.price.toLocaleString()}</div>
                   <div className="pd-related-bottom">
                     <div className="rating-stars-row">{renderStars(relItem.rating)}</div>
-                    <button
-                      type="button"
-                      className="btn-add-cart"
-                      style={{ width: "32px", height: "32px" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toast.success(`Added "${relItem.name}" to cart!`);
-                      }}
-                      title="Add to cart"
-                    >
-                      <i className="bi bi-cart3"></i>
-                    </button>
+<button
+                        type="button"
+                        className="btn-add-cart"
+                        style={{ width: "32px", height: "32px" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRelatedAddToCart(relItem);
+                        }}
+                        title="Add to cart"
+                      >
+                        <i className="bi bi-cart3"></i>
+                      </button>
                   </div>
                 </div>
               ))}
@@ -732,7 +851,7 @@ export default function ProductDetails() {
                 </div>
                 <div className="trust-badge-info">
                   <h4>Free Shipping</h4>
-                  <p>On orders over ₹999</p>
+                  <p>On orders over ₹{freeShippingThreshold}</p>
                 </div>
               </div>
             </div>
@@ -775,6 +894,91 @@ export default function ProductDetails() {
           </div>
         </div>
       </div>
+
+      {/* Write a Review Modal */}
+      {reviewOpen && (
+        <div
+          className="product-modal-backdrop"
+          onClick={() => setReviewOpen(false)}
+        >
+          <div
+            style={{
+              maxWidth: "520px",
+              width: "calc(100% - 2rem)",
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "1.75rem",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="btn-modal-close position-absolute top-0 end-0 m-3"
+              onClick={() => setReviewOpen(false)}
+              aria-label="Close review form"
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+            <h4 className="fw-bold mb-1">Write a Review</h4>
+            <p className="text-muted small mb-3">
+              {product.name} — reviews appear on the storefront after admin approval.
+            </p>
+            <form onSubmit={submitReview}>
+              <label className="form-label fw-semibold">Your rating</label>
+              <div className="d-flex gap-1 mb-3" role="radiogroup" aria-label="Rating">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRating(star)}
+                    aria-label={`${star} star${star > 1 ? "s" : ""}`}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      fontSize: "1.75rem",
+                      color: star <= reviewRating ? "#f5a623" : "#d7dee8",
+                    }}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Review title</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Sum it up in a line"
+                  value={reviewTitle}
+                  onChange={(e) => setReviewTitle(e.target.value)}
+                  maxLength={120}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Your review</label>
+                <textarea
+                  className="form-control"
+                  rows={4}
+                  placeholder="What did you like or dislike about this product?"
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  maxLength={2000}
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn btn-primary w-100"
+                disabled={reviewSubmitting}
+              >
+                {reviewSubmitting ? "Submitting..." : "Submit Review"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Full-screen Image Zoom Modal */}
       {isZoomed && (
