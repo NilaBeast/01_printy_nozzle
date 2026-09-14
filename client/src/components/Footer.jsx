@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import catalogService from "../services/catalog.service";
 // import footerData from "../data/footer.json";
 import "../../public/css/footer.css";
 
@@ -136,6 +138,28 @@ let footerData = {
 };
 
 function Footer() {
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [subscribing, setSubscribing] = useState(false);
+
+  const handleSubscribe = async (e) => {
+    e.preventDefault();
+    const email = newsletterEmail.trim();
+    if (!email || !email.includes("@")) {
+      toast.warn("Please enter a valid email address.");
+      return;
+    }
+    setSubscribing(true);
+    try {
+      const res = await catalogService.subscribeNewsletter(email);
+      toast.success(res.data?.message || "Subscribed successfully!");
+      setNewsletterEmail("");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Subscription failed. Please try again.");
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
   return (
     <footer className="pn-footer">
       {/* Decorative glow */}
@@ -180,14 +204,19 @@ function Footer() {
 
           <p>{footerData.newsletter.description}</p>
 
-          <form className="pn-newsletter-form">
+          <form className="pn-newsletter-form" onSubmit={handleSubscribe}>
             <input
               type="email"
               placeholder={footerData.newsletter.placeholder}
               aria-label="Email address"
+              value={newsletterEmail}
+              onChange={(e) => setNewsletterEmail(e.target.value)}
+              disabled={subscribing}
             />
 
-            <button type="submit">{footerData.newsletter.button}</button>
+            <button type="submit" disabled={subscribing}>
+              {subscribing ? "..." : footerData.newsletter.button}
+            </button>
           </form>
 
           <small>No spam. Unsubscribe anytime.</small>

@@ -37,7 +37,7 @@ const createBrand = async (req, res) => {
 
     let logoUrl = null;
     if (req.file) {
-      const uploadRes = await uploadFile(req.file.buffer, "brands", "image");
+      const uploadRes = await uploadFile(req.file, "brands", "image");
       logoUrl = uploadRes.secure_url;
     }
 
@@ -86,7 +86,7 @@ const updateBrand = async (req, res) => {
 
     let logoUrl = undefined;
     if (req.file) {
-      const uploadRes = await uploadFile(req.file.buffer, "brands", "image");
+      const uploadRes = await uploadFile(req.file, "brands", "image");
       logoUrl = uploadRes.secure_url;
     }
 
@@ -95,8 +95,8 @@ const updateBrand = async (req, res) => {
          name = COALESCE(?, name),
          slug = COALESCE(?, slug),
          logo_url = COALESCE(?, logo_url),
-         description = ?,
-         website_url = ?,
+         description = COALESCE(?, description),
+         website_url = COALESCE(?, website_url),
          is_active = COALESCE(?, is_active)
        WHERE id = ?`,
       [

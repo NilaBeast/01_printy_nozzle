@@ -2,6 +2,33 @@ const db = require("../../config/db");
 const slugify = require("slugify");
 const { uploadFile, deleteFile } = require("../../utils/cloudinaryUploader");
 
+/* ===== Helper: serialize JSON fields (objects/arrays/JSON strings) ===== */
+const jsonOrNull = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+      JSON.parse(trimmed);
+      return trimmed;
+    } catch {
+      return JSON.stringify(value.split("\n").filter(Boolean));
+    }
+  }
+  return JSON.stringify(value);
+};
+
+/* ===== Helper: normalize booleans from FormData ("true"/"false" strings) ===== */
+const parseBool = (value, fallback = null) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const str = String(value).toLowerCase();
+  if (str === "true" || str === "1") return true;
+  if (str === "false" || str === "0") return false;
+  return fallback;
+};
+
 /* ===================== GET ALL PRODUCTS (ADMIN) ===================== */
 const getAllProducts = async (req, res) => {
   try {
@@ -95,6 +122,18 @@ const getProductById = async (req, res) => {
 
     const product = products[0];
 
+    // Parse JSON columns for client convenience
+    const jsonFields = ["highlights", "key_features", "specifications", "resources", "faqs", "applications", "trust_badges"];
+    jsonFields.forEach((field) => {
+      if (typeof product[field] === "string" && product[field]) {
+        try {
+          product[field] = JSON.parse(product[field]);
+        } catch {
+          /* leave as-is */
+        }
+      }
+    });
+
     // Images
     const [images] = await db.query(
       "SELECT * FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, sort_order ASC",
@@ -126,7 +165,14 @@ const createProduct = async (req, res) => {
       stock,
       short_description,
       description,
+      highlights,
+      key_features,
       specifications,
+      pinout_image,
+      pinout_description,
+      resources,
+      faqs,
+      applications,
       is_featured,
       is_active,
     } = req.body;
@@ -147,8 +193,8 @@ const createProduct = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO products 
-       (name, slug, sku, category_id, brand_id, price, compare_price, stock, short_description, description, specifications, is_featured, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, slug, sku, category_id, brand_id, price, compare_price, stock, short_description, description, highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, is_featured, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         slug,
@@ -160,19 +206,32 @@ const createProduct = async (req, res) => {
         stock || 0,
         short_description || null,
         description || null,
-        specifications ? (typeof specifications === "string" ? specifications : JSON.stringify(specifications)) : null,
-        is_featured ? 1 : 0,
-        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+        jsonOrNull(highlights),
+        jsonOrNull(key_features),
+        jsonOrNull(specifications),
+        pinout_image || null,
+        pinout_description || null,
+        jsonOrNull(resources),
+        jsonOrNull(faqs),
+        jsonOrNull(applications),
+        parseBool(is_featured, false) ? 1 : 0,
+        parseBool(is_active, true) ? 1 : 0,
       ]
     );
 
     const productId = result.insertId;
 
-    // Handle image uploads if attached
-    if (req.files && req.files.length > 0) {
-      for (let i = 0; i < req.files.length; i++) {
-        const file = req.files[i];
-        const uploadRes = await uploadFile(file.buffer, "products", "image");
+    // Handle pinout image file upload if attached
+    if (!pinout_image && req.files && req.files.pinout_image && req.files.pinout_image[0]) {
+      const pinoutRes = await uploadFile(req.files.pinout_image[0], "products", "image");
+      await db.query("UPDATE products SET pinout_image = ? WHERE id = ?", [pinoutRes.secure_url, productId]);
+    }
+
+    // Handle gallery image uploads if attached
+    if (req.files && req.files.images && req.files.images.length > 0) {
+      for (let i = 0; i < req.files.images.length; i++) {
+        const file = req.files.images[i];
+        const uploadRes = await uploadFile(file, "products", "image");
         await db.query(
           "INSERT INTO product_images (product_id, image_url, public_id, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)",
           [productId, uploadRes.secure_url, uploadRes.public_id, i === 0 ? 1 : 0, i]
@@ -205,7 +264,14 @@ const updateProduct = async (req, res) => {
       stock,
       short_description,
       description,
+      highlights,
+      key_features,
       specifications,
+      pinout_image,
+      pinout_description,
+      resources,
+      faqs,
+      applications,
       is_featured,
       is_active,
     } = req.body;
@@ -236,7 +302,14 @@ const updateProduct = async (req, res) => {
          stock = COALESCE(?, stock),
          short_description = COALESCE(?, short_description),
          description = COALESCE(?, description),
+         highlights = COALESCE(?, highlights),
+         key_features = COALESCE(?, key_features),
          specifications = COALESCE(?, specifications),
+         pinout_image = COALESCE(?, pinout_image),
+         pinout_description = COALESCE(?, pinout_description),
+         resources = COALESCE(?, resources),
+         faqs = COALESCE(?, faqs),
+         applications = COALESCE(?, applications),
          is_featured = COALESCE(?, is_featured),
          is_active = COALESCE(?, is_active)
        WHERE id = ?`,
@@ -251,12 +324,38 @@ const updateProduct = async (req, res) => {
         stock !== undefined ? stock : null,
         short_description !== undefined ? short_description : null,
         description !== undefined ? description : null,
-        specifications ? (typeof specifications === "string" ? specifications : JSON.stringify(specifications)) : null,
-        is_featured !== undefined ? (is_featured ? 1 : 0) : null,
-        is_active !== undefined ? (is_active ? 1 : 0) : null,
+        jsonOrNull(highlights),
+        jsonOrNull(key_features),
+        jsonOrNull(specifications),
+        pinout_image !== undefined ? pinout_image : null,
+        pinout_description !== undefined ? pinout_description : null,
+        jsonOrNull(resources),
+        jsonOrNull(faqs),
+        jsonOrNull(applications),
+        parseBool(is_featured) !== null ? (parseBool(is_featured) ? 1 : 0) : null,
+        parseBool(is_active) !== null ? (parseBool(is_active) ? 1 : 0) : null,
         id,
       ]
     );
+
+    // Handle pinout image file upload if attached
+    if (req.files && req.files.pinout_image && req.files.pinout_image[0]) {
+      const pinoutRes = await uploadFile(req.files.pinout_image[0], "products", "image");
+      await db.query("UPDATE products SET pinout_image = ? WHERE id = ?", [pinoutRes.secure_url, id]);
+    }
+
+    // Append gallery image uploads if attached
+    if (req.files && req.files.images && req.files.images.length > 0) {
+      const [existingImages] = await db.query("SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?", [id]);
+      let sortOrder = existingImages[0].count;
+      for (const file of req.files.images) {
+        const uploadRes = await uploadFile(file, "products", "image");
+        await db.query(
+          "INSERT INTO product_images (product_id, image_url, public_id, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)",
+          [id, uploadRes.secure_url, uploadRes.public_id, 0, sortOrder++]
+        );
+      }
+    }
 
     return res.status(200).json({ success: true, message: "Product updated successfully" });
   } catch (error) {
@@ -292,7 +391,7 @@ const addProductImage = async (req, res) => {
       return res.status(400).json({ success: false, message: "No image file provided" });
     }
 
-    const uploadRes = await uploadFile(req.file.buffer, "products", "image");
+    const uploadRes = await uploadFile(req.file, "products", "image");
 
     const [existingImages] = await db.query("SELECT COUNT(*) AS count FROM product_images WHERE product_id = ?", [id]);
     const isPrimary = existingImages[0].count === 0 ? 1 : 0;

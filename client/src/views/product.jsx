@@ -5,36 +5,30 @@ import "../../public/css/product.css";
 import SkeletonCard from "../components/Loaders/SkeletonCard";
 import catalogService, { normalizeProduct } from "../services/catalog.service";
 import cartService from "../services/cart.service";
+import { syncCartBadge } from "../utils/cartSync";
+import useSiteSettings from "../hooks/useSiteSettings";
 
-// Category configurations with appropriate icons
-const CATEGORIES = [
-  { id: "all", name: "All Products", icon: "bi-grid" },
-  { id: "Microcontrollers", name: "Microcontrollers", icon: "bi-cpu" },
-  { id: "Modules & Sensors", name: "Modules & Sensors", icon: "bi-sliders" },
-  { id: "Power Supplies", name: "Power Supplies", icon: "bi-plug" },
-  { id: "Tools & Accessories", name: "Tools & Accessories", icon: "bi-tools" },
-  { id: "Additive & 3D Parts", name: "Additive & 3D Parts", icon: "bi-box" },
-  { id: "3D Printer Parts", name: "3D Printer Parts", icon: "bi-gear-wide-connected" },
-  { id: "Cables & Wires", name: "Cables & Wires", icon: "bi-bezier2" },
-  { id: "Displays", name: "Displays", icon: "bi-display" },
-  { id: "Robotics", name: "Robotics", icon: "bi-robot" },
-  { id: "IoT & Communication", name: "IoT & Communication", icon: "bi-broadcast" },
-];
-
-const BRANDS = [
-  "ESPRESSIF",
-  "Arduino",
-  "Raspberry Pi",
-  "HiLetgo",
-  "DFRobot",
-  "Seeed Studio",
-];
+// UI-only icon map keyed by category name (icons are presentation, not data)
+const CATEGORY_ICONS = {
+  "All Products": "bi-grid",
+  Microcontrollers: "bi-cpu",
+  "Modules & Sensors": "bi-sliders",
+  "Power Supplies": "bi-plug",
+  "Tools & Accessories": "bi-tools",
+  "Additive & 3D Parts": "bi-box",
+  "3D Printer Parts": "bi-gear-wide-connected",
+  "Cables & Wires": "bi-bezier2",
+  Displays: "bi-display",
+  Robotics: "bi-robot",
+  "IoT & Communication": "bi-broadcast",
+};
 
 const ITEMS_PER_PAGE = 12;
 
 export default function Product() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { freeShippingThreshold } = useSiteSettings();
 
   // Search & Filter states
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -48,6 +42,10 @@ export default function Product() {
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [catalogProducts, setCatalogProducts] = useState([]);
 
+  // Catalog metadata loaded from the database (categories & brands)
+  const [catalogCategories, setCatalogCategories] = useState([]);
+  const [catalogBrands, setCatalogBrands] = useState([]);
+
   // UX & Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [loadedImages, setLoadedImages] = useState({});
@@ -57,6 +55,34 @@ export default function Product() {
   // Search query from URL
   const searchQuery = searchParams.get("search") || "";
   const categoryQuery = searchParams.get("category") || "";
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCatalog = async () => {
+      try {
+        const [categoriesRes, brandsRes] = await Promise.all([
+          catalogService.getCategories(),
+          catalogService.getBrands(),
+        ]);
+        if (active) {
+          setCatalogCategories(categoriesRes.data.categories || []);
+          const brands = brandsRes.data.brands || [];
+          setCatalogBrands(brands.map((brand) => brand.name).filter(Boolean));
+        }
+      } catch (error) {
+        if (active) {
+          setCatalogCategories([]);
+          setCatalogBrands([]);
+        }
+      }
+    };
+
+    loadCatalog();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -89,17 +115,19 @@ export default function Product() {
     };
   }, [searchQuery]);
 
-  // Initialize filters from URL parameters if present
+  // Initialize filters from URL parameters once categories are loaded
   useEffect(() => {
     if (categoryQuery) {
-      const matched = CATEGORIES.find(
-        (c) => c.name.toLowerCase() === categoryQuery.toLowerCase() || c.id.toLowerCase() === categoryQuery.toLowerCase()
+      const matched = catalogCategories.find(
+        (c) =>
+          (c.name || "").toLowerCase() === categoryQuery.toLowerCase() ||
+          (c.slug || "").toLowerCase() === categoryQuery.toLowerCase()
       );
       if (matched) {
         setSelectedCategory(matched.name);
       }
     }
-  }, [categoryQuery]);
+  }, [categoryQuery, catalogCategories]);
 
   // Reset pagination when any filter changes
   useEffect(() => {
@@ -167,6 +195,7 @@ export default function Product() {
     try {
       await cartService.addItem({ product_id: product.id, quantity: 1 });
       toast.success(`Added "${product.name}" to cart!`);
+      syncCartBadge();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Unable to add item to cart");
     }
@@ -184,11 +213,22 @@ export default function Product() {
   // Calculate brand counts based on entire dataset
   const brandCounts = useMemo(() => {
     const counts = {};
-    BRANDS.forEach((brand) => {
+    catalogBrands.forEach((brand) => {
       counts[brand] = catalogProducts.filter((p) => p.brand === brand).length;
     });
     return counts;
-  }, [catalogProducts]);
+  }, [catalogBrands, catalogProducts]);
+
+  // Sidebar category list (All Products + database categories with icon mapping)
+  const sidebarCategories = useMemo(() => {
+    const all = [{ id: "all", name: "All Products", icon: CATEGORY_ICONS["All Products"] || "bi-grid" }];
+    const rest = catalogCategories.map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      icon: CATEGORY_ICONS[c.name] || "bi-box",
+    }));
+    return [...all, ...rest];
+  }, [catalogCategories]);
 
   // Calculate availability counts
   const availabilityCounts = useMemo(() => {
@@ -315,7 +355,7 @@ export default function Product() {
       <div className="sidebar-section">
         <h3 className="sidebar-heading">Categories</h3>
         <ul className="category-list">
-          {CATEGORIES.map((cat) => {
+          {sidebarCategories.map((cat) => {
             const isActive =
               cat.id === "all"
                 ? selectedCategory === "all"
@@ -370,7 +410,7 @@ export default function Product() {
       <div className="sidebar-section">
         <h3 className="sidebar-heading">Brand</h3>
         <div className="filter-checkbox-list">
-          {(showAllBrands ? BRANDS : BRANDS.slice(0, 6)).map((brand) => (
+          {(showAllBrands ? catalogBrands : catalogBrands.slice(0, 6)).map((brand) => (
             <label key={brand} className="filter-checkbox-item">
               <div className="filter-checkbox-left">
                 <input
@@ -384,8 +424,11 @@ export default function Product() {
               <span className="filter-count">({brandCounts[brand] || 0})</span>
             </label>
           ))}
+          {!catalogBrands.length && (
+            <span className="text-muted" style={{ fontSize: "0.82rem" }}>No brands available</span>
+          )}
         </div>
-        {BRANDS.length > 6 && (
+        {catalogBrands.length > 6 && (
           <button
             type="button"
             className="view-more-toggle"
@@ -877,7 +920,7 @@ export default function Product() {
                 </div>
                 <div className="trust-badge-info">
                   <h4>Free Shipping</h4>
-                  <p>On orders over ₹999</p>
+                  <p>On orders over ₹{freeShippingThreshold}</p>
                 </div>
               </div>
             </div>

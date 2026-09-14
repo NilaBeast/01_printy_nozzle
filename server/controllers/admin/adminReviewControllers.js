@@ -68,14 +68,29 @@ const toggleReviewApproval = async (req, res) => {
   try {
     const { id } = req.params;
     const { is_approved } = req.body;
+    const approved = is_approved ? 1 : 0;
 
     const [result] = await db.query(
-      "UPDATE reviews SET is_approved = ? WHERE id = ?",
-      [is_approved ? 1 : 0, id]
+      "UPDATE reviews SET is_approved = ?, is_visible = ? WHERE id = ?",
+      [approved, approved, id]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: "Review not found" });
+    }
+
+    // Recalculate product rating from visible reviews only
+    const [review] = await db.query("SELECT product_id FROM reviews WHERE id = ?", [id]);
+    if (review.length > 0) {
+      const [ratingStats] = await db.query(
+        "SELECT AVG(rating) AS avg_rating, COUNT(*) AS total_reviews FROM reviews WHERE product_id = ? AND is_visible = 1",
+        [review[0].product_id]
+      );
+      await db.query("UPDATE products SET avg_rating = ?, review_count = ? WHERE id = ?", [
+        ratingStats[0].avg_rating ? Math.round(ratingStats[0].avg_rating * 100) / 100 : 0,
+        ratingStats[0].total_reviews || 0,
+        review[0].product_id,
+      ]);
     }
 
     return res.status(200).json({ success: true, message: "Review approval status updated" });
@@ -99,9 +114,9 @@ const deleteReview = async (req, res) => {
 
     await db.query("DELETE FROM reviews WHERE id = ?", [id]);
 
-    // Recalculate product rating
+    // Recalculate product rating from visible reviews only
     const [ratingStats] = await db.query(
-      "SELECT AVG(rating) AS avg_rating, COUNT(*) AS total_reviews FROM reviews WHERE product_id = ? AND is_approved = 1",
+      "SELECT AVG(rating) AS avg_rating, COUNT(*) AS total_reviews FROM reviews WHERE product_id = ? AND is_visible = 1",
       [productId]
     );
 
@@ -109,7 +124,7 @@ const deleteReview = async (req, res) => {
     const newTotal = ratingStats[0].total_reviews || 0;
 
     await db.query(
-      "UPDATE products SET rating = ?, total_reviews = ? WHERE id = ?",
+      "UPDATE products SET avg_rating = ?, review_count = ? WHERE id = ?",
       [Number(newAvg).toFixed(2), newTotal, productId]
     );
 

@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 import "../../public/css/orders.css";
 import orderService from "../services/order.service";
+import printingService from "../services/printing.service";
+import profileService from "../services/profile.service";
+import { syncCartBadge } from "../utils/cartSync";
 import authServices from "../services/auth.service";
 
 export const INITIAL_ORDERS = [];
@@ -65,47 +68,8 @@ function Orders() {
       try {
         setLoading(true);
         const response = await orderService.getOrders({ limit: 50, time_range: "all" });
-        const mapped = (response.data.orders || []).map((order) => {
-          const normalizedStatus =
-            order.status === "in_production" || order.status === "reviewing" || order.status === "printing"
-              ? "Processing"
-              : order.status
-              ? order.status.charAt(0).toUpperCase() + order.status.slice(1)
-              : "Processing";
-          const allItems = (order.items || []).map((item) => ({
-            id: item.id,
-            name: item.product_name || order.file_name,
-            subtext: item.variant_value || item.category_name || order.material_name || "PrintyNozzle",
-            image: item.image_url || "/images/products/01.png",
-            price: Number(item.price || order.total_amount || 0),
-            qty: Number(item.quantity || order.quantity || 1),
-          }));
-
-          return {
-            id: order.order_number,
-            date: order.formatted_date || "",
-            placedDate: order.formatted_date || "",
-            status: normalizedStatus,
-            statusText: order.status_label,
-            statusDate: order.expected_delivery || "",
-            totalPrice: Number(order.total_amount || 0),
-            itemCountText: order.is_3d_print ? "3D Printing Order" : `${order.items_count || allItems.length} items`,
-            itemsSummary: order.items_summary || order.file_name || "Order items",
-            specsText: order.is_3d_print
-              ? `Material: ${order.material_name || "-"} | Color: ${order.color_name || "-"} | Qty: ${order.quantity || 1}`
-              : "",
-            is3DPrint: Boolean(order.is_3d_print),
-            shippingAddress: order.shipping_address?.formatted || "",
-            paymentMethod: order.payment_method_label || order.payment_method || "",
-            thumbnails: allItems.slice(0, 3),
-            overflowCount: Math.max(0, allItems.length - 3),
-            allItems,
-            trackingSteps: [],
-          };
-        });
-
         if (active) {
-          setOrders(mapped);
+          setOrders(mapOrders(response.data.orders || []));
         }
       } catch (error) {
         if (active) {
@@ -130,6 +94,105 @@ function Orders() {
   const [selectedTrackingOrder, setSelectedTrackingOrder] = useState(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [show3DModal, setShow3DModal] = useState(false);
+  const [printFiles, setPrintFiles] = useState([]);
+  const [printFilesLoading, setPrintFilesLoading] = useState(false);
+
+  const mapOrders = (list) =>
+    (list || []).map((order) => {
+      const normalizedStatus =
+        order.status === "in_production" || order.status === "reviewing" || order.status === "printing"
+          ? "Processing"
+          : order.status
+          ? order.status.charAt(0).toUpperCase() + order.status.slice(1)
+          : "Processing";
+      const allItems = (order.items || []).map((item) => ({
+        id: item.id,
+        name: item.product_name || order.file_name,
+        subtext: item.variant_value || item.category_name || order.material_name || "PrintyNozzle",
+        image: item.image_url || "/images/products/01.png",
+        price: Number(item.price || order.total_amount || 0),
+        qty: Number(item.quantity || order.quantity || 1),
+      }));
+
+      return {
+        id: order.order_number,
+        date: order.formatted_date || "",
+        placedDate: order.formatted_date || "",
+        status: normalizedStatus,
+        statusText: order.status_label,
+        statusDate: order.expected_delivery || "",
+        totalPrice: Number(order.total_amount || 0),
+        shippingCost: Number(order.shipping_cost ?? 0),
+        itemCountText: order.is_3d_print ? "3D Printing Order" : `${order.items_count || allItems.length} items`,
+        itemsSummary: order.items_summary || order.file_name || "Order items",
+        specsText: order.is_3d_print
+          ? `Material: ${order.material_name || "-"} | Color: ${order.color_name || "-"} | Qty: ${order.quantity || 1}`
+          : "",
+        is3DPrint: Boolean(order.is_3d_print),
+        shippingAddress: order.shipping_address?.formatted || "",
+        paymentMethod: order.payment_method_label || order.payment_method || "",
+        thumbnails: allItems.slice(0, 3),
+        overflowCount: Math.max(0, allItems.length - 3),
+        allItems,
+        trackingSteps: [],
+        canCancel: Boolean(order.can_cancel),
+      };
+    });
+
+  const reloadOrders = async () => {
+    try {
+      const response = await orderService.getOrders({ limit: 50, time_range: "all" });
+      setOrders(mapOrders(response.data.orders || []));
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to refresh orders");
+    }
+  };
+
+  const openTrackingModal = async (order) => {
+    // Show the modal immediately, then fill in the live timeline
+    setSelectedTrackingOrder({ ...order, trackingSteps: [] });
+    try {
+      const isPrint = Boolean(order.is3DPrint) || /^3D/i.test(String(order.id || "").replace(/^#/, ""));
+      const response = isPrint
+        ? await printingService.getPrintOrderById(String(order.id).replace(/^#/, ""))
+        : await orderService.getOrder(order.id);
+      const data = isPrint ? response.data.order : response.data.order;
+      const steps = isPrint
+        ? (data.timeline || []).map((step, idx, arr) => ({
+            title: step.step,
+            time: step.timestamp || "Pending",
+            completed: Boolean(step.is_completed),
+            current: Boolean(!step.is_completed && (idx === 0 || arr[idx - 1]?.is_completed)),
+            desc: step.step,
+          }))
+        : (data.timeline || []).map((step, idx, arr) => ({
+            title: step.step,
+            time: step.timestamp || "Pending",
+            completed: Boolean(step.is_completed),
+            current: Boolean(!step.is_completed && (idx === 0 || arr[idx - 1]?.is_completed)),
+            desc: step.tracking_number
+              ? `${step.carrier || "Carrier"} (${step.tracking_number})`
+              : step.step,
+          }));
+      setSelectedTrackingOrder({ ...order, trackingSteps: steps });
+    } catch (error) {
+      /* keep modal open with fallback message */
+    }
+  };
+
+  const open3DFilesModal = async () => {
+    setShow3DModal(true);
+    setPrintFilesLoading(true);
+    try {
+      const response = await profileService.getPrintFiles();
+      setPrintFiles(response.data?.files || []);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load 3D print files");
+      setPrintFiles([]);
+    } finally {
+      setPrintFilesLoading(false);
+    }
+  };
 
   // Handlers
   const handleLogout = () => {
@@ -138,12 +201,29 @@ function Orders() {
   };
 
   const handleBuyAgain = async (order) => {
+    if (order.is3DPrint) {
+      toast.info("Custom prints can't be reordered from here. Upload the model again from 3D Printing.");
+      navigate("/3d-printing");
+      return;
+    }
     try {
       await orderService.reorder(order.id);
       toast.success(`Items from Order #${order.id} added to your cart!`);
+      syncCartBadge();
       navigate("/cart");
     } catch (error) {
       toast.error(error?.response?.data?.message || "Unable to reorder");
+    }
+  };
+
+  const handleCancelOrder = async (order) => {
+    if (!window.confirm(`Cancel Order #${order.id}? This cannot be undone.`)) return;
+    try {
+      const response = await orderService.cancelOrder(order.id);
+      toast.success(response.data?.message || `Order #${order.id} cancelled`);
+      await reloadOrders();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to cancel order");
     }
   };
 
@@ -483,7 +563,7 @@ function Orders() {
                               <button
                                 type="button"
                                 className="order-btn-outline"
-                                onClick={() => setSelectedTrackingOrder(order)}
+                                onClick={() => openTrackingModal(order)}
                               >
                                 Track Order
                               </button>
@@ -496,6 +576,16 @@ function Orders() {
                             >
                               View Details
                             </button>
+
+                            {order.canCancel && !order.is3DPrint && (
+                              <button
+                                type="button"
+                                className="order-btn-outline order-btn-cancel"
+                                onClick={() => handleCancelOrder(order)}
+                              >
+                                Cancel Order
+                              </button>
+                            )}
 
                             {order.status === "Delivered" && (
                               <button
@@ -586,19 +676,26 @@ function Orders() {
                   <button
                     type="button"
                     className="orders-quick-item-btn"
-                    onClick={() => toast.info("Return / Replacement portal will open soon.")}
+                    onClick={() => navigate("/contact")}
                   >
                     <span className="orders-quick-icon">
                       <RefreshCw size={21} strokeWidth={2.1} />
                     </span>
-                    <span className="orders-quick-text">Return or Replace</span>
+                    <span className="orders-quick-text">Request Return / Replacement</span>
                   </button>
                 </li>
                 <li>
                   <button
                     type="button"
                     className="orders-quick-item-btn"
-                    onClick={() => handleDownloadInvoice(orders[0].id)}
+                    onClick={() => {
+                      const invoicable = orders.find((o) => !o.is3DPrint);
+                      if (!invoicable) {
+                        toast.info("No product orders with invoices yet.");
+                        return;
+                      }
+                      handleDownloadInvoice(invoicable.id);
+                    }}
                   >
                     <span className="orders-quick-icon">
                       <FileDown size={22} strokeWidth={2.1} />
@@ -610,7 +707,7 @@ function Orders() {
                   <button
                     type="button"
                     className="orders-quick-item-btn"
-                    onClick={() => setShow3DModal(true)}
+                    onClick={open3DFilesModal}
                   >
                     <span className="orders-quick-icon">
                       <Box size={22} strokeWidth={2.1} />
@@ -641,6 +738,10 @@ function Orders() {
                     src="/images/My_ORDERS_PAGE_BOTTLE_IMAGE.png"
                     alt="3D Printed Vase"
                     className="orders-promo-image"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "/images/products/01.png";
+                    }}
                   />
                 </div>
                 <div className="orders-promo-content">
@@ -792,7 +893,11 @@ function Orders() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
                   <span>Shipping & Handling</span>
-                  <span style={{ color: "#10b981", fontWeight: 600 }}>FREE</span>
+                  {Number(selectedOrderDetails.shippingCost || 0) === 0 ? (
+                    <span style={{ color: "#10b981", fontWeight: 600 }}>FREE</span>
+                  ) : (
+                    <span>₹{Number(selectedOrderDetails.shippingCost).toLocaleString("en-IN")}</span>
+                  )}
                 </div>
                 <div
                   style={{
@@ -813,14 +918,16 @@ function Orders() {
             </div>
 
             <div className="orders-modal-footer">
-              <button
-                type="button"
-                className="order-btn-outline"
-                onClick={() => handleDownloadInvoice(selectedOrderDetails.id)}
-              >
-                <Download size={14} style={{ marginRight: 6 }} />
-                Invoice
-              </button>
+              {!selectedOrderDetails.is3DPrint && (
+                <button
+                  type="button"
+                  className="order-btn-outline"
+                  onClick={() => handleDownloadInvoice(selectedOrderDetails.id)}
+                >
+                  <Download size={14} style={{ marginRight: 6 }} />
+                  Invoice
+                </button>
+              )}
               <button
                 type="button"
                 className="order-btn-primary"
@@ -881,6 +988,11 @@ function Orders() {
                     </div>
                   </div>
                 ))}
+                {selectedTrackingOrder.trackingSteps.length === 0 && (
+                  <div style={{ padding: "12px 4px", color: "#64748b", fontSize: "0.88rem" }}>
+                    Tracking timeline will appear here once the order ships.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -895,9 +1007,15 @@ function Orders() {
               <button
                 type="button"
                 className="order-btn-primary"
-                onClick={() => {
-                  toast.success("SMS & Email live updates enabled!");
-                  setSelectedTrackingOrder(null);
+                onClick={async () => {
+                  try {
+                    await profileService.updatePreferences({ order_updates: true });
+                    toast.success("Order status notifications enabled!");
+                  } catch (error) {
+                    toast.error(error?.response?.data?.message || "Unable to update notification preference");
+                  } finally {
+                    setSelectedTrackingOrder(null);
+                  }
                 }}
               >
                 Subscribe for Updates
@@ -965,7 +1083,8 @@ function Orders() {
                 type="button"
                 className="order-btn-primary"
                 onClick={() => {
-                  toast.info("Add new address form opening...");
+                  setShowAddressModal(false);
+                  navigate("/profile#addresses");
                 }}
               >
                 Add New Address
@@ -997,91 +1116,70 @@ function Orders() {
               </button>
             </div>
             <div className="orders-modal-body">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "12px 14px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  background: "#f8fafc",
-                }}
-              >
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "8px",
-                    background: "#eff6ff",
-                    color: "#2563eb",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Box size={22} />
+              {printFilesLoading ? (
+                <div style={{ padding: "20px", textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                  Loading your files...
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#0f172a" }}>
-                    spiral_vase_lattice.stl
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                    14.2 MB • Uploaded 03 Aug 2024 • Bambu PLA
-                  </div>
+              ) : printFiles.length === 0 ? (
+                <div style={{ padding: "20px", textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                  No 3D print files yet. Place a print order to see your models here.
                 </div>
-                <button
-                  type="button"
-                  className="order-btn-outline"
-                  style={{ padding: "5px 10px", fontSize: "0.8rem" }}
-                  onClick={() => toast.success("Downloading STL file...")}
-                >
-                  <Download size={14} />
-                </button>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "12px 14px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  background: "#f8fafc",
-                }}
-              >
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "8px",
-                    background: "#eff6ff",
-                    color: "#2563eb",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Box size={22} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#0f172a" }}>
-                    mount_bracket_v2.step
+              ) : (
+                printFiles.map((file) => (
+                  <div
+                    key={file.order_id || file.file_name}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "12px 14px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "12px",
+                      background: "#f8fafc",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: "8px",
+                        background: "#eff6ff",
+                        color: "#2563eb",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Box size={22} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {file.file_name}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                        {file.file_size ? `${file.file_size} • ` : ""}
+                        {file.created_at ? `Ordered ${new Date(file.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • ` : ""}
+                        {file.material_name || "3D Print"}
+                        {file.status ? ` • ${String(file.status).replace(/_/g, " ")}` : ""}
+                      </div>
+                    </div>
+                    {file.file_url ? (
+                      <a
+                        href={file.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="order-btn-outline"
+                        style={{ padding: "5px 10px", fontSize: "0.8rem", textDecoration: "none" }}
+                        title="Download original model file"
+                      >
+                        <Download size={14} />
+                      </a>
+                    ) : null}
                   </div>
-                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                    8.6 MB • Uploaded 12 Jul 2024 • PETG Solid
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="order-btn-outline"
-                  style={{ padding: "5px 10px", fontSize: "0.8rem" }}
-                  onClick={() => toast.success("Downloading STEP file...")}
-                >
-                  <Download size={14} />
-                </button>
-              </div>
+                ))
+              )}
             </div>
             <div className="orders-modal-footer">
               <button
@@ -1094,7 +1192,10 @@ function Orders() {
               <button
                 type="button"
                 className="order-btn-primary"
-                onClick={() => toast.info("Opening 3D model uploader...")}
+                onClick={() => {
+                  setShow3DModal(false);
+                  navigate("/3d-printing");
+                }}
               >
                 Upload New Model
               </button>

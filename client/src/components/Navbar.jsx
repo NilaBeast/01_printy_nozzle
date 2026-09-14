@@ -38,7 +38,7 @@ function Navbar() {
     return { isLoggedIn: Boolean(token), user };
   });
 
-  const cartCount = (() => {
+const readCartCount = () => {
     try {
       const saved = JSON.parse(localStorage.getItem("printy_cart") || "[]");
       return Array.isArray(saved)
@@ -47,7 +47,9 @@ function Navbar() {
     } catch (error) {
       return 0;
     }
-  })();
+  };
+
+  const [cartCount, setCartCount] = useState(readCartCount);
 
   const isLoggedIn = authState.isLoggedIn;
   const user = authState.user;
@@ -70,20 +72,27 @@ function Navbar() {
      OUTSIDE CLICK + ESCAPE
      ===================================================== */
 
-  useEffect(() => {
+useEffect(() => {
     const syncAuth = () => {
       const token = localStorage.getItem("token");
       const nextUser = JSON.parse(localStorage.getItem("user") || "null");
       setAuthState({ isLoggedIn: Boolean(token), user: nextUser });
     };
 
+    const syncCart = () => setCartCount(readCartCount());
+
     window.addEventListener("authChange", syncAuth);
     window.addEventListener("storage", syncAuth);
+    window.addEventListener("cartChange", syncCart);
+    window.addEventListener("storage", syncCart);
     syncAuth();
+    syncCart();
 
     return () => {
       window.removeEventListener("authChange", syncAuth);
       window.removeEventListener("storage", syncAuth);
+      window.removeEventListener("cartChange", syncCart);
+      window.removeEventListener("storage", syncCart);
     };
   }, []);
 

@@ -12,6 +12,8 @@ const printingService = {
     });
   },
   createOrder: (payload) => api.post("/printing/order", payload),
+  getUserPrintOrders: (params = {}) => api.get("/printing/orders", { params }),
+  getPrintOrderById: (id) => api.get(`/printing/orders/${id}`),
 };
 
 export default printingService;

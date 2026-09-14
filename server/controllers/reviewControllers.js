@@ -26,24 +26,13 @@ const addReview = async (req, res) => {
       return res.status(409).json({ success: false, message: "You have already reviewed this product" });
     }
 
-    // Add review
+    // Add review (goes to the admin moderation queue — not visible until approved)
     await db.query(
-      "INSERT INTO reviews (product_id, user_id, rating, title, comment) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO reviews (product_id, user_id, rating, title, comment, is_approved, is_visible) VALUES (?, ?, ?, ?, ?, 0, 0)",
       [productId, req.user.id, rating, title || null, comment || null]
     );
 
-    // Update product average rating
-    const [avgResult] = await db.query(
-      "SELECT AVG(rating) as avg_rating, COUNT(*) as review_count FROM reviews WHERE product_id = ? AND is_visible = 1",
-      [productId]
-    );
-
-    await db.query(
-      "UPDATE products SET avg_rating = ?, review_count = ? WHERE id = ?",
-      [Math.round(avgResult[0].avg_rating * 100) / 100, avgResult[0].review_count, productId]
-    );
-
-    return res.status(201).json({ success: true, message: "Review submitted successfully" });
+    return res.status(201).json({ success: true, message: "Review submitted successfully! It will appear after admin approval." });
   } catch (error) {
     console.error("Add review error:", error);
     return res.status(500).json({ success: false, message: "Server error" });

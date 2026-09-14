@@ -18,7 +18,14 @@ import {
   ArrowRight
 } from "lucide-react";
 import orderService from "../services/order.service";
+import printingService from "../services/printing.service";
 import "../../public/css/order-details.css";
+
+const formatPrintStatus = (status) => {
+  if (!status) return "Processing";
+  if (["in_production", "reviewing", "printing"].includes(status)) return "Processing";
+  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
 
 const OrderDetails = () => {
   const { id } = useParams();
@@ -37,6 +44,68 @@ const OrderDetails = () => {
 
       try {
         setLoading(true);
+        // 3D print orders (numbers start with "3D") live in printing_orders
+        if (/^3D/i.test(String(id || "").replace(/^#/, ""))) {
+          const response = await printingService.getPrintOrderById(String(id).replace(/^#/, ""));
+          const po = response.data.order;
+          const specBits = [
+            po.material_name,
+            po.color_name || po.custom_color_hex,
+            po.infill_density ? `${po.infill_density}% infill` : null,
+            po.surface_finish,
+            po.estimated_weight ? `${po.estimated_weight}g` : null,
+          ].filter(Boolean);
+          const placedDate = po.created_at
+            ? new Date(po.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+            : "";
+          const shipBits = [po.shipping_address1, po.shipping_city, po.shipping_state, po.shipping_pincode]
+            .filter(Boolean)
+            .join(", ");
+
+          if (active) {
+            setServerOrder({
+              id: po.order_number,
+              date: placedDate,
+              placedDate,
+              status: formatPrintStatus(po.status),
+              totalPrice: Number(po.total_amount || 0),
+              is3DPrint: true,
+              allItems: [
+                {
+                  id: po.id,
+                  name: `3D Print: ${po.file_name}`,
+                  subtext: specBits.join(" · ") || "Custom 3D print",
+                  image: "/images/products/01.png",
+                  price: Number(po.subtotal || po.total_amount || 0),
+                  qty: 1,
+                },
+              ],
+              trackingSteps: (po.timeline || [
+                { step: "Order Placed", timestamp: placedDate, is_completed: true },
+                { step: "Confirmed", timestamp: "Pending", is_completed: po.status === "confirmed" || po.status === "delivered" },
+              ]).map((step) => ({
+                title: step.step,
+                time: step.timestamp || "Pending",
+                completed: step.is_completed,
+                desc: step.step,
+              })),
+              shippingAddress: po.shipping_name
+                ? `${po.shipping_name}, ${shipBits}${po.shipping_phone ? `, ${po.shipping_phone}` : ""}`
+                : shipBits || "Pickup / address on file",
+              paymentMethod: po.payment_method === "cod" ? "Cash on Delivery" : po.payment_method,
+              summary: {
+                items_count: Number(po.quantity || 1),
+                subtotal: Number(po.subtotal || 0),
+                shipping_cost: 0,
+                discount: 0,
+                tax_amount: Number(po.tax_amount || 0),
+                total_amount: Number(po.total_amount || 0),
+              },
+            });
+          }
+          return;
+        }
+
         const response = await orderService.getOrder(id);
         const data = response.data.order;
         const status =
@@ -96,33 +165,41 @@ const OrderDetails = () => {
 
   const order = serverOrder;
 
-  // Order items mapped with fallbacks
+  // Order items mapped with fallbacks (null-safe: order loads async)
   const items = useMemo(() => {
-    return (order.allItems || []).map((item) => ({
+    return (order?.allItems || []).map((item) => ({
       id: item.id,
       name: item.name,
       subtext:
         item.subtext ||
-        (order.is3DPrint ? "3D Printing & Fabrication" : "Electronics & Components"),
+        (order?.is3DPrint ? "3D Printing & Fabrication" : "Electronics & Components"),
       image: item.image || "/images/products/01.png",
       price: item.price || 0,
       qty: item.qty || 1
     }));
   }, [order]);
 
-  // Calculated totals directly from items
+  // Financials come from the server order summary (single source of truth)
+  const serverSummary = order?.summary || {};
   const subtotal = useMemo(() => {
+    if (serverSummary.subtotal !== undefined && serverSummary.subtotal !== null) {
+      return Number(serverSummary.subtotal);
+    }
     return items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  }, [items]);
+  }, [items, serverSummary.subtotal]);
 
   const itemsCount = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.qty, 0);
-  }, [items]);
+    return Number(serverSummary.items_count || 0) || items.reduce((sum, item) => sum + item.qty, 0);
+  }, [items, serverSummary.items_count]);
 
-  const shipping = "FREE";
-  const discount = 0;
-  const tax = useMemo(() => +(subtotal * 0.18), [subtotal]);
-  const total = useMemo(() => +(subtotal + tax - discount), [subtotal, tax, discount]);
+  const shippingCost = Number(serverSummary.shipping_cost ?? 0);
+  const shipping = shippingCost === 0 ? "FREE" : `₹${shippingCost.toLocaleString("en-IN")}`;
+  const discount = Number(serverSummary.discount ?? 0);
+  const tax = useMemo(() => Number(serverSummary.tax_amount ?? +(subtotal * 0.18)), [subtotal, serverSummary.tax_amount]);
+  const total = useMemo(
+    () => Number(serverSummary.total_amount ?? +(subtotal + tax - discount + shippingCost)),
+    [subtotal, tax, discount, shippingCost, serverSummary.total_amount]
+  );
 
   // Parse address details
   const address = useMemo(() => {
@@ -202,7 +279,36 @@ const OrderDetails = () => {
     }
   };
 
-  const trackingSteps = order.trackingSteps || [];
+  const trackingSteps = order?.trackingSteps || [];
+
+  if (loading) {
+    return (
+      <div className="od-page-wrapper">
+        <div className="od-container">
+          <div className="p-5 text-center">
+            <div className="spinner-border text-primary" role="status" aria-label="Loading order details" />
+            <p className="text-muted mt-3">Loading order details…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="od-page-wrapper">
+        <div className="od-container">
+          <div className="p-5 text-center">
+            <h2>Order not found</h2>
+            <p className="text-muted">This order could not be loaded. It may have been removed or the link is incorrect.</p>
+            <Link to="/orders" className="btn btn-primary px-4 py-2 mt-3">
+              Back to My Orders
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="od-page-wrapper">
@@ -304,6 +410,10 @@ const OrderDetails = () => {
                             src={item.image}
                             alt={item.name}
                             className="od-prod-img"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "/images/products/01.png";
+                            }}
                           />
                           <div className="od-prod-meta">
                             <h3 className="od-prod-name">{item.name}</h3>
@@ -338,18 +448,20 @@ const OrderDetails = () => {
                 <div className="od-info-col">
                   <span className="od-info-lbl">Payment Method</span>
                   <span className="od-info-val">
-                    {order.paymentMethod || "UPI (Google Pay)"}
+                    {order.paymentMethod || "—"}
                   </span>
                 </div>
                 <div className="od-info-col" style={{ alignItems: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="od-info-invoice-btn"
-                    onClick={handleDownloadInvoice}
-                  >
-                    <span>View Invoice</span>
-                    <Download size={14} strokeWidth={2.4} />
-                  </button>
+                  {!order.is3DPrint && (
+                    <button
+                      type="button"
+                      className="od-info-invoice-btn"
+                      onClick={handleDownloadInvoice}
+                    >
+                      <span>View Invoice</span>
+                      <Download size={14} strokeWidth={2.4} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -403,7 +515,7 @@ const OrderDetails = () => {
                 </div>
                 <div className="od-summary-row">
                   <span className="od-sum-lbl">Shipping</span>
-                  <span className="od-sum-val od-sum-val-free">
+                  <span className={`od-sum-val ${shippingCost === 0 ? "od-sum-val-free" : ""}`}>
                     {shipping}
                   </span>
                 </div>
@@ -412,7 +524,7 @@ const OrderDetails = () => {
                   <span className="od-sum-val">-₹{discount}</span>
                 </div>
                 <div className="od-summary-row">
-                  <span className="od-sum-lbl">Tax (18% GST)</span>
+                  <span className="od-sum-lbl">Tax (GST)</span>
                   <span className="od-sum-val">
                     ₹{tax.toFixed(2)}
                   </span>
@@ -450,7 +562,8 @@ const OrderDetails = () => {
               </Link>
             </div>
 
-            {/* Download Invoice Card */}
+            {/* Download Invoice Card (regular orders only) */}
+            {!order.is3DPrint && (
             <div className="od-card od-action-card">
               <div className="od-action-top">
                 <FileText size={28} strokeWidth={2.1} className="od-action-icon" />
@@ -470,8 +583,10 @@ const OrderDetails = () => {
                 <span>Download Invoice</span>
               </button>
             </div>
+            )}
 
-            {/* Reorder Card */}
+            {/* Reorder Card (regular orders only) */}
+            {!order.is3DPrint && (
             <div className="od-card od-action-card">
               <div className="od-action-top">
                 <RefreshCw size={28} strokeWidth={2.1} className="od-action-icon" />
@@ -491,6 +606,7 @@ const OrderDetails = () => {
                 <span>Add All to Cart</span>
               </button>
             </div>
+            )}
 
             {/* Explore 3D Printing Promo Card */}
             <div className="od-card od-promo-card">
@@ -512,6 +628,10 @@ const OrderDetails = () => {
                   src="/images/My_ORDERS_PAGE_BOTTLE_TRANSPARENT.png"
                   alt="3D Printed Vase"
                   className="od-promo-vase"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/images/products/01.png";
+                  }}
                 />
               </div>
             </div>

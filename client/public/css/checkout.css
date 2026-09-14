@@ -2,6 +2,45 @@
    CHECKOUT PAGE STYLING - FULL RESPONSIVE SPECIFICATION
    ========================================================================== */
 
+.coupon-applied-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #f0fdf4;
+  border: 1px dashed #86c98f;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.coupon-applied-row .cart-coupon-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.8px;
+  color: #0a2244;
+  background: linear-gradient(135deg, #fff7e0, #ffefc2);
+  border: 1px dashed #e0b73c;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.coupon-applied-row .cart-coupon-remove {
+  border: 0;
+  background: transparent;
+  color: #d11f1f;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coupon-applied-row .cart-coupon-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .checkout-page-wrapper {
   width: 100%;
   min-height: 80vh;
@@ -1011,4 +1050,209 @@
     gap: 16px;
     padding: 16px;
   }
+
+  .pay-success-modal {
+    padding: 28px 22px;
+  }
+
+  .pay-success-actions .btn-checkout-primary,
+  .pay-success-actions .btn-continue-shopping {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   RAZORPAY-ONLY PAYMENT PANEL
+   -------------------------------------------------------------------------- */
+.razorpay-only-box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.razorpay-only-badge {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 14px;
+  color: #1d4ed8;
+}
+
+.razorpay-only-badge > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.razorpay-only-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.razorpay-only-sub {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.razorpay-only-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #15803d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+/* --------------------------------------------------------------------------
+   PAYMENT SUCCESS POPUP
+   -------------------------------------------------------------------------- */
+.pay-success-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 16, 38, 0.6);
+  backdrop-filter: blur(6px);
+  animation: pay-fade-in 0.22s ease;
+}
+
+.pay-success-modal {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 36px 32px 30px;
+  text-align: center;
+  box-shadow: 0 32px 90px rgba(2, 16, 38, 0.4);
+  animation: pay-pop-in 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.pay-success-icon {
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #16a34a;
+  background: radial-gradient(circle, #dcfce7 0%, #f0fdf4 70%);
+  border: 2px solid #bbf7d0;
+  animation: pay-tick 0.5s ease 0.15s backwards;
+}
+
+.pay-success-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  color: #0f172a;
+}
+
+.pay-success-sub {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.pay-success-sub strong {
+  color: #0f172a;
+}
+
+.pay-success-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  text-align: left;
+}
+
+.pay-success-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.pay-success-row span {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pay-success-row strong {
+  color: #0f172a;
+}
+
+.pay-success-payid {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.pay-success-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pay-success-actions .btn-checkout-primary {
+  width: 100%;
+}
+
+.btn-continue-shopping {
+  width: 100%;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+
+.btn-continue-shopping:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+@keyframes pay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pay-pop-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pay-tick {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }

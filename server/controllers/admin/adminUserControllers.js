@@ -100,23 +100,43 @@ const getUserById = async (req, res) => {
   }
 };
 
-/* ===================== UPDATE USER STATUS / ROLE ===================== */
+/* ===================== UPDATE USER (DETAILS / STATUS / ROLE) ===================== */
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, is_active } = req.body;
+    const { first_name, last_name, email, phone, role, is_active } = req.body;
 
     // Prevent changing own role or deactivating self
     if (Number(id) === req.user.id) {
       return res.status(400).json({ success: false, message: "Cannot modify your own account role/status here" });
     }
 
+    // Email uniqueness check
+    if (email && email.trim()) {
+      const [existingEmail] = await db.query("SELECT id FROM users WHERE email = ? AND id != ?", [email.trim(), id]);
+      if (existingEmail.length > 0) {
+        return res.status(409).json({ success: false, message: "Email already in use by another account" });
+      }
+    }
+
     const [result] = await db.query(
       `UPDATE users SET
+         first_name = COALESCE(?, first_name),
+         last_name = COALESCE(?, last_name),
+         email = COALESCE(?, email),
+         phone = ?,
          role = COALESCE(?, role),
          is_active = COALESCE(?, is_active)
        WHERE id = ?`,
-      [role || null, is_active !== undefined ? (is_active ? 1 : 0) : null, id]
+      [
+        (first_name !== undefined && first_name !== "") ? first_name : null,
+        (last_name !== undefined && last_name !== "") ? last_name : null,
+        (email !== undefined && email.trim() !== "") ? email.trim() : null,
+        phone !== undefined ? phone : null,
+        role || null,
+        is_active !== undefined ? (is_active ? 1 : 0) : null,
+        id,
+      ]
     );
 
     if (result.affectedRows === 0) {

@@ -1,6 +1,6 @@
 // pages/Home.jsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../../public/css/home.css";
 
@@ -17,32 +17,32 @@ export default function Home() {
   const [error, setError] = useState("");
 
   /* =====================================================
-     HERO IMAGES
+     HERO BANNERS (loaded from the database)
   ===================================================== */
 
-  const heroImages = [
-    "/images/home_hero/01.png",
-    "/images/home_hero/02.png",
-    "/images/home_hero/03.png",
-    "/images/home_hero/04.png",
-    "/images/home_hero/05.png",
-  ];
-
+  const [heroSlides, setHeroSlides] = useState([]);
   const [activeSlide, setActiveSlide] = useState(0);
+
+  /* =====================================================
+     HOME CATEGORIES (loaded from the database)
+  ===================================================== */
+
+  const [homeCategories, setHomeCategories] = useState([]);
 
   /* =====================================================
      AUTO SLIDE
   ===================================================== */
 
   useEffect(() => {
+    if (heroSlides.length <= 1) return;
     const slider = setInterval(() => {
       setActiveSlide((current) => {
-        return (current + 1) % heroImages.length;
+        return (current + 1) % heroSlides.length;
       });
     }, 5000);
 
     return () => clearInterval(slider);
-  }, [heroImages.length]);
+  }, [heroSlides.length]);
 
   /* =====================================================
      SLIDER CONTROLS
@@ -50,13 +50,13 @@ export default function Home() {
 
   const nextSlide = () => {
     setActiveSlide((current) => {
-      return (current + 1) % heroImages.length;
+      return (current + 1) % heroSlides.length;
     });
   };
 
   const previousSlide = () => {
     setActiveSlide((current) => {
-      return (current - 1 + heroImages.length) % heroImages.length;
+      return (current - 1 + heroSlides.length) % heroSlides.length;
     });
   };
 
@@ -65,23 +65,65 @@ export default function Home() {
   };
 
   /* =====================================================
-     LOAD PRODUCTS FROM DATABASE
+     LOAD HOME DATA (banners, categories, products)
   ===================================================== */
 
   useEffect(() => {
     let active = true;
 
-    const loadHomeProducts = async () => {
+    const loadHome = async () => {
       try {
         setLoading(true);
         setError("");
-        const response = await catalogService.getProducts({ limit: 6 });
-        const items = (response.data.products || []).map(normalizeProduct);
-        if (active) {
-          setFeatured(items);
-        }
+        const [homeRes, productsRes] = await Promise.all([
+          catalogService.getHome(),
+          catalogService.getProducts({ limit: 6 }),
+        ]);
+
+        if (!active) return;
+
+        const homeData = homeRes.data.data || homeRes.data || {};
+        const bannerList = homeData.banners || [];
+        setHeroSlides(
+          bannerList.length
+            ? bannerList.map((b) => ({
+                id: b.id,
+                image: b.image_url,
+                title: b.title || "",
+                subtitle: b.subtitle || "",
+                link: b.link_url || "",
+                button: b.button_text || "Shop Now",
+              }))
+            : [
+                { id: "f1", image: "/images/home_hero/01.png" },
+                { id: "f2", image: "/images/home_hero/02.png" },
+                { id: "f3", image: "/images/home_hero/03.png" },
+                { id: "f4", image: "/images/home_hero/04.png" },
+                { id: "f5", image: "/images/home_hero/05.png" },
+              ]
+        );
+
+        const categoryList = homeData.categories || [];
+        setHomeCategories(
+          categoryList.map((c) => ({
+            name: c.name || c.category_name || "Category",
+            slug: c.slug || c.category_slug || "",
+            image: c.image_url || "",
+          }))
+        );
+
+        const items = (productsRes.data.products || []).map(normalizeProduct);
+        setFeatured(items);
       } catch (err) {
         if (active) {
+          setHeroSlides([
+            { id: "f1", image: "/images/home_hero/01.png" },
+            { id: "f2", image: "/images/home_hero/02.png" },
+            { id: "f3", image: "/images/home_hero/03.png" },
+            { id: "f4", image: "/images/home_hero/04.png" },
+            { id: "f5", image: "/images/home_hero/05.png" },
+          ]);
+          setHomeCategories([]);
           setFeatured([]);
           setError("Unable to load products.");
         }
@@ -92,7 +134,7 @@ export default function Home() {
       }
     };
 
-    loadHomeProducts();
+    loadHome();
     return () => {
       active = false;
     };
@@ -149,38 +191,8 @@ export default function Home() {
   };
 
   /* =====================================================
-     CATEGORY DATA
+     CATEGORY DATA (loaded from the database above)
   ===================================================== */
-
-  const categories = useMemo(() => {
-    return [
-      {
-        name: "Microcontrollers",
-        image: "/images/products/01.png",
-        icon: "cpu",
-      },
-      {
-        name: "Modules & Sensors",
-        image: "/images/products/02.png",
-        icon: "sensor",
-      },
-      {
-        name: "Power Supplies",
-        image: "/images/products/03.png",
-        icon: "power",
-      },
-      {
-        name: "Tools & Accessories",
-        image: "/images/products/04.png",
-        icon: "tools",
-      },
-      {
-        name: "Additive & 3D Parts",
-        image: "/images/products/05.png",
-        icon: "cube",
-      },
-    ];
-  }, []);
 
   /* =====================================================
      ICONS
@@ -329,11 +341,11 @@ export default function Home() {
 
         <div className="home-hero-background">
 
-          {heroImages.map((image, index) => (
+          {heroSlides.map((slide, index) => (
             <img
-              key={image}
-              src={image}
-              alt="ElectroLab electronics and 3D printing"
+              key={slide.id || slide.image}
+              src={slide.image}
+              alt={slide.title || "ElectroLab electronics and 3D printing"}
               className={`home-hero-image ${
                 activeSlide === index ? "is-active" : ""
               }`}
@@ -411,7 +423,7 @@ export default function Home() {
 
           <div className="home-hero-dots">
 
-            {heroImages.map((_, index) => (
+            {heroSlides.map((_, index) => (
               <button
                 key={index}
                 type="button"
@@ -491,7 +503,7 @@ export default function Home() {
 
         <div className="home-category-grid">
 
-          {categories.map((category) => {
+          {homeCategories.map((category) => {
             const image = category.image;
 
             return (

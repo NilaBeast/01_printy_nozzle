@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- ElectroLab / PrintyNozzle — Complete MySQL Database Schema
 -- Run this file in phpMyAdmin to create all tables & seed data
 -- ============================================================
@@ -193,12 +193,28 @@ CREATE TABLE IF NOT EXISTS cart (
 ) ENGINE=InnoDB;
 
 -- ===================== CART ITEMS =====================
+-- Supports both regular products AND custom 3D prints (product_id NULL + print config).
 CREATE TABLE IF NOT EXISTS cart_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cart_id INT NOT NULL,
-  product_id INT NOT NULL,
+  product_id INT DEFAULT NULL,
   variant_id INT DEFAULT NULL,
   quantity INT NOT NULL DEFAULT 1,
+  item_type VARCHAR(20) DEFAULT 'product',
+  unit_price DECIMAL(10,2) DEFAULT NULL,
+  file_name VARCHAR(300) DEFAULT NULL,
+  file_url VARCHAR(500) DEFAULT NULL,
+  file_public_id VARCHAR(300) DEFAULT NULL,
+  file_size DECIMAL(10,2) DEFAULT NULL,
+  dimension_x DECIMAL(8,2) DEFAULT NULL,
+  dimension_y DECIMAL(8,2) DEFAULT NULL,
+  dimension_z DECIMAL(8,2) DEFAULT NULL,
+  material_id INT DEFAULT NULL,
+  color_id INT DEFAULT NULL,
+  custom_color_hex VARCHAR(7) DEFAULT NULL,
+  infill_density INT DEFAULT 50,
+  surface_finish VARCHAR(20) DEFAULT 'standard',
+  estimated_weight DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
@@ -293,6 +309,7 @@ CREATE TABLE IF NOT EXISTS orders (
 ) ENGINE=InnoDB;
 
 -- ===================== ORDER ITEMS =====================
+-- product_id NULL rows are custom 3D prints (with print config snapshot).
 CREATE TABLE IF NOT EXISTS order_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_id INT NOT NULL,
@@ -305,10 +322,29 @@ CREATE TABLE IF NOT EXISTS order_items (
   price DECIMAL(10,2) NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   total DECIMAL(10,2) NOT NULL,
+  item_type VARCHAR(20) DEFAULT 'product',
+  unit_price DECIMAL(10,2) DEFAULT NULL,
+  file_name VARCHAR(300) DEFAULT NULL,
+  file_url VARCHAR(500) DEFAULT NULL,
+  file_public_id VARCHAR(300) DEFAULT NULL,
+  file_size DECIMAL(10,2) DEFAULT NULL,
+  dimension_x DECIMAL(8,2) DEFAULT NULL,
+  dimension_y DECIMAL(8,2) DEFAULT NULL,
+  dimension_z DECIMAL(8,2) DEFAULT NULL,
+  material_id INT DEFAULT NULL,
+  color_id INT DEFAULT NULL,
+  custom_color_hex VARCHAR(7) DEFAULT NULL,
+  infill_density INT DEFAULT 50,
+  surface_finish VARCHAR(20) DEFAULT 'standard',
+  estimated_weight DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- ===================== MIGRATION: 3D-PRINT-IN-CART (existing DBs) =====================
+-- The server also self-heals via utils/printCartSchema.js, but running these in
+-- phpMyAdmin guarantees the columns exist for older installs.
 
 -- ===================== 3D PRINTING MATERIALS =====================
 CREATE TABLE IF NOT EXISTS printing_materials (
@@ -342,7 +378,7 @@ CREATE TABLE IF NOT EXISTS printing_orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   order_number VARCHAR(50) NOT NULL UNIQUE,
-  status ENUM('pending', 'reviewing', 'in_production', 'printing', 'quality_check', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending',
+  status ENUM('pending', 'confirmed', 'reviewing', 'in_production', 'printing', 'quality_check', 'shipped', 'delivered', 'cancelled') DEFAULT 'confirmed',
   
   -- File Info
   file_name VARCHAR(300) NOT NULL,
@@ -488,7 +524,9 @@ INSERT INTO site_settings (setting_key, setting_value, setting_type, description
 ('whatsapp_number', '+919876543210', 'string', 'WhatsApp Support Number'),
 ('company_address', '123, Maker Street, Koramangala, Bengaluru, Karnataka 560034, India', 'string', 'Office Address'),
 ('business_hours', 'Mon - Sat: 10:00 AM - 7:00 PM | Sunday: Closed', 'string', 'Working Hours'),
-('smooth_finish_per_gram', '3', 'number', 'Extra cost per gram for smooth finish')
+('smooth_finish_per_gram', '3', 'number', 'Extra cost per gram for smooth finish'),
+('printing_delivery_days', '3 - 5 Working Days', 'string', 'Estimated delivery window shown on the 3D printing page'),
+('printing_delivery_region', 'Across India', 'string', 'Delivery region shown on the 3D printing page')
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);
 
 -- Default Categories
@@ -566,301 +604,8 @@ INSERT INTO users (id, first_name, last_name, email, phone, password_hash, role,
 (1, 'Admin', 'ElectroLab', 'admin@electrolab.in', '9876543210', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 1)
 ON DUPLICATE KEY UPDATE email = VALUES(email);
 
--- Customer User (Diprati Das - diprati@example.com / User@1234)
-INSERT INTO users (id, first_name, last_name, email, phone, password_hash, role, is_verified, dob, gender, email_notifications, marketing_updates, order_updates, created_at) VALUES
-(2, 'Diprati', 'Das', 'diprati@example.com', '+91 98765 43210', '$2b$10$7R96bK6z6s1.W15gXj6GzeU8sI7bK/Q49vM9/W0PzY.pXq4j1V3sO', 'customer', 1, '2002-11-03', 'Male', 1, 0, 1, '2024-08-01 10:00:00')
-ON DUPLICATE KEY UPDATE email = VALUES(email);
-
--- Saved Addresses for Diprati Das
-INSERT INTO addresses (id, user_id, type, full_name, phone, address_line1, address_line2, city, state, pincode, country, is_default) VALUES
-(1, 2, 'Home', 'Diprati Das', '+91 98765 43210', '123, Maker Street', 'Koramangala', 'Bengaluru', 'Karnataka', '560034', 'India', 1),
-(2, 2, 'Office', 'Diprati Das', '+91 98765 43210', 'XYZ Tech Park, 5th Floor', 'Outer Ring Road, Bellandur', 'Bengaluru', 'Karnataka', '560103', 'India', 0)
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name);
-
--- Rich ESP32 Product (Matches Screenshot 1)
-INSERT INTO products (
-  id, name, slug, tagline, badge, description, short_description, sku, price, compare_price, 
-  category_id, brand_id, stock, is_active, is_featured, is_bestseller, is_new, tags, 
-  avg_rating, review_count, total_sold,
-  highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, trust_badges
-) VALUES (
-  1,
-  'ESP32 DevKit V1',
-  'esp32-devkit-v1',
-  'Wi-Fi + Bluetooth Development Board',
-  'Bestseller',
-  'The ESP32 DevKit V1 is a feature-rich development board based on the ESP-WROOM-32 module. It combines high performance, low power consumption, and wireless connectivity making it perfect for IoT and embedded applications. With support for both Wi-Fi and Bluetooth (Classic + BLE), it is widely used by hobbyists, students, and professionals.',
-  'Wi-Fi + Bluetooth Development Board with Dual Core Tensilica LX6 Microcontroller',
-  'ESP32-DK-V1',
-  499.00,
-  599.00,
-  1,
-  1,
-  150,
-  1,
-  1,
-  1,
-  0,
-  'esp32,wifi,bluetooth,iot,microcontroller,arduino,espressif',
-  4.80,
-  128,
-  850,
-  JSON_ARRAY(
-    JSON_OBJECT('title', 'Dual Core', 'subtitle', '240 MHz', 'icon', 'cpu'),
-    JSON_OBJECT('title', 'Wi-Fi', 'subtitle', '802.11 b/g/n', 'icon', 'wifi'),
-    JSON_OBJECT('title', 'Bluetooth', 'subtitle', 'v4.2 (BLE)', 'icon', 'bluetooth'),
-    JSON_OBJECT('title', 'Arduino /', 'subtitle', 'MicroPython', 'icon', 'code'),
-    JSON_OBJECT('title', 'Wide', 'subtitle', 'Community Support', 'icon', 'community')
-  ),
-  JSON_ARRAY(
-    'Powered by ESP-WROOM-32 (Dual-core Tensilica LX6)',
-    'Wi-Fi 802.11 b/g/n and Bluetooth v4.2 (BLE + Classic)',
-    '30+ GPIO pins with multiple peripheral support',
-    'Supports Arduino IDE, ESP-IDF, MicroPython',
-    'On-board USB to Serial (CH340 / CP2102)',
-    'Compact and breadboard friendly design'
-  ),
-  JSON_OBJECT(
-    'Microcontroller', 'ESP-WROOM-32 (Tensilica 32-bit LX6)',
-    'Clock Frequency', 'Up to 240 MHz',
-    'Flash Memory', '4 MB (32 MBit) SPI Flash',
-    'SRAM', '520 KB SRAM',
-    'Operating Voltage', '3.3V DC',
-    'Input Voltage', '5V via Micro-USB or 5V-12V Vin pin',
-    'Wi-Fi Protocol', '802.11 b/g/n (up to 150 Mbps)',
-    'Bluetooth', 'Bluetooth v4.2 BR/EDR and BLE specification',
-    'GPIO Pins', '30 Digital I/O pins with PWM, ADC, DAC',
-    'Interfaces', '3x UART, 2x SPI, 2x I2C, 12-bit ADC, 8-bit DAC',
-    'Dimensions', '51.5 mm x 28.5 mm x 12.0 mm',
-    'Weight', '10.5 grams'
-  ),
-  'https://res.cloudinary.com/demo/image/upload/v1/esp32_pinout.png',
-  'Pinout diagram featuring all 30 pins including 5V, 3V3, GND, EN, Touch, ADC, DAC, and SPI channels.',
-  JSON_ARRAY(
-    JSON_OBJECT('title', 'ESP32 Technical Datasheet (PDF)', 'type', 'PDF', 'url', 'https://espressif.com/esp32_datasheet.pdf'),
-    JSON_OBJECT('title', 'ESP32 DevKit V1 Schematic & Pinout', 'type', 'Schematic', 'url', 'https://espressif.com/schematic.pdf'),
-    JSON_OBJECT('title', 'Arduino IDE Setup & IoT Guide', 'type', 'Tutorial', 'url', 'https://docs.espressif.com/projects/arduino-esp32'),
-    JSON_OBJECT('title', 'CP210x / CH340 USB Drivers (Windows & Mac)', 'type', 'Driver', 'url', 'https://silabs.com/drivers')
-  ),
-  JSON_ARRAY(
-    JSON_OBJECT('question', 'Can I power the ESP32 directly via 5V?', 'answer', 'Yes, you can supply 5V through the micro-USB port or via the VIN pin. The on-board voltage regulator drops it to 3.3V.'),
-    JSON_OBJECT('question', 'Is this compatible with the Arduino IDE?', 'answer', 'Yes, simply install the ESP32 board package in the Arduino IDE Boards Manager.'),
-    JSON_OBJECT('question', 'Does it support Bluetooth Low Energy (BLE)?', 'answer', 'Yes, it supports both classic Bluetooth 4.2 and Bluetooth Low Energy (BLE).')
-  ),
-  JSON_ARRAY(
-    'IoT Projects',
-    'Home Automation',
-    'Wireless Sensor Networks',
-    'Robotics',
-    'DIY Electronics',
-    'Smart Wearables'
-  ),
-  JSON_ARRAY(
-    'Original & High Quality',
-    'Tested Before Shipping',
-    '7 Days Easy Returns',
-    'Fast Delivery Across India'
-  )
-) ON DUPLICATE KEY UPDATE name = VALUES(name);
-
--- Product Images for ESP32 DevKit V1
-INSERT INTO product_images (product_id, image_url, alt_text, sort_order, is_primary) VALUES
-(1, 'https://res.cloudinary.com/demo/image/upload/v1/esp32_top.png', 'ESP32 DevKit V1 Top View', 0, 1),
-(1, 'https://res.cloudinary.com/demo/image/upload/v1/esp32_angle.png', 'ESP32 DevKit V1 Angle View', 1, 0),
-(1, 'https://res.cloudinary.com/demo/image/upload/v1/esp32_side.png', 'ESP32 DevKit V1 Side View', 2, 0),
-(1, 'https://res.cloudinary.com/demo/image/upload/v1/esp32_box.png', 'ESP32 DevKit V1 Packaging Box', 3, 0),
-(1, 'https://res.cloudinary.com/demo/image/upload/v1/esp32_bottom.png', 'ESP32 DevKit V1 Bottom View', 4, 0)
-ON DUPLICATE KEY UPDATE image_url = VALUES(image_url);
-
--- Sample Reviews for ESP32
-INSERT INTO reviews (product_id, user_id, rating, title, comment, is_verified_purchase, is_approved) VALUES
-(1, 2, 5, 'Exceptional board for IoT projects!', 'Works right out of the box with Arduino IDE. Bluetooth and Wi-Fi range is phenomenal. Fast delivery too!', 1, 1)
-ON DUPLICATE KEY UPDATE rating = VALUES(rating);
-
--- Sample Related Products (Arduino UNO, Raspberry Pi 4, DHT11, HC-SR04, NodeMCU, 0.96 OLED)
-INSERT INTO products (id, name, slug, tagline, sku, price, compare_price, category_id, brand_id, stock, is_active, avg_rating, review_count, total_sold) VALUES
-(2, 'Arduino UNO R3', 'arduino-uno-r3', 'ATmega328P Development Board', 'ARD-UNO-R3', 649.00, 799.00, 1, 2, 100, 1, 4.90, 93, 400),
-(3, 'Raspberry Pi 4 (4GB)', 'raspberry-pi-4-4gb', 'Single Board Computer 4GB RAM', 'RPI-4-4GB', 4499.00, 5299.00, 1, 3, 45, 1, 4.95, 57, 180),
-(4, 'DHT11 Temperature Sensor', 'dht11-sensor', 'Digital Temp & Humidity Sensor', 'DHT11', 49.00, 79.00, 2, NULL, 500, 1, 4.70, 312, 1200),
-(5, 'HC-SR04 Ultrasonic Sensor', 'hc-sr04-ultrasonic', 'Ultrasonic Distance Measuring Module', 'HC-SR04', 149.00, 199.00, 2, NULL, 300, 1, 4.80, 214, 950),
-(6, 'NodeMCU ESP8266', 'nodemcu-esp8266', 'WiFi IoT Development Board', 'ESP8266-NODEMCU', 299.00, 399.00, 1, 1, 220, 1, 4.75, 575, 1100),
-(7, '0.96" OLED Display', '0-96-oled-display', '128x64 I2C OLED Module Blue', 'OLED-096', 199.00, 299.00, 8, NULL, 160, 1, 4.60, 88, 620),
-(8, 'PLA 3D Printer Filament (Red)', 'pla-filament-red', '1.75mm 1kg Premium Spool', 'PLA-175-RED', 899.00, 1099.00, 5, NULL, 40, 1, 4.85, 45, 120),
-(9, 'Precision Screwdriver Set', 'precision-screwdriver-set', '25-in-1 Repair Tool Kit', 'SCREW-25', 299.00, 399.00, 4, NULL, 80, 1, 4.80, 34, 150)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
-
--- Sample Wishlist for Diprati Das
-INSERT INTO wishlist (user_id, product_id) VALUES
-(2, 3),
-(2, 6)
-ON DUPLICATE KEY UPDATE user_id = VALUES(user_id);
-
--- Sample Order #EL12456 (Matches Screenshots 3 & 4)
-INSERT INTO orders (
-  id, user_id, order_number, status, 
-  shipping_name, shipping_phone, shipping_email, shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
-  billing_name, billing_phone, billing_address1, billing_address2, billing_city, billing_state, billing_pincode, billing_country,
-  delivery_option, shipping_cost, tracking_number, shipping_carrier,
-  packed_at, shipped_at, out_for_delivery_at, delivered_at,
-  payment_method, payment_method_label, payment_status,
-  subtotal, discount, tax_amount, total_amount, created_at
-) VALUES (
-  1,
-  2,
-  'EL12456',
-  'delivered',
-  'Diprati Das',
-  '+91 98765 43210',
-  'diprati@example.com',
-  '123, Maker Street',
-  'Koramangala',
-  'Bengaluru',
-  'Karnataka',
-  '560034',
-  'India',
-  'Diprati Das',
-  '+91 98765 43210',
-  '123, Maker Street',
-  'Koramangala',
-  'Bengaluru',
-  'Karnataka',
-  '560034',
-  'India',
-  'standard',
-  0.00,
-  'BLUEDART-882391024',
-  'BlueDart Express',
-  '2024-08-13 14:15:00',
-  '2024-08-14 11:32:00',
-  '2024-08-15 09:10:00',
-  '2024-08-16 16:32:00',
-  'upi',
-  'UPI (GPay)',
-  'paid',
-  2745.00,
-  0.00,
-  494.10,
-  3239.10,
-  '2024-08-12 10:24:00'
-) ON DUPLICATE KEY UPDATE order_number = VALUES(order_number);
-
--- Order Items for Order #EL12456
-INSERT INTO order_items (order_id, product_id, product_name, category_name, variant_value, price, quantity, total) VALUES
-(1, 1, 'ESP32 DevKit V1', 'Microcontrollers', 'Black', 499.00, 1, 499.00),
-(1, 8, 'PLA 3D Printer Filament', 'Additive & 3D Parts', 'Blue | 1kg', 899.00, 2, 1798.00),
-(1, 9, 'Precision Screwdriver Set', 'Tools & Accessories', '25 in 1', 299.00, 1, 299.00),
-(1, 5, 'HC-SR04 Ultrasonic Sensor', 'Modules & Sensors', 'Standard', 149.00, 1, 149.00)
-ON DUPLICATE KEY UPDATE product_name = VALUES(product_name);
-
--- Sample 3D Print Order #EL12412 (In Production)
-INSERT INTO printing_orders (
-  id, user_id, order_number, status, file_name, file_url, material_id, color_id, quantity,
-  material_cost, subtotal, tax_amount, total_amount, payment_method, payment_status, created_at
-) VALUES (
-  1,
-  2,
-  'EL12412',
-  'in_production',
-  'Custom 3D Print (STL File)',
-  'https://res.cloudinary.com/demo/raw/upload/v1/custom_model.stl',
-  1,
-  2,
-  2,
-  677.12,
-  677.12,
-  121.88,
-  799.00,
-  'upi',
-  'paid',
-  '2024-08-03 15:30:00'
-) ON DUPLICATE KEY UPDATE order_number = VALUES(order_number);
-
--- Sample Order #EL12378 (Shipped)
-INSERT INTO orders (
-  id, user_id, order_number, status, 
-  shipping_name, shipping_phone, shipping_address1, shipping_city, shipping_state, shipping_pincode,
-  delivery_option, shipping_cost, tracking_number, shipping_carrier,
-  shipped_at, payment_method, payment_method_label, payment_status,
-  subtotal, discount, tax_amount, total_amount, created_at
-) VALUES (
-  2,
-  2,
-  'EL12378',
-  'shipped',
-  'Diprati Das',
-  '+91 98765 43210',
-  '123, Maker Street, Koramangala',
-  'Bengaluru',
-  'Karnataka',
-  '560034',
-  'standard',
-  0.00,
-  'DTDC-9921441',
-  'DTDC',
-  '2024-07-29 10:00:00',
-  'card',
-  'Credit Card',
-  'paid',
-  931.35,
-  0.00,
-  167.65,
-  1099.00,
-  '2024-07-28 11:20:00'
-) ON DUPLICATE KEY UPDATE order_number = VALUES(order_number);
-
-INSERT INTO order_items (order_id, product_id, product_name, category_name, price, quantity, total) VALUES
-(2, 2, 'Arduino UNO R3', 'Microcontrollers', 649.00, 1, 649.00),
-(2, 5, 'HC-SR04 Ultrasonic Sensor', 'Modules & Sensors', 149.00, 1, 149.00),
-(2, 4, 'DHT11 Temperature Sensor', 'Modules & Sensors', 49.00, 1, 49.00)
-ON DUPLICATE KEY UPDATE product_name = VALUES(product_name);
-
--- Sample 3D Print Order #EL12310 (Delivered)
-INSERT INTO printing_orders (
-  id, user_id, order_number, status, file_name, file_url, material_id, color_id, quantity,
-  material_cost, subtotal, tax_amount, total_amount, payment_method, payment_status, created_at
-) VALUES (
-  2,
-  2,
-  'EL12310',
-  'delivered',
-  'Custom 3D Print (STL File)',
-  'https://res.cloudinary.com/demo/raw/upload/v1/bracket.stl',
-  2,
-  1,
-  1,
-  550.85,
-  550.85,
-  99.15,
-  650.00,
-  'upi',
-  'paid',
-  '2024-07-12 09:15:00'
-) ON DUPLICATE KEY UPDATE order_number = VALUES(order_number);
-
--- Sample Order #EL12298 (Cancelled)
-INSERT INTO orders (
-  id, user_id, order_number, status, 
-  shipping_name, shipping_phone, shipping_address1, shipping_city, shipping_state, shipping_pincode,
-  payment_method, payment_method_label, payment_status,
-  subtotal, discount, tax_amount, total_amount, cancelled_at, created_at
-) VALUES (
-  3,
-  2,
-  'EL12298',
-  'cancelled',
-  'Diprati Das',
-  '+91 98765 43210',
-  '123, Maker Street, Koramangala',
-  'Bengaluru',
-  'Karnataka',
-  '560034',
-  'cod',
-  'Cash on Delivery',
-  'pending',
-  355.93,
-  0.00,
-  64.07,
-  420.00,
-  '2024-07-06 14:00:00',
-  '2024-07-05 16:45:00'
-) ON DUPLICATE KEY UPDATE order_number = VALUES(order_number);
+-- ============================================================
+-- NOTE: All dummy/sample records (sample users, products, orders,
+-- reviews, wishlist, addresses, product images & demo Cloudinary URLs)
+-- were removed. Add real records via the Admin Panel.
+-- ============================================================

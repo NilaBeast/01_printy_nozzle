@@ -19,7 +19,7 @@ const createCategory = async (req, res) => {
 
     let imageUrl = null;
     if (req.file) {
-      const uploadRes = await uploadFile(req.file.buffer, "categories", "image");
+      const uploadRes = await uploadFile(req.file, "categories", "image");
       imageUrl = uploadRes.secure_url;
     }
 
@@ -69,7 +69,7 @@ const updateCategory = async (req, res) => {
 
     let imageUrl = undefined;
     if (req.file) {
-      const uploadRes = await uploadFile(req.file.buffer, "categories", "image");
+      const uploadRes = await uploadFile(req.file, "categories", "image");
       imageUrl = uploadRes.secure_url;
     }
 

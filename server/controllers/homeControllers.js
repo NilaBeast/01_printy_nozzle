@@ -43,7 +43,7 @@ const getHomeData = async (req, res) => {
 
     // Site Settings
     const [settings] = await db.query(
-      "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('site_name', 'site_tagline', 'support_email', 'support_phone', 'free_shipping_threshold')"
+      "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('site_name', 'site_tagline', 'support_email', 'support_phone', 'free_shipping_threshold', 'gst_rate')"
     );
 
     const siteSettings = {};

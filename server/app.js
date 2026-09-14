@@ -5,12 +5,20 @@ const cors = require("cors");
 const helmet = require("helmet");
 require("dotenv").config();
 
+// Self-healing DB migration for 3D-print-in-cart columns (idempotent)
+try {
+  require("./utils/printCartSchema");
+} catch (e) {
+  console.warn("⚠️ printCartSchema preload skipped:", e.message);
+}
+
 // Client Routers
 const authRoutes = require("./routers/authRoutes");
 const profileRoutes = require("./routers/profileRoutes");
 const homeRoutes = require("./routers/homeRoutes");
 const productRoutes = require("./routers/productRoutes");
 const categoryRoutes = require("./routers/categoryRoutes");
+const brandRoutes = require("./routers/brandRoutes");
 const cartRoutes = require("./routers/cartRoutes");
 const orderRoutes = require("./routers/orderRoutes");
 const checkoutRoutes = require("./routers/checkoutRoutes");
@@ -78,6 +86,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/home", homeRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/brands", brandRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/checkout", checkoutRoutes);

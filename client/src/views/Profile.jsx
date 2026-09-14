@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Settings,
@@ -17,6 +17,7 @@ import profileService from "../services/profile.service";
 
 function Profile() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   /* =====================================================
      AUTO-SCROLL TO ADDRESSES
@@ -41,15 +42,18 @@ function Profile() {
      ===================================================== */
 
   const [isEditing, setIsEditing] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   const [profileData, setProfileData] = useState({
-    firstName: "Diprati",
-    lastName: "Das",
-    email: "diprati@example.com",
-    phone: "+91 98765 43210",
-    dob: "03/11/2002",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    dob: "",
     gender: "Male",
   });
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   const [editData, setEditData] = useState({ ...profileData });
 
@@ -59,44 +63,67 @@ function Profile() {
     orderUpdates: true,
   });
 
-  const [addresses, setAddresses] = useState([
-    {
-      id: 1,
-      type: "Home",
-      icon: "bi-house-door",
-      isDefault: true,
-      name: "Diprati Das",
-      street: "123, Maker Street",
-      area: "Koramangala",
-      city: "Bengaluru, Karnataka 560034",
-      country: "India",
-      phone: "+91 98765 43210",
-    },
-    {
-      id: 2,
-      type: "Office",
-      icon: "bi-building",
-      isDefault: false,
-      name: "Diprati Das",
-      street: "XYZ Tech Park, 5th Floor",
-      area: "Outer Ring Road, Bellandur",
-      city: "Bengaluru, Karnataka 560103",
-      country: "India",
-      phone: "+91 98765 43210",
-    },
-  ]);
+  const [accountSummary, setAccountSummary] = useState({
+    total_orders: 0,
+    wishlist_items: 0,
+    saved_addresses: 0,
+    print_files: 0,
+    member_since: "",
+  });
+
+  const [addresses, setAddresses] = useState([]);
+
+  // Address modal (add / edit)
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressForm, setAddressForm] = useState({
+    type: "Home",
+    full_name: "",
+    phone: "",
+    email: "",
+    address_line1: "",
+    address_line2: "",
+    city: "",
+    state: "",
+    pincode: "",
+    country: "India",
+    is_default: false,
+  });
+
+  // Change password modal
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+    confirm_password: "",
+  });
+
+  const mapAddress = (address) => ({
+    id: address.id,
+    type: address.type || "Home",
+    isDefault: Boolean(address.is_default),
+    name: address.full_name,
+    street: address.address_line1,
+    area: address.address_line2 || "",
+    city: `${address.city}, ${address.state} ${address.pincode}`,
+    country: address.country || "India",
+    phone: address.phone,
+    raw: address,
+  });
 
   useEffect(() => {
     let active = true;
 
     const loadProfile = async () => {
-      if (!localStorage.getItem("token")) return;
+      if (!localStorage.getItem("token")) {
+        navigate("/login", { state: { from: "/profile" } });
+        return;
+      }
 
       try {
-        const [profileResponse, addressesResponse] = await Promise.all([
-          profileService.getProfile(),
-          profileService.getAddresses(),
-        ]);
+        const profileResponse = await profileService.getProfile();
         const profilePayload = profileResponse.data.data;
         const user = profilePayload.profile;
         const nextProfile = {
@@ -105,32 +132,26 @@ function Profile() {
           email: user.email || "",
           phone: user.phone || "",
           dob: user.dob || "",
-          gender: user.gender || "Other",
+          gender: user.gender || "Male",
         };
 
         if (!active) return;
         setProfileData(nextProfile);
         setEditData(nextProfile);
+        setAvatarUrl(user.avatar_url || null);
         setPreferences({
           emailNotifications: Boolean(profilePayload.preferences?.email_notifications ?? true),
           marketingUpdates: Boolean(profilePayload.preferences?.marketing_updates),
           orderUpdates: Boolean(profilePayload.preferences?.order_updates ?? true),
         });
-        setAddresses(
-          (addressesResponse.data.addresses || []).map((address) => ({
-            id: address.id,
-            type: address.type,
-            isDefault: Boolean(address.is_default),
-            name: address.full_name,
-            street: address.address_line1,
-            area: address.address_line2 || "",
-            city: `${address.city}, ${address.state} ${address.pincode}`,
-            country: address.country || "India",
-            phone: address.phone,
-          }))
-        );
+        if (profilePayload.account_summary) {
+          setAccountSummary(profilePayload.account_summary);
+        }
+        setAddresses((profilePayload.saved_addresses || []).map(mapAddress));
       } catch (error) {
         toast.error(error?.response?.data?.message || "Unable to load profile");
+      } finally {
+        if (active) setProfileLoading(false);
       }
     };
 
@@ -140,12 +161,21 @@ function Profile() {
     };
   }, []);
 
+  const reloadAddresses = async () => {
+    try {
+      const res = await profileService.getAddresses();
+      setAddresses((res.data.addresses || []).map(mapAddress));
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load addresses");
+    }
+  };
+
   const summaryData = [
-    { Icon: CreditCard, label: "Total Orders", value: "12" },
-    { Icon: Heart, label: "Wishlist Items", value: "8" },
-    { Icon: MapPin, label: "Saved Addresses", value: "2" },
-    { Icon: Box, label: "3D Print Files", value: "5" },
-    { Icon: CalendarCheck, label: "Member Since", value: "Aug 2024" },
+    { Icon: CreditCard, label: "Total Orders", value: String(accountSummary.total_orders ?? 0) },
+    { Icon: Heart, label: "Wishlist Items", value: String(accountSummary.wishlist_items ?? 0) },
+    { Icon: MapPin, label: "Saved Addresses", value: String(addresses.length) },
+    { Icon: Box, label: "3D Print Files", value: String(accountSummary.print_files ?? 0) },
+    { Icon: CalendarCheck, label: "Member Since", value: accountSummary.member_since || "—" },
   ];
 
   /* =====================================================
@@ -208,12 +238,93 @@ function Profile() {
     }
   };
 
+  const resetAddressForm = () => {
+    setAddressForm({
+      type: "Home",
+      full_name: "",
+      phone: "",
+      email: "",
+      address_line1: "",
+      address_line2: "",
+      city: "",
+      state: "",
+      pincode: "",
+      country: "India",
+      is_default: false,
+    });
+    setEditingAddressId(null);
+  };
+
   const handleAddAddress = () => {
-    toast.info("Add address feature coming soon!");
+    resetAddressForm();
+    setAddressForm((prev) => ({
+      ...prev,
+      full_name: `${profileData.firstName} ${profileData.lastName}`.trim(),
+      phone: profileData.phone || "",
+      email: profileData.email || "",
+    }));
+    setAddressModalOpen(true);
   };
 
   const handleEditAddress = (id) => {
-    toast.info("Edit address feature coming soon!");
+    const found = addresses.find((address) => address.id === id);
+    if (!found?.raw) return;
+    const raw = found.raw;
+    setAddressForm({
+      type: raw.type || "Home",
+      full_name: raw.full_name || "",
+      phone: raw.phone || "",
+      email: raw.email || "",
+      address_line1: raw.address_line1 || "",
+      address_line2: raw.address_line2 || "",
+      city: raw.city || "",
+      state: raw.state || "",
+      pincode: raw.pincode || "",
+      country: raw.country || "India",
+      is_default: Boolean(raw.is_default),
+    });
+    setEditingAddressId(id);
+    setAddressModalOpen(true);
+  };
+
+  const handleSaveAddress = async (e) => {
+    e.preventDefault();
+    const { full_name, phone, address_line1, city, state, pincode } = addressForm;
+    if (!full_name.trim() || !phone.trim() || !address_line1.trim() || !city.trim() || !state.trim() || !pincode.trim()) {
+      toast.warn("Full name, phone, address, city, state and pincode are required.");
+      return;
+    }
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      toast.warn("Please enter a valid 6-digit pincode.");
+      return;
+    }
+    setAddressSaving(true);
+    try {
+      if (editingAddressId) {
+        const res = await profileService.updateAddress(editingAddressId, addressForm);
+        toast.success(res.data?.message || "Address updated successfully!");
+      } else {
+        const res = await profileService.addAddress(addressForm);
+        toast.success(res.data?.message || "Address added successfully!");
+      }
+      setAddressModalOpen(false);
+      resetAddressForm();
+      await reloadAddresses();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to save address");
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+
+  const handleSetDefaultAddress = async (id) => {
+    try {
+      await profileService.setDefaultAddress(id);
+      toast.success("Default address updated");
+      await reloadAddresses();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to set default address");
+    }
   };
 
   const handleRemoveAddress = (id) => {
@@ -227,11 +338,67 @@ function Profile() {
   };
 
   const handleChangePassword = () => {
-    toast.info("Change password feature coming soon!");
+    setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+    setPasswordModalOpen(true);
   };
 
-  const handleChangePhoto = () => {
-    toast.info("Change photo feature coming soon!");
+  const handleSavePassword = async (e) => {
+    e.preventDefault();
+    if (!passwordForm.current_password || !passwordForm.new_password) {
+      toast.warn("Current and new passwords are required.");
+      return;
+    }
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      toast.warn("New password and confirmation do not match.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const res = await profileService.changePassword(passwordForm);
+      toast.success(res.data?.message || "Password changed successfully!");
+      setPasswordModalOpen(false);
+      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Password change failed");
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handlePhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/jpg", "image/webp"].includes(file.type)) {
+      toast.warn("Please choose a JPG or PNG image.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.warn("Image must be under 2MB.");
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const res = await profileService.uploadAvatar(file);
+      const url = res.data?.avatar_url;
+      if (url) {
+        setAvatarUrl(url);
+        try {
+          const stored = JSON.parse(localStorage.getItem("user") || "null");
+          if (stored) {
+            localStorage.setItem("user", JSON.stringify({ ...stored, avatar_url: url }));
+            window.dispatchEvent(new Event("authChange"));
+          }
+        } catch (err) {
+          /* non-fatal */
+        }
+      }
+      toast.success(res.data?.message || "Profile photo updated!");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Photo upload failed");
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   /* =====================================================
@@ -256,6 +423,11 @@ function Profile() {
       {/* ======================== CONTENT ======================== */}
 
       <div className="profile-content">
+        {profileLoading ? (
+          <div className="profile-card" style={{ padding: 40, textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+            Loading your profile...
+          </div>
+        ) : (
         <div className="profile-grid">
           {/* ==================== LEFT COLUMN ==================== */}
 
@@ -325,18 +497,30 @@ function Profile() {
 
                   <div className="profile-avatar-section">
                     <div className="profile-avatar">
-                      {getInitials()}
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="Profile" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                      ) : (
+                        getInitials() || "U"
+                      )}
                     </div>
 
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg,image/webp"
+                      id="profile-photo-input"
+                      style={{ display: "none" }}
+                      onChange={handlePhotoFile}
+                    />
                     <button
                       className="profile-change-photo-btn"
-                      onClick={handleChangePhoto}
+                      onClick={() => document.getElementById("profile-photo-input")?.click()}
+                      disabled={photoUploading}
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M6.76 22h10.48c2.76 0 3.86-1.69 3.99-3.75l.52-8.26A3.753 3.753 0 0018 6c-.61 0-1.17-.35-1.45-.89l-.72-1.45C15.37 2.75 14.17 2 13.15 2h-2.29c-1.03 0-2.23.75-2.69 1.66l-.72 1.45C7.17 5.65 6.61 6 6 6 3.83 6 2.11 7.83 2.25 9.99l.52 8.26C2.9 20.31 4 22 6.76 22z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="2"/>
                       </svg>
-                      Change Photo
+                      {photoUploading ? "Uploading..." : "Change Photo"}
                     </button>
 
                     <span className="profile-photo-hint">
@@ -377,10 +561,8 @@ function Profile() {
                         type="email"
                         className="profile-email-input"
                         value={data.email}
-                        disabled={!isEditing}
-                        onChange={(e) =>
-                          handleFieldChange("email", e.target.value)
-                        }
+                        disabled
+                        title="Email address cannot be changed"
                       />
                     </div>
 
@@ -400,9 +582,10 @@ function Profile() {
                       <label>Date of Birth</label>
                       <div className="profile-input-with-icon">
                         <input
-                          type="text"
+                          type="date"
                           value={data.dob}
                           disabled={!isEditing}
+                          max={new Date().toISOString().split("T")[0]}
                           onChange={(e) =>
                             handleFieldChange("dob", e.target.value)
                           }
@@ -493,7 +676,16 @@ function Profile() {
               </div>
 
               <div className="profile-addresses-grid">
-                {addresses.map((address) => (
+                {addresses.length === 0 ? (
+                  <div className="profile-address-empty">
+                    <MapPin size={28} color="#94a3b8" />
+                    <p>No saved addresses yet. Add one for faster checkout.</p>
+                    <button className="profile-add-address-btn" onClick={handleAddAddress}>
+                      Add New Address
+                    </button>
+                  </div>
+                ) : (
+                  addresses.map((address) => (
                   <div className="profile-address-card" key={address.id}>
                     <div className="profile-address-card-inner">
                       <div className="profile-address-card-header">
@@ -533,6 +725,14 @@ function Profile() {
                     </div>
 
                     <div className="profile-address-actions">
+                      {!address.isDefault && (
+                        <button
+                          className="profile-address-action-btn default-btn"
+                          onClick={() => handleSetDefaultAddress(address.id)}
+                        >
+                          Set Default
+                        </button>
+                      )}
                       <button
                         className="profile-address-action-btn edit-btn"
                         onClick={() => handleEditAddress(address.id)}
@@ -554,7 +754,8 @@ function Profile() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  )))
+                }
               </div>
             </div>
           </div>
@@ -811,7 +1012,121 @@ function Profile() {
             </div>
           </div>
         </div>
+        )}
       </div>
+
+      {/* ================= ADDRESS MODAL ================= */}
+      {addressModalOpen && (
+        <div className="profile-modal-backdrop" onClick={() => setAddressModalOpen(false)}>
+          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="profile-modal-header">
+              <h3>{editingAddressId ? "Edit Address" : "Add New Address"}</h3>
+              <button type="button" className="profile-modal-close" onClick={() => setAddressModalOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSaveAddress}>
+              <div className="profile-modal-grid">
+                <label>
+                  <span>Label</span>
+                  <select value={addressForm.type} onChange={(e) => setAddressForm({ ...addressForm, type: e.target.value })}>
+                    <option value="Home">Home</option>
+                    <option value="Office">Office</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Full Name *</span>
+                  <input value={addressForm.full_name} onChange={(e) => setAddressForm({ ...addressForm, full_name: e.target.value })} required />
+                </label>
+                <label>
+                  <span>Phone *</span>
+                  <input value={addressForm.phone} onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })} required />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input type="email" value={addressForm.email} onChange={(e) => setAddressForm({ ...addressForm, email: e.target.value })} />
+                </label>
+                <label className="profile-modal-full">
+                  <span>Address Line 1 *</span>
+                  <input value={addressForm.address_line1} onChange={(e) => setAddressForm({ ...addressForm, address_line1: e.target.value })} required />
+                </label>
+                <label className="profile-modal-full">
+                  <span>Address Line 2</span>
+                  <input value={addressForm.address_line2} onChange={(e) => setAddressForm({ ...addressForm, address_line2: e.target.value })} />
+                </label>
+                <label>
+                  <span>City *</span>
+                  <input value={addressForm.city} onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })} required />
+                </label>
+                <label>
+                  <span>State *</span>
+                  <input value={addressForm.state} onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })} required />
+                </label>
+                <label>
+                  <span>Pincode *</span>
+                  <input value={addressForm.pincode} onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })} maxLength={6} required />
+                </label>
+                <label>
+                  <span>Country</span>
+                  <input value={addressForm.country} onChange={(e) => setAddressForm({ ...addressForm, country: e.target.value })} />
+                </label>
+              </div>
+              <label className="profile-modal-check">
+                <input type="checkbox" checked={addressForm.is_default} onChange={(e) => setAddressForm({ ...addressForm, is_default: e.target.checked })} />
+                Set as default address
+              </label>
+              <div className="profile-modal-actions">
+                <button type="button" className="profile-cancel-btn" onClick={() => setAddressModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="profile-save-btn" disabled={addressSaving}>
+                  {addressSaving ? "Saving..." : editingAddressId ? "Update Address" : "Add Address"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= PASSWORD MODAL ================= */}
+      {passwordModalOpen && (
+        <div className="profile-modal-backdrop" onClick={() => setPasswordModalOpen(false)}>
+          <div className="profile-modal profile-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="profile-modal-header">
+              <h3>Change Password</h3>
+              <button type="button" className="profile-modal-close" onClick={() => setPasswordModalOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSavePassword}>
+              <div className="profile-modal-grid profile-modal-single">
+                <label>
+                  <span>Current Password *</span>
+                  <input type="password" value={passwordForm.current_password} onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })} required />
+                </label>
+                <label>
+                  <span>New Password *</span>
+                  <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })} required />
+                </label>
+                <label>
+                  <span>Confirm New Password *</span>
+                  <input type="password" value={passwordForm.confirm_password} onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })} required />
+                </label>
+              </div>
+              <p className="profile-modal-hint">Minimum 8 characters with uppercase, lowercase, number and special character.</p>
+              <div className="profile-modal-actions">
+                <button type="button" className="profile-cancel-btn" onClick={() => setPasswordModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="profile-save-btn" disabled={passwordSaving}>
+                  {passwordSaving ? "Updating..." : "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

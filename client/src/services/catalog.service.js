@@ -45,7 +45,14 @@ const catalogService = {
   getProducts: (params = {}) => api.get("/products", { params }),
   getProduct: (id) => api.get(`/products/${id}`),
   getCategories: () => api.get("/categories"),
+  getBrands: () => api.get("/brands"),
+  getPrintingConfig: () => api.get("/printing/config"),
   checkPincode: (pincode) => api.post("/products/check-pincode", { pincode }),
+  getContactInfo: () => api.get("/contact/info"),
+  submitContact: (payload) => api.post("/contact", payload),
+  subscribeNewsletter: (email) => api.post("/newsletter/subscribe", { email }),
+  getProductReviews: (productId, params = {}) => api.get(`/reviews/${productId}`, { params }),
+  submitReview: (productId, payload) => api.post(`/reviews/${productId}`, payload),
 };
 
 export default catalogService;

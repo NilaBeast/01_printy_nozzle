@@ -1,4 +1,8 @@
 const db = require("../config/db");
+const { calculateCouponTotals, round2 } = require("../utils/couponHelper");
+const { ensurePrintCartSchema } = require("../utils/printCartSchema");
+const { calculatePrintPrice } = require("../utils/priceCalculator");
+const crypto = require("crypto");
 
 /* ===================== FORMAT HELPER ===================== */
 const formatDate = (date) => {
@@ -124,7 +128,7 @@ const getUserOrders = async (req, res) => {
     for (const ord of orders) {
       const [items] = await db.query(
         `SELECT oi.id, oi.product_name, oi.category_name, oi.variant_value, oi.price, oi.quantity, oi.total,
-                COALESCE(oi.product_image, (SELECT image_url FROM product_images WHERE product_id = oi.product_id AND is_primary = 1 LIMIT 1), 'https://res.cloudinary.com/demo/image/upload/sample.jpg') as image_url
+                COALESCE(oi.product_image, (SELECT image_url FROM product_images WHERE product_id = oi.product_id AND is_primary = 1 LIMIT 1), '') as image_url
          FROM order_items oi
          WHERE oi.order_id = ?`,
         [ord.id]
@@ -159,7 +163,7 @@ const getUserOrders = async (req, res) => {
       let pParams = [userId];
 
       if (status === "processing") {
-        pWhere.push("po.status IN ('pending', 'reviewing', 'in_production', 'printing', 'quality_check')");
+        pWhere.push("po.status IN ('confirmed', 'reviewing', 'in_production', 'printing', 'quality_check')");
       } else if (status === "delivered" || status === "cancelled") {
         pWhere.push("po.status = ?");
         pParams.push(status);
@@ -204,13 +208,9 @@ const getUserOrders = async (req, res) => {
         quantity: po.quantity,
         items_count: po.quantity,
         items_summary: `Custom 3D Print (${po.file_name}) - Material: ${po.material_name} | Color: ${po.color_name} | Qty: ${po.quantity}`,
-        thumbnails: [
-          "https://res.cloudinary.com/demo/image/upload/v1/3d_print_icon.png",
-          "https://res.cloudinary.com/demo/image/upload/v1/filament_spool.png",
-          "https://res.cloudinary.com/demo/image/upload/v1/nozzle_icon.png",
-        ],
-        additional_items_count: 2,
-        can_cancel: ["pending", "reviewing"].includes(po.status),
+        thumbnails: [],
+        additional_items_count: 0,
+        can_cancel: ["confirmed", "reviewing"].includes(po.status),
         can_track: ["shipped", "in_production", "printing"].includes(po.status),
         can_reorder: true,
         can_return: false,
@@ -267,7 +267,7 @@ const getOrderById = async (req, res) => {
     // Order items
     const [items] = await db.query(
       `SELECT oi.*, p.slug as product_slug,
-              COALESCE(oi.product_image, (SELECT image_url FROM product_images WHERE product_id = oi.product_id AND is_primary = 1 LIMIT 1), 'https://res.cloudinary.com/demo/image/upload/sample.jpg') as image_url
+              COALESCE(oi.product_image, (SELECT image_url FROM product_images WHERE product_id = oi.product_id AND is_primary = 1 LIMIT 1), '') as image_url
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = ?`,
@@ -518,41 +518,92 @@ const createOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    const [cartItems] = await connection.query(
-      `SELECT ci.*, p.name as product_name, p.price, p.stock, p.category_id,
-              c.name as category_name,
-              pv.variant_name, pv.variant_value, pv.price_adjustment,
-              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as product_image
-       FROM cart_items ci
-       JOIN products p ON ci.product_id = p.id
-       LEFT JOIN categories c ON p.category_id = c.id
-       LEFT JOIN product_variants pv ON ci.variant_id = pv.id
-       WHERE ci.cart_id = ?`,
-      [cart[0].id]
-    );
+    await ensurePrintCartSchema().catch(() => {});
+
+    let cartItems;
+    try {
+      [cartItems] = await connection.query(
+        `SELECT ci.*, p.name as product_name, p.price, p.stock, p.category_id,
+                c.name as category_name,
+                pv.variant_name, pv.variant_value, pv.price_adjustment,
+                ci.item_type, ci.unit_price as print_unit_price,
+                ci.file_name, ci.file_url, ci.file_public_id, ci.file_size,
+                ci.dimension_x, ci.dimension_y, ci.dimension_z,
+                ci.material_id, ci.color_id, ci.custom_color_hex,
+                ci.infill_density, ci.surface_finish, ci.estimated_weight,
+                pm.name as material_name, pc.name as color_name, pc.hex_code as color_hex,
+                (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as product_image
+         FROM cart_items ci
+         LEFT JOIN products p ON ci.product_id = p.id
+         LEFT JOIN categories c ON p.category_id = c.id
+         LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+         LEFT JOIN printing_materials pm ON ci.material_id = pm.id
+         LEFT JOIN printing_colors pc ON ci.color_id = pc.id
+         WHERE ci.cart_id = ?`,
+        [cart[0].id]
+      );
+    } catch (e) {
+      if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
+        [cartItems] = await connection.query(
+          `SELECT ci.*, p.name as product_name, p.price, p.stock, p.category_id,
+                  c.name as category_name,
+                  pv.variant_name, pv.variant_value, pv.price_adjustment,
+                  (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as product_image
+           FROM cart_items ci
+           JOIN products p ON ci.product_id = p.id
+           LEFT JOIN categories c ON p.category_id = c.id
+           LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+           WHERE ci.cart_id = ?`,
+          [cart[0].id]
+        );
+      } else {
+        throw e;
+      }
+    }
 
     if (cartItems.length === 0) {
       await connection.rollback();
       return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    // Check stock & calculate subtotal
+    const isPrintCartItem = (it) => it.item_type === "print" || it.product_id == null;
+
+    // Check stock & calculate subtotal (products + 3D prints)
     let subtotal = 0;
     for (const item of cartItems) {
-      const itemStock = item.variant_id ? item.stock : item.stock;
-      if (itemStock < item.quantity) {
+      if (isPrintCartItem(item)) {
+        const unit = parseFloat(item.print_unit_price ?? item.unit_price ?? 0);
+        if (!Number.isFinite(unit) || unit < 0) {
+          await connection.rollback();
+          return res.status(400).json({ success: false, message: "Invalid 3D print price in cart" });
+        }
+        subtotal += unit * item.quantity;
+        continue;
+      }
+      const itemStock = item.stock;
+      if (itemStock == null || itemStock < item.quantity) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: `Not enough stock for ${item.product_name}. Available: ${itemStock}`,
+          message: `Not enough stock for ${item.product_name}. Available: ${itemStock ?? 0}`,
         });
       }
       const itemPrice = parseFloat(item.price) + parseFloat(item.price_adjustment || 0);
       subtotal += itemPrice * item.quantity;
     }
+    subtotal = round2(subtotal);
 
-    // Coupon calculation
-    let discount = 0;
+    // Settings first (needed for GST-aware coupon)
+    const [settings] = await connection.query(
+      "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('free_shipping_threshold', 'standard_shipping_cost', 'express_shipping_cost', 'same_day_shipping_cost', 'gst_rate', 'smooth_finish_per_gram')"
+    );
+    const configMap = {};
+    settings.forEach((s) => (configMap[s.setting_key] = s.setting_value));
+
+    const gstRate = parseFloat(configMap.gst_rate || 18);
+
+    // Coupon calculation — discount on FULL price incl. GST
+    let couponRow = null;
     let couponId = null;
     let couponCode = null;
     if (cart[0].coupon_id) {
@@ -560,31 +611,18 @@ const createOrder = async (req, res) => {
         "SELECT * FROM coupons WHERE id = ? AND is_active = 1 AND (valid_until IS NULL OR valid_until > NOW())",
         [cart[0].coupon_id]
       );
-      if (coupons.length > 0) {
-        const coupon = coupons[0];
-        if (subtotal >= parseFloat(coupon.min_order_amount)) {
-          couponId = coupon.id;
-          couponCode = coupon.code;
-          if (coupon.discount_type === "percentage") {
-            discount = (subtotal * parseFloat(coupon.discount_value)) / 100;
-            if (coupon.max_discount && discount > parseFloat(coupon.max_discount)) {
-              discount = parseFloat(coupon.max_discount);
-            }
-          } else {
-            discount = parseFloat(coupon.discount_value);
-          }
-          await connection.query("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?", [coupon.id]);
-        }
+      if (coupons.length > 0 && subtotal >= parseFloat(coupons[0].min_order_amount || 0)) {
+        couponRow = coupons[0];
+        couponId = couponRow.id;
+        couponCode = couponRow.code;
+        await connection.query("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?", [couponRow.id]);
       }
     }
+    const couponTotals = calculateCouponTotals({ subtotal, gstRate, coupon: couponRow });
+    const discount = couponTotals.discount;
+    const taxAmount = couponTotals.taxAmount;
 
     // Shipping cost
-    const [settings] = await connection.query(
-      "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('free_shipping_threshold', 'standard_shipping_cost', 'express_shipping_cost', 'same_day_shipping_cost', 'gst_rate')"
-    );
-    const configMap = {};
-    settings.forEach((s) => (configMap[s.setting_key] = s.setting_value));
-
     const freeThreshold = parseFloat(configMap.free_shipping_threshold || 999);
     let shippingCost = 0;
 
@@ -596,11 +634,8 @@ const createOrder = async (req, res) => {
       shippingCost = subtotal >= freeThreshold ? 0 : parseFloat(configMap.standard_shipping_cost || 0);
     }
 
-    // GST Tax calculation
-    const gstRate = parseFloat(configMap.gst_rate || 18);
-    const taxableAmount = Math.max(0, subtotal - discount);
-    const taxAmount = (taxableAmount * gstRate) / 100;
-    const totalAmount = taxableAmount + taxAmount + shippingCost;
+    // Total = (subtotal + GST) - discount (coupon on full incl-GST price) + shipping
+    const totalAmount = round2(couponTotals.totalAmount + shippingCost);
 
     // Resolve address
     let shipName = shipping_name;
@@ -631,10 +666,10 @@ const createOrder = async (req, res) => {
     const orderNumber = `EL${Math.floor(10000 + Math.random() * 90000)}`;
 
     const methodLabels = {
-      upi: "UPI (GPay)",
-      card: "Credit / Debit Card",
-      net_banking: "Net Banking",
-      wallet: "Digital Wallet",
+      upi: "Online Payment (Razorpay)",
+      card: "Online Payment (Razorpay)",
+      net_banking: "Online Payment (Razorpay)",
+      wallet: "Online Payment (Razorpay)",
       cod: "Cash on Delivery",
     };
 
@@ -670,8 +705,11 @@ const createOrder = async (req, res) => {
         delivery_option,
         shippingCost,
         payment_method,
-        methodLabels[payment_method] || "Cash on Delivery",
-        payment_method === "cod" ? "pending" : "paid",
+        methodLabels[payment_method] || "Online Payment (Razorpay)",
+        // Every new order starts "pending". Razorpay orders flip to "paid"
+        // in verify-payment; this keeps the order visible under My Orders
+        // even if the customer closes the gateway without paying.
+        "pending",
         subtotal.toFixed(2),
         discount.toFixed(2),
         taxAmount.toFixed(2),
@@ -684,8 +722,197 @@ const createOrder = async (req, res) => {
 
     const orderId = orderResult.insertId;
 
-    // Insert Order Items & Deduct stock
+    // Insert Order Items & Deduct stock (products) / track prints
+    let printAwareOrderItems = true;
+    try {
+      await connection.query("SELECT item_type FROM order_items LIMIT 0");
+    } catch (e) {
+      if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
+        printAwareOrderItems = false;
+      } else if (e && e.code === "ER_NO_SUCH_TABLE") {
+        printAwareOrderItems = false;
+      } else {
+        // SELECT ... LIMIT 0 on empty table still works; if table missing other error, keep true
+        // Check via information schema fallback: assume print-aware if ensure ran
+        printAwareOrderItems = true;
+      }
+    }
+    // More reliable: check information_schema for one print column
+    try {
+      const [colCheck] = await connection.query(
+        `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_items' AND COLUMN_NAME = 'file_name' LIMIT 1`
+      );
+      printAwareOrderItems = colCheck.length > 0;
+    } catch (e) {
+      /* keep previous value */
+    }
+
     for (const item of cartItems) {
+      if (isPrintCartItem(item)) {
+        const unit = round2(parseFloat(item.print_unit_price ?? item.unit_price ?? 0));
+        const itemTotal = round2(unit * item.quantity);
+        const materialLabel = item.material_name || "3D Print";
+        const colorLabel = item.color_name || item.custom_color_hex || "Custom";
+        const infillLabel = `${item.infill_density || 50}%`;
+        const finishLabel = item.surface_finish === "smooth" ? "Smooth" : "Standard";
+        const printName = `Custom 3D Print (${item.file_name || "model"})`;
+        const variantSummary = `${materialLabel} • ${colorLabel} • ${infillLabel} • ${finishLabel}`;
+
+        if (printAwareOrderItems) {
+          await connection.query(
+            `INSERT INTO order_items
+              (order_id, product_id, product_name, product_image, category_name,
+               variant_name, variant_value, price, quantity, total,
+               item_type, unit_price,
+               file_name, file_url, file_public_id, file_size,
+               dimension_x, dimension_y, dimension_z,
+               material_id, color_id, custom_color_hex,
+               infill_density, surface_finish, estimated_weight)
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?,
+               'print', ?,
+               ?, ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?)`,
+            [
+              orderId,
+              printName,
+              "/images/rocket.png",
+              "3D Printing",
+              materialLabel,
+              variantSummary,
+              unit.toFixed(2),
+              item.quantity,
+              itemTotal.toFixed(2),
+              unit.toFixed(2),
+              item.file_name || null,
+              item.file_url || null,
+              item.file_public_id || null,
+              item.file_size != null ? Number(item.file_size) : null,
+              item.dimension_x != null ? Number(item.dimension_x) : null,
+              item.dimension_y != null ? Number(item.dimension_y) : null,
+              item.dimension_z != null ? Number(item.dimension_z) : null,
+              item.material_id || null,
+              item.color_id || null,
+              item.custom_color_hex || null,
+              item.infill_density || 50,
+              item.surface_finish || "standard",
+              item.estimated_weight != null ? Number(item.estimated_weight) : null,
+            ]
+          );
+        } else {
+          await connection.query(
+            `INSERT INTO order_items (order_id, product_id, product_name, product_image, category_name, variant_name, variant_value, price, quantity, total)
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              orderId,
+              printName,
+              "/images/rocket.png",
+              "3D Printing",
+              materialLabel,
+              variantSummary,
+              unit.toFixed(2),
+              item.quantity,
+              itemTotal.toFixed(2),
+            ]
+          );
+        }
+
+        // Mirror into printing_orders so the print queue / admin keeps working
+        try {
+          if (!item.material_id) {
+            console.error("⛔ Mirror aborted: material_id is missing for print cart item", {
+              cart_item_id: item.id,
+              file_name: item.file_name,
+              material_id: item.material_id,
+            });
+          } else {
+            const [matRows] = await connection.query(
+              "SELECT price_per_gram FROM printing_materials WHERE id = ?",
+              [item.material_id]
+            );
+            const pricePerGram = matRows.length ? parseFloat(matRows[0].price_per_gram) : 12;
+            let colorAdj = 0;
+            if (item.color_id) {
+              const [cRows] = await connection.query(
+                "SELECT price_adjustment FROM printing_colors WHERE id = ?",
+                [item.color_id]
+              );
+              if (cRows.length) colorAdj = parseFloat(cRows[0].price_adjustment || 0);
+            }
+            const smoothPerGram = parseFloat(configMap.smooth_finish_per_gram || 3);
+            const breakdown = calculatePrintPrice({
+              estimatedWeight: parseFloat(item.estimated_weight || 20),
+              pricePerGram,
+              infillDensity: parseInt(item.infill_density) || 50,
+              surfaceFinish: item.surface_finish || "standard",
+              smoothFinishPerGram: smoothPerGram,
+              colorAdjustment: colorAdj,
+              quantity: parseInt(item.quantity) || 1,
+              gstRate,
+            });
+            const printOrderNumber =
+              "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
+            await connection.query(
+              `INSERT INTO printing_orders (
+                user_id, order_number, status,
+                file_name, file_url, file_public_id, file_size,
+                dimension_x, dimension_y, dimension_z,
+                material_id, color_id, custom_color_hex,
+                infill_density, surface_finish, quantity,
+                estimated_weight, material_cost, color_cost, finish_cost,
+                subtotal, tax_amount, total_amount,
+                shipping_name, shipping_phone, shipping_address1,
+                shipping_city, shipping_state, shipping_pincode,
+                payment_method, payment_status, notes
+              ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                userId,
+                printOrderNumber,
+                item.file_name || "model.stl",
+                item.file_url || "",
+                item.file_public_id || null,
+                item.file_size || null,
+                item.dimension_x || null,
+                item.dimension_y || null,
+                item.dimension_z || null,
+                item.material_id,
+                item.color_id || null,
+                item.custom_color_hex || null,
+                parseInt(item.infill_density) || 50,
+                item.surface_finish || "standard",
+                parseInt(item.quantity) || 1,
+                breakdown.effectiveWeight,
+                breakdown.materialCost,
+                breakdown.colorCost,
+                breakdown.finishCost,
+                breakdown.subtotal,
+                breakdown.taxAmount,
+                breakdown.totalAmount,
+                shipName,
+                shipPhone,
+                shipAdd1,
+                shipCity,
+                shipState,
+                shipPin,
+                payment_method,
+                payment_method === "cod" ? "pending" : "paid",
+                `Part of e-commerce order ${orderNumber}`,
+              ]
+            );
+            console.log(`✅ Mirrored print item to printing_orders: ${printOrderNumber}`);
+          }
+        } catch (printMirrorErr) {
+          console.error("⛔ Failed to mirror print item to printing_orders:", printMirrorErr.message, {
+            file_name: item.file_name,
+            material_id: item.material_id,
+            color_id: item.color_id,
+            stack: printMirrorErr.stack,
+          });
+        }
+        continue;
+      }
+
       const itemPrice = parseFloat(item.price) + parseFloat(item.price_adjustment || 0);
       const itemTotal = itemPrice * item.quantity;
 

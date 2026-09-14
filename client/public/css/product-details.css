@@ -981,3 +981,25 @@ section.pd-related-wrapper,
     grid-template-columns: 1fr;
   }
 }
+
+/* Reviewer avatar shown next to customer reviews */
+.pd-reviewer-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #e9eef6;
+  color: #102033;
+  font-size: 15px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pd-reviewer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

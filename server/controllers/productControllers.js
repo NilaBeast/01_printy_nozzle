@@ -303,17 +303,17 @@ const checkDeliveryPincode = async (req, res) => {
       });
     }
 
-    // Default fallback estimation for unlisted valid 6-digit pincodes in India
+    // Every valid 6-digit PIN code is deliverable across India.
+    // Known pincodes get their city-specific ETA; all others fall back
+    // to the standard delivery window instead of being rejected.
     return res.status(200).json({
       success: true,
       pincode: cleanPin,
       is_serviceable: true,
-      city: "Standard Delivery Location",
-      state: "India",
-      estimated_delivery: "4 - 6 working days",
+      estimated_delivery: "3 - 5 working days",
       cod_available: true,
-      express_available: false,
-      message: "Usually delivers in 4 - 6 working days",
+      express_available: true,
+      message: `Great! PIN code ${cleanPin} is serviceable for Fast Delivery!`,
     });
   } catch (error) {
     console.error("Check pincode delivery error:", error);
