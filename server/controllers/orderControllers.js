@@ -491,6 +491,99 @@ const getOrderInvoice = async (req, res) => {
 /* ===================== CREATE ORDER (CHECKOUT) ===================== */
 const createOrder = async (req, res) => {
   const connection = await db.getConnection();
+
+  /* Insert one 3D-print cart item into printing_orders and return its id/number/total.
+     Used for print-only checkouts (no `orders` row) and to mirror prints
+     inside mixed checkouts (the `orders` row still carries products). */
+  const insertPrintingOrderRow = async ({ item, ship, payment_method, payment_status, gstRate, smoothPerGram, notes }) => {
+    if (!item.material_id) {
+      console.error("⛔ Printing order aborted: material_id is missing for print cart item", {
+        cart_item_id: item.id,
+        file_name: item.file_name,
+        material_id: item.material_id,
+      });
+      throw new Error("A 3D print item is missing its material. Please re-add it from 3D Printing.");
+    }
+    const [matRows] = await connection.query(
+      "SELECT price_per_gram FROM printing_materials WHERE id = ?",
+      [item.material_id]
+    );
+    const pricePerGram = matRows.length ? parseFloat(matRows[0].price_per_gram) : 12;
+    let colorAdj = 0;
+    if (item.color_id) {
+      const [cRows] = await connection.query(
+        "SELECT price_adjustment FROM printing_colors WHERE id = ?",
+        [item.color_id]
+      );
+      if (cRows.length) colorAdj = parseFloat(cRows[0].price_adjustment || 0);
+    }
+    const breakdown = calculatePrintPrice({
+      estimatedWeight: parseFloat(item.estimated_weight || 20),
+      pricePerGram,
+      infillDensity: parseInt(item.infill_density) || 50,
+      surfaceFinish: item.surface_finish || "standard",
+      smoothFinishPerGram: smoothPerGram,
+      colorAdjustment: colorAdj,
+      quantity: parseInt(item.quantity) || 1,
+      gstRate,
+    });
+    const printOrderNumber =
+      "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
+    const [insertRes] = await connection.query(
+      `INSERT INTO printing_orders (
+        user_id, order_number, status,
+        file_name, file_url, file_public_id, file_size,
+        dimension_x, dimension_y, dimension_z,
+        material_id, color_id, custom_color_hex,
+        infill_density, surface_finish, quantity,
+        estimated_weight, material_cost, color_cost, finish_cost,
+        subtotal, tax_amount, total_amount,
+        shipping_name, shipping_phone, shipping_address1,
+        shipping_city, shipping_state, shipping_pincode,
+        payment_method, payment_status, notes
+      ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.id,
+        printOrderNumber,
+        item.file_name || "model.stl",
+        item.file_url || "",
+        item.file_public_id || null,
+        item.file_size || null,
+        item.dimension_x || null,
+        item.dimension_y || null,
+        item.dimension_z || null,
+        item.material_id,
+        item.color_id || null,
+        item.custom_color_hex || null,
+        parseInt(item.infill_density) || 50,
+        item.surface_finish || "standard",
+        parseInt(item.quantity) || 1,
+        breakdown.effectiveWeight,
+        breakdown.materialCost,
+        breakdown.colorCost,
+        breakdown.finishCost,
+        breakdown.subtotal,
+        breakdown.taxAmount,
+        breakdown.totalAmount,
+        ship.name,
+        ship.phone,
+        ship.address1,
+        ship.city,
+        ship.state,
+        ship.pin,
+        payment_method,
+        payment_status,
+        notes,
+      ]
+    );
+    console.log(`✅ Print item stored in printing_orders: ${printOrderNumber}`);
+    return {
+      id: insertRes.insertId,
+      order_number: printOrderNumber,
+      total_amount: breakdown.totalAmount,
+    };
+  };
+
   try {
     await connection.beginTransaction();
 
@@ -602,11 +695,14 @@ const createOrder = async (req, res) => {
 
     const gstRate = parseFloat(configMap.gst_rate || 18);
 
-    // Coupon calculation — discount on FULL price incl. GST
+    // Coupon calculation — discount on FULL price incl. GST.
+    // Coupons attach to the `orders` row, so print-only checkouts
+    // (which create no `orders` row) neither consume nor discount them.
     let couponRow = null;
     let couponId = null;
     let couponCode = null;
-    if (cart[0].coupon_id) {
+    const hasProductItems = cartItems.some((it) => !isPrintCartItem(it));
+    if (cart[0].coupon_id && hasProductItems) {
       const [coupons] = await connection.query(
         "SELECT * FROM coupons WHERE id = ? AND is_active = 1 AND (valid_until IS NULL OR valid_until > NOW())",
         [cart[0].coupon_id]
@@ -664,6 +760,55 @@ const createOrder = async (req, res) => {
     }
 
     const orderNumber = `EL${Math.floor(10000 + Math.random() * 90000)}`;
+
+    const printItems = cartItems.filter((it) => isPrintCartItem(it));
+    const ship = {
+      name: shipName,
+      phone: shipPhone,
+      address1: shipAdd1,
+      city: shipCity,
+      state: shipState,
+      pin: shipPin,
+    };
+    const smoothPerGram = parseFloat(configMap.smooth_finish_per_gram || 3);
+
+    // Print-only checkout: 3D prints live ONLY in printing_orders —
+    // no `orders` / `order_items` rows, so they never leak into Orders.
+    if (!hasProductItems) {
+      const created = [];
+      for (const item of printItems) {
+        created.push(
+          await insertPrintingOrderRow({
+            item,
+            ship,
+            payment_method,
+            payment_status: "pending",
+            gstRate,
+            smoothPerGram,
+            notes: notes || "Placed via store checkout",
+          })
+        );
+      }
+      await connection.query("DELETE FROM cart_items WHERE cart_id = ?", [cart[0].id]);
+      await connection.query("UPDATE cart SET coupon_id = NULL WHERE id = ?", [cart[0].id]);
+      await connection.commit();
+
+      const printTotal = round2(
+        created.reduce((sum, r) => sum + Number(r.total_amount || 0), 0) + shippingCost
+      );
+      return res.status(201).json({
+        success: true,
+        message: "3D print order placed successfully!",
+        order: {
+          id: created[0].id,
+          order_number: created[0].order_number,
+          total_amount: printTotal.toFixed(2),
+          payment_method,
+          is_print_only: true,
+          print_order_ids: created.map((r) => r.id),
+        },
+      });
+    }
 
     const methodLabels = {
       upi: "Online Payment (Razorpay)",
@@ -820,88 +965,15 @@ const createOrder = async (req, res) => {
 
         // Mirror into printing_orders so the print queue / admin keeps working
         try {
-          if (!item.material_id) {
-            console.error("⛔ Mirror aborted: material_id is missing for print cart item", {
-              cart_item_id: item.id,
-              file_name: item.file_name,
-              material_id: item.material_id,
-            });
-          } else {
-            const [matRows] = await connection.query(
-              "SELECT price_per_gram FROM printing_materials WHERE id = ?",
-              [item.material_id]
-            );
-            const pricePerGram = matRows.length ? parseFloat(matRows[0].price_per_gram) : 12;
-            let colorAdj = 0;
-            if (item.color_id) {
-              const [cRows] = await connection.query(
-                "SELECT price_adjustment FROM printing_colors WHERE id = ?",
-                [item.color_id]
-              );
-              if (cRows.length) colorAdj = parseFloat(cRows[0].price_adjustment || 0);
-            }
-            const smoothPerGram = parseFloat(configMap.smooth_finish_per_gram || 3);
-            const breakdown = calculatePrintPrice({
-              estimatedWeight: parseFloat(item.estimated_weight || 20),
-              pricePerGram,
-              infillDensity: parseInt(item.infill_density) || 50,
-              surfaceFinish: item.surface_finish || "standard",
-              smoothFinishPerGram: smoothPerGram,
-              colorAdjustment: colorAdj,
-              quantity: parseInt(item.quantity) || 1,
-              gstRate,
-            });
-            const printOrderNumber =
-              "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
-            await connection.query(
-              `INSERT INTO printing_orders (
-                user_id, order_number, status,
-                file_name, file_url, file_public_id, file_size,
-                dimension_x, dimension_y, dimension_z,
-                material_id, color_id, custom_color_hex,
-                infill_density, surface_finish, quantity,
-                estimated_weight, material_cost, color_cost, finish_cost,
-                subtotal, tax_amount, total_amount,
-                shipping_name, shipping_phone, shipping_address1,
-                shipping_city, shipping_state, shipping_pincode,
-                payment_method, payment_status, notes
-              ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                userId,
-                printOrderNumber,
-                item.file_name || "model.stl",
-                item.file_url || "",
-                item.file_public_id || null,
-                item.file_size || null,
-                item.dimension_x || null,
-                item.dimension_y || null,
-                item.dimension_z || null,
-                item.material_id,
-                item.color_id || null,
-                item.custom_color_hex || null,
-                parseInt(item.infill_density) || 50,
-                item.surface_finish || "standard",
-                parseInt(item.quantity) || 1,
-                breakdown.effectiveWeight,
-                breakdown.materialCost,
-                breakdown.colorCost,
-                breakdown.finishCost,
-                breakdown.subtotal,
-                breakdown.taxAmount,
-                breakdown.totalAmount,
-                shipName,
-                shipPhone,
-                shipAdd1,
-                shipCity,
-                shipState,
-                shipPin,
-                payment_method,
-                payment_method === "cod" ? "pending" : "paid",
-                `Part of e-commerce order ${orderNumber}`,
-              ]
-            );
-            console.log(`✅ Mirrored print item to printing_orders: ${printOrderNumber}`);
-          }
+          await insertPrintingOrderRow({
+            item,
+            ship,
+            payment_method,
+            payment_status: payment_method === "cod" ? "pending" : "paid",
+            gstRate,
+            smoothPerGram,
+            notes: `Part of e-commerce order ${orderNumber}`,
+          });
         } catch (printMirrorErr) {
           console.error("⛔ Failed to mirror print item to printing_orders:", printMirrorErr.message, {
             file_name: item.file_name,

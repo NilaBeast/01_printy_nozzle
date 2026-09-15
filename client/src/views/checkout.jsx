@@ -422,6 +422,8 @@ export default function Checkout() {
         const rzResponse = await checkoutService.createRazorpayOrder({
           amount: grandTotal,
           order_id: placedOrder.id,
+          order_type: placedOrder.is_print_only ? "print" : "order",
+          print_order_ids: placedOrder.print_order_ids || [],
         });
         gateway = rzResponse.data;
       } catch (gatewayError) {
@@ -469,6 +471,8 @@ export default function Checkout() {
           razorpay_payment_id: paymentResult.resp.razorpay_payment_id,
           razorpay_signature: paymentResult.resp.razorpay_signature,
           order_id: placedOrder.id,
+          order_type: placedOrder.is_print_only ? "print" : "order",
+          print_order_ids: placedOrder.print_order_ids || [],
         });
       } catch (verifyError) {
         toast.warn("Payment received but verification is pending. Our support team will confirm shortly.");

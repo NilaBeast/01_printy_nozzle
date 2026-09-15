@@ -37,28 +37,77 @@ const getAllOrders = async (req, res) => {
 
     const whereSql = whereClauses.join(" AND ");
 
-    // Count
-    const [countRes] = await db.query(
-      `SELECT COUNT(*) AS total
-       FROM orders o
-       LEFT JOIN users u ON o.user_id = u.id
-       WHERE ${whereSql}`,
-      params
-    );
-    const total = countRes[0].total;
+    const runOrdersQuery = (extraWhere) =>
+      db.query(
+        `SELECT o.*,
+                u.first_name, u.last_name, u.email,
+                (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count
+         FROM orders o
+         LEFT JOIN users u ON o.user_id = u.id
+         WHERE ${whereSql}${extraWhere}
+         ORDER BY o.id DESC
+         LIMIT ? OFFSET ?`,
+        [...params, Number(limit), Number(offset)]
+      );
 
-    // Rows
-    const [orders] = await db.query(
-      `SELECT o.*,
-              u.first_name, u.last_name, u.email,
-              (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count
-       FROM orders o
-       LEFT JOIN users u ON o.user_id = u.id
-       WHERE ${whereSql}
-       ORDER BY o.id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(limit), Number(offset)]
-    );
+    const runCountQuery = (extraWhere) =>
+      db.query(
+        `SELECT COUNT(*) AS total
+         FROM orders o
+         LEFT JOIN users u ON o.user_id = u.id
+         WHERE ${whereSql}${extraWhere}`,
+        params
+      );
+
+    // Pure 3D-print checkouts live only in printing_orders — keep them out
+    // of the product Orders list. Fall back gracefully on legacy DBs that
+    // lack the order_items.item_type column.
+    const printOnlyExclusion = ` AND NOT (
+      EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM order_items oi
+        WHERE oi.order_id = o.id AND (oi.item_type IS NULL OR oi.item_type <> 'print')
+      )
+    )`;
+
+    let orders;
+    let total;
+    try {
+      const [countRes] = await runCountQuery(printOnlyExclusion);
+      total = countRes[0].total;
+      [orders] = await runOrdersQuery(printOnlyExclusion);
+    } catch (exclusionError) {
+      if (exclusionError && (exclusionError.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(exclusionError.message || ""))) {
+        const [countRes] = await runCountQuery("");
+        total = countRes[0].total;
+        [orders] = await runOrdersQuery("");
+      } else {
+        throw exclusionError;
+      }
+    }
+
+    // Attach a compact item list for the admin table (thumbnails + names).
+    if (orders.length) {
+      try {
+        const [items] = await db.query(
+          `SELECT order_id, product_name, product_image, quantity, price
+           FROM order_items WHERE order_id IN (${orders.map(() => "?").join(",")})
+           ORDER BY order_id DESC, id ASC`,
+          orders.map((o) => o.id)
+        );
+        const byOrder = {};
+        items.forEach((it) => {
+          (byOrder[it.order_id] = byOrder[it.order_id] || []).push(it);
+        });
+        orders.forEach((o) => {
+          o.items = byOrder[o.id] || [];
+        });
+      } catch {
+        orders.forEach((o) => {
+          o.items = [];
+        });
+      }
+    }
 
     return res.status(200).json({
       success: true,

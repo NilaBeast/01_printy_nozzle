@@ -73,7 +73,10 @@ const getAllProducts = async (req, res) => {
       `SELECT p.*,
               c.name AS category_name,
               b.name AS brand_name,
-              (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) AS primary_image,
+              COALESCE(
+                (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1),
+                (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY sort_order ASC, id ASC LIMIT 1)
+              ) AS primary_image,
               (SELECT COUNT(*) FROM product_variants WHERE product_id = p.id) AS variant_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -160,6 +163,7 @@ const createProduct = async (req, res) => {
       category_id,
       brand_id,
       sku,
+      tagline,
       price,
       compare_price,
       stock,
@@ -183,7 +187,6 @@ const createProduct = async (req, res) => {
         message: "Name, price, and category are required",
       });
     }
-
     let slug = slugify(name, { lower: true, strict: true });
     // Check slug collision
     const [existingSlug] = await db.query("SELECT id FROM products WHERE slug = ?", [slug]);
@@ -193,12 +196,13 @@ const createProduct = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO products 
-       (name, slug, sku, category_id, brand_id, price, compare_price, stock, short_description, description, highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, is_featured, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, slug, sku, tagline, category_id, brand_id, price, compare_price, stock, short_description, description, highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, is_featured, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         slug,
         sku || `SKU-${Date.now()}`,
+        tagline || null,
         category_id,
         brand_id || null,
         price,
@@ -259,6 +263,7 @@ const updateProduct = async (req, res) => {
       category_id,
       brand_id,
       sku,
+      tagline,
       price,
       compare_price,
       stock,
@@ -295,6 +300,7 @@ const updateProduct = async (req, res) => {
          name = COALESCE(?, name),
          slug = COALESCE(?, slug),
          sku = COALESCE(?, sku),
+         tagline = COALESCE(?, tagline),
          category_id = COALESCE(?, category_id),
          brand_id = COALESCE(?, brand_id),
          price = COALESCE(?, price),
@@ -317,6 +323,7 @@ const updateProduct = async (req, res) => {
         name || null,
         slug || null,
         sku || null,
+        tagline !== undefined ? tagline : null,
         category_id || null,
         brand_id !== undefined ? brand_id : null,
         price || null,
