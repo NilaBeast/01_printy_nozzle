@@ -1,4 +1,7 @@
 const db = require("../../config/db");
+const bcrypt = require("bcrypt");
+
+const saltRounds = Number(process.env.SALT_ROUNDS) || 10;
 
 /* ===================== GET ALL USERS (ADMIN) ===================== */
 const getAllUsers = async (req, res) => {
@@ -30,16 +33,29 @@ const getAllUsers = async (req, res) => {
     const [countRes] = await db.query(`SELECT COUNT(*) AS total FROM users WHERE ${whereSql}`, params);
     const total = countRes[0].total;
 
-    const [users] = await db.query(
-      `SELECT id, first_name, last_name, email, phone, role, is_active, created_at,
-              (SELECT COUNT(*) FROM orders WHERE user_id = users.id) AS total_orders,
-              (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE user_id = users.id AND (payment_status = 'paid' OR status = 'delivered')) AS total_spent
-       FROM users
-       WHERE ${whereSql}
-       ORDER BY id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(limit), Number(offset)]
-    );
+    const runListQuery = (withLogin) =>
+      db.query(
+        `SELECT id, first_name, last_name, email, phone, role, is_active, created_at${withLogin ? ", last_login" : ""},
+                (SELECT COUNT(*) FROM orders WHERE user_id = users.id) AS total_orders,
+                (SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE user_id = users.id AND (payment_status = 'paid' OR status = 'delivered')) AS total_spent
+         FROM users
+         WHERE ${whereSql}
+         ORDER BY id DESC
+         LIMIT ? OFFSET ?`,
+        [...params, Number(limit), Number(offset)]
+      );
+
+    // Fall back gracefully on legacy DBs lacking users.last_login.
+    let users;
+    try {
+      [users] = await runListQuery(true);
+    } catch (loginColError) {
+      if (loginColError && (loginColError.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(loginColError.message || ""))) {
+        [users] = await runListQuery(false);
+      } else {
+        throw loginColError;
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -150,8 +166,79 @@ const updateUser = async (req, res) => {
   }
 };
 
+/* ===================== CREATE USER (ADMIN) ===================== */
+const createUser = async (req, res) => {
+  try {
+    const { first_name, last_name, email, phone, password, role, is_active } = req.body;
+
+    if (!first_name || !last_name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "First name, last name, email, and password are required",
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const [existing] = await db.query("SELECT id FROM users WHERE email = ?", [cleanEmail]);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: "Email is already registered" });
+    }
+
+    const safeRole = role === "admin" ? "admin" : "customer";
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const [result] = await db.query(
+      "INSERT INTO users (first_name, last_name, email, phone, password_hash, role, is_active, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+      [
+        first_name.trim(),
+        last_name.trim(),
+        cleanEmail,
+        phone?.trim() || null,
+        hashedPassword,
+        safeRole,
+        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: { userId: result.insertId },
+    });
+  } catch (error) {
+    console.error("Admin createUser error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== DELETE USER (ADMIN) ===================== */
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Never let an admin delete their own account.
+    if (Number(id) === req.user.id) {
+      return res.status(400).json({ success: false, message: "You cannot delete your own account" });
+    }
+
+    // Linked orders, carts, addresses cascade (ON DELETE CASCADE).
+    const [result] = await db.query("DELETE FROM users WHERE id = ?", [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Admin deleteUser error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
+  createUser,
   updateUser,
+  deleteUser,
 };

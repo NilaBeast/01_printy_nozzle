@@ -134,4 +134,54 @@ const sendPaymentConfirmationMail = async ({ to, name, order, items = [] }) => {
   }
 };
 
-module.exports = { isMailerConfigured, sendPaymentConfirmationMail };
+/**
+ * Contact-inquiry reply email. Fire-and-forget — never throws.
+ * Returns { sent: boolean, skipped?: string }.
+ */
+const sendContactReplyMail = async ({ to, name, subject, replyMessage }) => {
+  try {
+    if (!to) return { sent: false, skipped: "no-recipient" };
+    const tx = getTransporter();
+    if (!tx) {
+      console.log(
+        `📧 [mailer skipped — SMTP not configured] inquiry reply to ${to}`
+      );
+      return { sent: false, skipped: "smtp-not-configured" };
+    }
+
+    const from =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      "PrintyNozzle <no-reply@printynozzle.in>";
+    const firstName = escapeHtml((name || "").split(" ")[0] || "Maker");
+    const body = escapeHtml(replyMessage).replace(/\n/g, "<br>");
+
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a;">
+        <div style="background:linear-gradient(135deg,#0759d6,#3f9bff);padding:26px;border-radius:14px 14px 0 0;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">Reply from PrintyNozzle Support</h1>
+          <p style="color:#dbeafe;margin:6px 0 0;font-size:14px;">Re: ${escapeHtml(subject || "Your inquiry")}</p>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 14px 14px;padding:24px;background:#fff;">
+          <p style="font-size:15px;">Hi ${firstName},</p>
+          <p style="font-size:14px;color:#334155;line-height:1.7;">${body}</p>
+          <p style="font-size:13px;color:#64748b;">Reply to this email if you need further help.</p>
+          <p style="font-size:13px;color:#64748b;">— Team PrintyNozzle</p>
+        </div>
+      </div>`;
+
+    await tx.sendMail({
+      from,
+      to,
+      subject: `Re: ${subject || "Your inquiry"} — PrintyNozzle Support`,
+      html,
+    });
+    console.log(`📧 Inquiry reply sent to ${to}`);
+    return { sent: true };
+  } catch (error) {
+    console.error("📧 Inquiry reply email failed:", error.message);
+    return { sent: false, skipped: error.message };
+  }
+};
+
+module.exports = { isMailerConfigured, sendPaymentConfirmationMail, sendContactReplyMail };

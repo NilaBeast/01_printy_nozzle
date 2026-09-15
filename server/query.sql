@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   email_notifications TINYINT(1) DEFAULT 1,
   marketing_updates TINYINT(1) DEFAULT 0,
   order_updates TINYINT(1) DEFAULT 1,
+  last_login TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -480,6 +481,18 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   is_read TINYINT(1) DEFAULT 0,
   status ENUM('pending', 'read', 'replied', 'archived') DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ===================== CONTACT MESSAGE REPLIES =====================
+CREATE TABLE IF NOT EXISTS contact_replies (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  message_id INT NOT NULL,
+  sender ENUM('customer', 'staff') DEFAULT 'staff',
+  sender_name VARCHAR(200) DEFAULT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (message_id) REFERENCES contact_messages(id) ON DELETE CASCADE,
+  INDEX idx_message (message_id)
 ) ENGINE=InnoDB;
 
 -- ===================== FAQS =====================

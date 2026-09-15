@@ -84,30 +84,48 @@ const updateCoupon = async (req, res) => {
       is_active,
     } = req.body;
 
+    // `undefined` (key absent) = leave the column untouched.
+    // `""` (cleared in the form) = store NULL — numeric/date columns reject ''.
+    const toNumber = (v) => (v === "" || v === null ? null : Number(v));
+    const assignments = [];
+    const params = [];
+    const keepIfNull = (col, value) => {
+      assignments.push(`${col} = COALESCE(?, ${col})`);
+      params.push(value);
+    };
+    const setDirect = (col, value) => {
+      assignments.push(`${col} = ?`);
+      params.push(value);
+    };
+
+    keepIfNull("code", code ? code.trim().toUpperCase() : null);
+    keepIfNull("discount_type", discount_type || null);
+    keepIfNull(
+      "discount_value",
+      discount_value === undefined ? null : toNumber(discount_value)
+    );
+    keepIfNull(
+      "min_order_amount",
+      min_order_amount === undefined ? null : toNumber(min_order_amount)
+    );
+    if (max_discount !== undefined) setDirect("max_discount", toNumber(max_discount));
+    if (usage_limit !== undefined) {
+      setDirect(
+        "usage_limit",
+        usage_limit === "" || usage_limit === null ? null : parseInt(usage_limit, 10)
+      );
+    }
+    if (valid_from !== undefined) setDirect("valid_from", valid_from === "" ? null : valid_from);
+    if (valid_until !== undefined) setDirect("valid_until", valid_until === "" ? null : valid_until);
+    if (is_active !== undefined) setDirect("is_active", is_active ? 1 : 0);
+
+    if (params.some((p) => typeof p === "number" && Number.isNaN(p))) {
+      return res.status(400).json({ success: false, message: "Numeric fields must contain valid numbers" });
+    }
+
     const [result] = await db.query(
-      `UPDATE coupons SET
-         code = COALESCE(?, code),
-         discount_type = COALESCE(?, discount_type),
-         discount_value = COALESCE(?, discount_value),
-         min_order_amount = COALESCE(?, min_order_amount),
-         max_discount = ?,
-         usage_limit = ?,
-         valid_from = ?,
-         valid_until = ?,
-         is_active = COALESCE(?, is_active)
-       WHERE id = ?`,
-      [
-        code ? code.trim().toUpperCase() : null,
-        discount_type || null,
-        discount_value || null,
-        min_order_amount !== undefined ? min_order_amount : null,
-        max_discount !== undefined ? max_discount : null,
-        usage_limit !== undefined ? usage_limit : null,
-        valid_from !== undefined ? valid_from : null,
-        valid_until !== undefined ? valid_until : null,
-        is_active !== undefined ? (is_active ? 1 : 0) : null,
-        id,
-      ]
+      `UPDATE coupons SET ${assignments.join(", ")} WHERE id = ?`,
+      [...params, id]
     );
 
     if (result.affectedRows === 0) {

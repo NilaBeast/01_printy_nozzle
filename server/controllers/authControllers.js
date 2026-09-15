@@ -209,6 +209,10 @@ const login = async (req, res) => {
 
     delete user.password_hash;
 
+    // Track last login for the admin Users table (guarded so login
+    // never fails on DBs where the column hasn't been added yet).
+    db.query("UPDATE users SET last_login = NOW() WHERE id = ?", [user.id]).catch(() => {});
+
     return res.status(200).json({
       success: true,
       message: "Login successful",

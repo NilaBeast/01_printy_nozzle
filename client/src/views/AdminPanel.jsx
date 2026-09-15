@@ -2,19 +2,35 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
+  ArrowUpDown,
+  Ban,
   BarChart3,
   Box,
+  Boxes,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
+  Cog,
+  Copy,
+  CirclePause,
+  Cpu,
   Cuboid,
+  Cylinder,
+  Filter,
   Layers,
+  Lightbulb,
   Palette,
   RefreshCw,
+  Reply,
   Save,
   Search,
+  Send,
   ShieldCheck,
   Plus,
   Pencil,
   Tag,
+  Ticket,
   Trash2,
   Power,
   Users,
@@ -24,10 +40,13 @@ import {
   MapPin,
   CreditCard,
   FileText,
+  MoreVertical,
   Package,
+  Printer,
   Truck,
   CheckCircle2,
   Clock,
+  Wrench,
   XCircle,
   ArrowLeft,
   Download,
@@ -36,10 +55,13 @@ import {
   Mail,
   MessageSquare,
   Settings2,
+  ShoppingCart,
+  Sparkles,
   Store,
   Link2,
   Image as ImageIcon,
   Globe2,
+  Upload,
 } from "lucide-react";
 import adminService from "../services/admin.service";
 import "../../public/css/admin.css";
@@ -127,6 +149,45 @@ function AdminPanel() {
   const [printSubTab, setPrintSubTab] = useState("orders");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [printStatusFilter, setPrintStatusFilter] = useState("all");
+  const [colorSearch, setColorSearch] = useState("");
+  const [colorStatusFilter, setColorStatusFilter] = useState("all");
+  const [colorPage, setColorPage] = useState(1);
+  const [colorPerPage, setColorPerPage] = useState(10);
+  const [printSearch, setPrintSearch] = useState("");
+  const [printMaterialFilter, setPrintMaterialFilter] = useState("all");
+  const [printDateFilter, setPrintDateFilter] = useState("");
+  const [printPage, setPrintPage] = useState(1);
+  const [printPerPage, setPrintPerPage] = useState(10);
+  const [selectedPrintIds, setSelectedPrintIds] = useState([]);
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [materialTypeFilter, setMaterialTypeFilter] = useState("all");
+  const [materialPage, setMaterialPage] = useState(1);
+  const [materialPerPage, setMaterialPerPage] = useState(10);
+  const [couponSearch, setCouponSearch] = useState("");
+  const [couponStatusFilter, setCouponStatusFilter] = useState("all");
+  const [couponPage, setCouponPage] = useState(1);
+  const [couponPerPage, setCouponPerPage] = useState(10);
+  const [selectedCouponIds, setSelectedCouponIds] = useState([]);
+  const [showCouponTip, setShowCouponTip] = useState(true);
+  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+  const [productStatusFilter, setProductStatusFilter] = useState("all");
+  const [productPage, setProductPage] = useState(1);
+  const [productPerPage, setProductPerPage] = useState(10);
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categoryStatusFilter, setCategoryStatusFilter] = useState("all");
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [categoryPerPage, setCategoryPerPage] = useState(10);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderDateFilter, setOrderDateFilter] = useState("");
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState("all");
+  const [showOrderFilters, setShowOrderFilters] = useState(false);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPerPage, setOrderPerPage] = useState(10);
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [showOrderTip, setShowOrderTip] = useState(true);
+  const [orderMenuId, setOrderMenuId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState({});
@@ -172,6 +233,9 @@ function AdminPanel() {
     is_featured: false,
     is_active: true,
   });
+  const [existingGallery, setExistingGallery] = useState([]);
+  const [existingPinout, setExistingPinout] = useState(null);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [couponForm, setCouponForm] = useState({
     code: "",
     discount_type: "percentage",
@@ -202,9 +266,19 @@ function AdminPanel() {
     last_name: "",
     email: "",
     phone: "",
+    password: "",
     role: "customer",
     is_active: true,
   });
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [userStatusFilter, setUserStatusFilter] = useState("all");
+  const [userPage, setUserPage] = useState(1);
+  const [userPerPage, setUserPerPage] = useState(10);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [showUserTip, setShowUserTip] = useState(true);
   const [brandForm, setBrandForm] = useState({
     name: "",
     description: "",
@@ -294,15 +368,365 @@ function AdminPanel() {
     loadAdminData();
   }, []);
 
+  const getStockState = (product) => {
+    const qty = Number(product.stock || 0);
+    if (qty <= 0) return "out";
+    const threshold = Number(product.low_stock_threshold ?? 5);
+    if (qty <= threshold) return "low";
+    return "in";
+  };
+
+  const STOCK_META = {
+    in: { label: "In Stock", tone: "in" },
+    low: { label: "Low Stock", tone: "low" },
+    out: { label: "Out of Stock", tone: "out" },
+  };
+
+  const CATEGORY_TONES = ["blue", "green", "purple", "pink", "amber"];
+  const categoryTone = (name = "") => {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return CATEGORY_TONES[h % CATEGORY_TONES.length];
+  };
+
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((product) =>
-      [product.name, product.sku, product.category_name, product.brand_name]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(q))
+    return products.filter((product) => {
+      const matchesSearch =
+        !q ||
+        [product.name, product.sku, product.category_name, product.brand_name]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(q));
+      const matchesCategory =
+        productCategoryFilter === "all" ||
+        String(product.category_id) === String(productCategoryFilter) ||
+        (product.category_name || "").toLowerCase() === String(productCategoryFilter).toLowerCase();
+      const state = getStockState(product);
+      const matchesStatus =
+        productStatusFilter === "all" ||
+        (productStatusFilter === "inactive" ? !(product.is_active ?? true) : state === productStatusFilter);
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [products, search, productCategoryFilter, productStatusFilter]);
+
+  const productStats = useMemo(() => {
+    const total = (products || []).length;
+    const inCount = (products || []).filter((p) => getStockState(p) === "in").length;
+    const lowCount = (products || []).filter((p) => getStockState(p) === "low").length;
+    const outCount = (products || []).filter((p) => getStockState(p) === "out").length;
+    const now = new Date();
+    const thisMonth = (products || []).filter((p) => {
+      const d = new Date(p.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = (products || []).filter((p) => {
+      const d = new Date(p.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+    }).length;
+    const growth = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : thisMonth > 0 ? 100 : 0;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, inCount, lowCount, outCount, growth, pct };
+  }, [products]);
+
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / productPerPage));
+  const safeProductPage = Math.min(productPage, productTotalPages);
+  const paginatedProducts = filteredProducts.slice(
+    (safeProductPage - 1) * productPerPage,
+    safeProductPage * productPerPage
+  );
+
+  const toggleProductSelect = (id) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  }, [products, search]);
+  };
+
+  const toggleProductSelectAll = () => {
+    const pageIds = paginatedProducts.map((p) => p.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedProductIds.includes(id));
+    setSelectedProductIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
+  };
+
+  const deleteProduct = async (id) => {
+    try {
+      await adminService.deleteProduct(id);
+      toast.success("Product deleted");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Product delete failed");
+    }
+  };
+
+  const duplicateProduct = async (id) => {
+    try {
+      const res = await adminService.getProductById(id);
+      const p = res.data.data || {};
+      // Prefill the Add Product modal — images can't be cloned (files only),
+      // so the admin reviews details and re-attaches images before saving.
+      setProductForm({
+        name: p.name ? `${p.name} Copy` : "Copy",
+        sku: p.sku ? `${p.sku}-COPY` : "",
+        tagline: p.tagline || "",
+        category_id: p.category_id || "",
+        brand_id: p.brand_id || "",
+        price: p.price || "",
+        compare_price: p.compare_price || "",
+        stock: p.stock ?? "",
+        short_description: p.short_description || "",
+        description: p.description || "",
+        keyFeaturesText: (Array.isArray(p.key_features) ? p.key_features : []).join("\n"),
+        specificationsText: specsToText(p.specifications),
+        applicationsText: (Array.isArray(p.applications) ? p.applications : []).join("\n"),
+        resourcesText: resourcesToText(p.resources),
+        faqsText: (Array.isArray(p.faqs) ? p.faqs : [])
+          .map((f) => `${f.q || f.question || ""}|${f.a || f.answer || ""}`)
+          .join("\n"),
+        pinout_description: p.pinout_description || "",
+        pinoutImageFile: null,
+        galleryFiles: [],
+        is_featured: false,
+        is_active: p.is_active !== undefined ? Boolean(p.is_active) : true,
+      });
+      setEditing(null);
+      setActiveModal("product");
+      toast.info("Review the duplicated details and save");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to duplicate product");
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes && bytes !== 0) return "";
+    const mb = Number(bytes) / (1024 * 1024);
+    return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(Number(bytes) / 1024))} KB`;
+  };
+
+  const handlePinoutSelect = (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Pinout file must be under 5MB");
+      return;
+    }
+    setProductForm((prev) => ({ ...prev, pinoutImageFile: file }));
+  };
+
+  const handleGallerySelect = (files) => {
+    const picked = Array.from(files || []).filter((f) => f.type.startsWith("image/"));
+    if (!picked.length) return;
+    const room = 5 - existingGallery.length - productForm.galleryFiles.length;
+    if (room <= 0) {
+      toast.error("Gallery is full (max 5 images). Remove one first.");
+      return;
+    }
+    if (picked.length > room) {
+      toast.info(`Only ${room} more image(s) fit in the gallery`);
+    }
+    const accepted = picked.slice(0, room).filter((f) => {
+      if (f.size > 5 * 1024 * 1024) {
+        toast.error(`${f.name} exceeds 5MB and was skipped`);
+        return false;
+      }
+      return true;
+    });
+    if (accepted.length) {
+      accepted.forEach((f) => {
+        f.preview = URL.createObjectURL(f);
+      });
+      setProductForm((prev) => ({ ...prev, galleryFiles: [...prev.galleryFiles, ...accepted] }));
+    }
+  };
+
+  const removeExistingGalleryImage = async (imageId) => {
+    try {
+      await adminService.deleteProductImage(imageId);
+      setExistingGallery((prev) => prev.filter((img) => img.id !== imageId));
+      toast.success("Gallery image removed");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Image remove failed");
+    }
+  };
+
+  const setPrimaryGalleryImage = async (productId, imageId) => {
+    try {
+      await adminService.setPrimaryProductImage(productId, imageId);
+      setExistingGallery((prev) => prev.map((img) => ({ ...img, is_primary: img.id === imageId ? 1 : 0 })));
+      toast.success("Primary image updated");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Primary image update failed");
+    }
+  };
+
+  const isCategoryActive = (category) =>
+    category.is_active === undefined ? true : Boolean(category.is_active);
+
+  const categoryIconFor = (name = "") => {
+    const n = String(name).toLowerCase();
+    if (n.includes("spare")) return Package;
+    if (n.includes("3d printer")) return Printer;
+    if (n.includes("printer") || n.includes("part") || n.includes("nozzle")) return Cog;
+    if (n.includes("accessor") || n.includes("tool") || n.includes("lubricant")) return Wrench;
+    if (n.includes("micro") || n.includes("controller") || n.includes("electronic")) return Cpu;
+    if (n.includes("filament") || n.includes("material")) return Cylinder;
+    return Box;
+  };
+
+  const categoryStats = useMemo(() => {
+    const total = (categories || []).length;
+    const active = (categories || []).filter((c) => isCategoryActive(c)).length;
+    const inactive = Math.max(0, total - active);
+    const totalProducts = (categories || []).reduce((sum, c) => sum + Number(c.product_count || 0), 0);
+    const now = new Date();
+    const thisMonth = (categories || []).filter((c) => {
+      const d = new Date(c.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = (categories || []).filter((c) => {
+      const d = new Date(c.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+    }).length;
+    const growth = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : thisMonth > 0 ? 100 : 0;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, active, inactive, totalProducts, growth, pct };
+  }, [categories]);
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    return (categories || []).filter((category) => {
+      const matchesSearch =
+        !q ||
+        [category.name, category.description]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus =
+        categoryStatusFilter === "all" ||
+        (categoryStatusFilter === "active" ? isCategoryActive(category) : !isCategoryActive(category));
+      return matchesSearch && matchesStatus;
+    });
+  }, [categories, categorySearch, categoryStatusFilter]);
+
+  const categoryTotalPages = Math.max(1, Math.ceil(filteredCategories.length / categoryPerPage));
+  const safeCategoryPage = Math.min(categoryPage, categoryTotalPages);
+  const paginatedCategories = filteredCategories.slice(
+    (safeCategoryPage - 1) * categoryPerPage,
+    safeCategoryPage * categoryPerPage
+  );
+
+  const toggleCategorySelect = (id) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleCategorySelectAll = () => {
+    const pageIds = paginatedCategories.map((c) => c.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedCategoryIds.includes(id));
+    setSelectedCategoryIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
+  };
+
+  const toggleCategory = (category) => {
+    adminService
+      .updateCategory(category.id, { is_active: !isCategoryActive(category) })
+      .then(() => {
+        toast.success("Category updated");
+        loadAdminData();
+      })
+      .catch((error) => toast.error(error?.response?.data?.message || "Category update failed"));
+  };
+
+  const AVATAR_TONES = ["blue", "purple"];
+  const avatarTone = (name = "") => {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return AVATAR_TONES[h % AVATAR_TONES.length];
+  };
+
+  const orderStatusTone = (status) => {
+    if (status === "delivered" || status === "confirmed") return "done";
+    if (status === "cancelled" || status === "returned") return "cancel";
+    if (status === "pending") return "pending";
+    return "progress";
+  };
+
+  const paymentTone = (status) => {
+    if (status === "paid") return "done";
+    if (status === "failed") return "cancel";
+    if (status === "refunded") return "progress";
+    return "pending";
+  };
+
+  const customerOrderStats = useMemo(() => {
+    const total = (orders || []).length;
+    const confirmed = (orders || []).filter((o) => o.status === "confirmed").length;
+    const pending = (orders || []).filter((o) => o.status === "pending").length;
+    const cancelled = (orders || []).filter((o) => o.status === "cancelled").length;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, confirmed, pending, cancelled, pct };
+  }, [orders]);
+
+  const filteredCustomerOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    return (orders || []).filter((order) => {
+      const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        [order.order_number, customerName, order.email, order.shipping_phone]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus = orderStatusFilter === "all" || order.status === orderStatusFilter;
+      const matchesPayment = orderPaymentFilter === "all" || order.payment_status === orderPaymentFilter;
+      let matchesDate = true;
+      if (orderDateFilter && order.created_at) {
+        const d = new Date(order.created_at);
+        matchesDate = !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === orderDateFilter;
+      }
+      return matchesSearch && matchesStatus && matchesPayment && matchesDate;
+    });
+  }, [orders, orderSearch, orderStatusFilter, orderPaymentFilter, orderDateFilter]);
+
+  const orderTotalPages = Math.max(1, Math.ceil(filteredCustomerOrders.length / orderPerPage));
+  const safeOrderPage = Math.min(orderPage, orderTotalPages);
+  const paginatedCustomerOrders = filteredCustomerOrders.slice(
+    (safeOrderPage - 1) * orderPerPage,
+    safeOrderPage * orderPerPage
+  );
+
+  const clearOrderFilters = () => {
+    setOrderSearch("");
+    setOrderStatusFilter("all");
+    setOrderPaymentFilter("all");
+    setOrderDateFilter("");
+    setOrderPage(1);
+    setSelectedOrderIds([]);
+  };
+
+  const toggleOrderSelect = (id) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleOrderSelectAll = () => {
+    const pageIds = paginatedCustomerOrders.map((o) => o.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedOrderIds.includes(id));
+    setSelectedOrderIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
+  };
+
+  const copyOrderNumber = async (orderNumber) => {
+    try {
+      await navigator.clipboard.writeText(`#${orderNumber}`);
+      toast.success(`Order #${orderNumber} copied`);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
 
   const resetProductForm = () => {
     setProductForm({
@@ -332,6 +756,9 @@ function AdminPanel() {
   const closeModal = () => {
     setEditing(null);
     setActiveModal(null);
+    setExistingGallery([]);
+    setExistingPinout(null);
+    setSavingProduct(false);
   };
 
   /* ===== Build FormData for product create/update (supports image uploads) ===== */
@@ -348,7 +775,8 @@ function AdminPanel() {
     append("price", productForm.price);
     append("compare_price", productForm.compare_price);
     append("stock", productForm.stock);
-    append("short_description", productForm.short_description);
+    // Card one-liner falls back to the short subtitle so cards never render empty.
+    append("short_description", productForm.short_description || productForm.tagline);
     append("description", productForm.description);
     append("pinout_description", productForm.pinout_description);
     append("key_features", JSON.stringify(parseLines(productForm.keyFeaturesText)));
@@ -365,10 +793,31 @@ function AdminPanel() {
 
   const submitProduct = async (event) => {
     event.preventDefault();
-    if (!productForm.name || !productForm.category_id || productForm.price === "") {
-      toast.error("Product name, category, and price are required");
+    if (!productForm.name?.trim()) {
+      toast.error("Product name is required");
       return;
     }
+    if (!productForm.category_id) {
+      toast.error("Please choose a category");
+      return;
+    }
+    if (productForm.price === "" || Number.isNaN(Number(productForm.price)) || Number(productForm.price) < 0) {
+      toast.error("Please enter a valid price");
+      return;
+    }
+    if (productForm.stock === "" || Number.isNaN(Number(productForm.stock)) || Number(productForm.stock) < 0) {
+      toast.error("Please enter a valid stock quantity");
+      return;
+    }
+    if (!productForm.tagline?.trim()) {
+      toast.error("Short description is required");
+      return;
+    }
+    if (!productForm.description?.trim()) {
+      toast.error("Product description is required");
+      return;
+    }
+    setSavingProduct(true);
     try {
       const payload = buildProductFormData();
       if (editing?.id) {
@@ -383,6 +832,8 @@ function AdminPanel() {
       loadAdminData();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Product save failed");
+    } finally {
+      setSavingProduct(false);
     }
   };
 
@@ -414,6 +865,8 @@ function AdminPanel() {
         is_featured: Boolean(p.is_featured),
         is_active: p.is_active !== undefined ? Boolean(p.is_active) : true,
       });
+      setExistingGallery(Array.isArray(p.images) ? p.images : []);
+      setExistingPinout(p.pinout_image || null);
       setEditing({ type: "product", id });
       setActiveModal("product");
     } catch (error) {
@@ -451,12 +904,34 @@ function AdminPanel() {
       toast.error("Coupon code and discount value are required");
       return;
     }
+    // Send numbers as numbers and cleared optional fields as null —
+    // the API rejects empty strings for numeric/date columns.
+    const couponPayload = {
+      code: couponForm.code,
+      discount_type: couponForm.discount_type,
+      discount_value: Number(couponForm.discount_value),
+      min_order_amount:
+        couponForm.min_order_amount === "" || couponForm.min_order_amount === null
+          ? 0
+          : Number(couponForm.min_order_amount),
+      max_discount:
+        couponForm.max_discount === "" || couponForm.max_discount === null
+          ? null
+          : Number(couponForm.max_discount),
+      usage_limit:
+        couponForm.usage_limit === "" || couponForm.usage_limit === null
+          ? null
+          : parseInt(couponForm.usage_limit, 10),
+      valid_from: couponForm.valid_from || null,
+      valid_until: couponForm.valid_until || null,
+      is_active: couponForm.is_active,
+    };
     try {
       if (editing?.id) {
-        await adminService.updateCoupon(editing.id, couponForm);
+        await adminService.updateCoupon(editing.id, couponPayload);
         toast.success("Coupon updated");
       } else {
-        await adminService.createCoupon(couponForm);
+        await adminService.createCoupon(couponPayload);
         toast.success("Coupon created");
       }
       closeModal();
@@ -472,9 +947,9 @@ function AdminPanel() {
       code: coupon.code || "",
       discount_type: coupon.discount_type || "percentage",
       discount_value: coupon.discount_value || "",
-      min_order_amount: coupon.min_order_amount || 0,
-      max_discount: coupon.max_discount || "",
-      usage_limit: coupon.usage_limit || "",
+      min_order_amount: coupon.min_order_amount ?? 0,
+      max_discount: coupon.max_discount ?? "",
+      usage_limit: coupon.usage_limit ?? "",
       valid_from: coupon.valid_from ? String(coupon.valid_from).slice(0, 10) : "",
       valid_until: coupon.valid_until ? String(coupon.valid_until).slice(0, 10) : "",
       is_active: coupon.is_active !== undefined ? Boolean(coupon.is_active) : true,
@@ -667,6 +1142,18 @@ function AdminPanel() {
     }
   };
 
+  const resetUserForm = () => {
+    setUserForm({
+      first_name: "",
+      last_name: "",
+      email: "",
+      phone: "",
+      password: "",
+      role: "customer",
+      is_active: true,
+    });
+  };
+
   const submitUser = async (event) => {
     event.preventDefault();
     if (!userForm.first_name || !userForm.last_name || !userForm.email) {
@@ -674,12 +1161,23 @@ function AdminPanel() {
       return;
     }
     try {
-      await adminService.updateUser(editing?.id, userForm);
-      toast.success("User updated");
+      if (editing?.id) {
+        const { password, ...updatePayload } = userForm;
+        await adminService.updateUser(editing.id, updatePayload);
+        toast.success("User updated");
+      } else {
+        if (!userForm.password || userForm.password.length < 6) {
+          toast.error("Set a password of at least 6 characters");
+          return;
+        }
+        await adminService.createUser(userForm);
+        toast.success("User created");
+      }
       closeModal();
+      resetUserForm();
       loadAdminData();
     } catch (error) {
-      toast.error(error?.response?.data?.message || "User update failed");
+      toast.error(error?.response?.data?.message || "User save failed");
     }
   };
 
@@ -689,11 +1187,104 @@ function AdminPanel() {
       last_name: user.last_name || "",
       email: user.email || "",
       phone: user.phone || "",
+      password: "",
       role: user.role || "customer",
       is_active: user.is_active !== undefined ? Boolean(user.is_active) : true,
     });
     setEditing({ type: "user", id: user.id });
     setActiveModal("user");
+  };
+
+  const deleteUser = async (id, name) => {
+    try {
+      await adminService.deleteUser(id);
+      toast.success(`User${name ? ` ${name}` : ""} deleted`);
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "User delete failed");
+    }
+  };
+
+  const loadUserDetails = async (user) => {
+    setUserDetailLoading(true);
+    setSelectedUserDetail({
+      ...user,
+      addresses: [],
+      orders: [],
+      printOrders: [],
+    });
+    try {
+      const res = await adminService.getUserById(user.id);
+      const detail = res.data.data || {};
+      setSelectedUserDetail({
+        ...user,
+        ...detail,
+        total_orders: user.total_orders ?? detail.orders?.length ?? 0,
+        total_spent: user.total_spent ?? 0,
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load user details");
+    } finally {
+      setUserDetailLoading(false);
+    }
+  };
+
+  const userAvatarTone = (name = "") => {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return h % 2 === 0 ? "blue" : "purple";
+  };
+
+  const userInitials = (user) => {
+    const f = user.first_name?.[0] || "";
+    const l = user.last_name?.[0] || "";
+    return `${f}${l}`.toUpperCase() || "?";
+  };
+
+  const userStats = useMemo(() => {
+    const total = (users || []).length;
+    const customers = (users || []).filter((u) => u.role !== "admin").length;
+    const admins = (users || []).filter((u) => u.role === "admin").length;
+    const inactive = (users || []).filter((u) => !u.is_active).length;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, customers, admins, inactive, pct };
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return (users || []).filter((user) => {
+      const matchesSearch =
+        !q ||
+        [user.first_name, user.last_name, user.email, user.phone]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesRole = userRoleFilter === "all" || user.role === userRoleFilter;
+      const matchesStatus =
+        userStatusFilter === "all" ||
+        (userStatusFilter === "active" ? Boolean(user.is_active) : !user.is_active);
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [users, userSearch, userRoleFilter, userStatusFilter]);
+
+  const userTotalPages = Math.max(1, Math.ceil(filteredUsers.length / userPerPage));
+  const safeUserPage = Math.min(userPage, userTotalPages);
+  const paginatedUsers = filteredUsers.slice(
+    (safeUserPage - 1) * userPerPage,
+    safeUserPage * userPerPage
+  );
+
+  const toggleUserSelect = (id) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleUserSelectAll = () => {
+    const pageIds = paginatedUsers.map((u) => u.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedUserIds.includes(id));
+    setSelectedUserIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
   };
 
   /* ===================== BRANDS ===================== */
@@ -801,11 +1392,26 @@ function AdminPanel() {
   };
 
   /* ===================== CONTACT MESSAGES ===================== */
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactStatusFilter, setContactStatusFilter] = useState("all");
+  const [contactDateFilter, setContactDateFilter] = useState("");
+  const [contactPage, setContactPage] = useState(1);
+  const [contactPerPage, setContactPerPage] = useState(10);
+  const [selectedContactIds, setSelectedContactIds] = useState([]);
+  const [selectedContactDetail, setSelectedContactDetail] = useState(null);
+  const [contactDetailLoading, setContactDetailLoading] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [showContactTip, setShowContactTip] = useState(true);
+
   const updateContact = async (id, status) => {
     try {
       await adminService.updateContactStatus(id, { status });
       toast.success("Message marked as " + status);
       loadAdminData();
+      if (selectedContactDetail?.id === id) {
+        setSelectedContactDetail((prev) => (prev ? { ...prev, status } : prev));
+      }
     } catch (error) {
       toast.error(error?.response?.data?.message || "Message update failed");
     }
@@ -815,10 +1421,103 @@ function AdminPanel() {
     try {
       await adminService.deleteContact(id);
       toast.success("Message deleted");
+      if (selectedContactDetail?.id === id) setSelectedContactDetail(null);
       loadAdminData();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Message delete failed");
     }
+  };
+
+  const loadContactDetails = async (id) => {
+    setContactDetailLoading(true);
+    try {
+      const res = await adminService.getContactById(id);
+      setSelectedContactDetail(res.data.data);
+      setReplyText("");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load inquiry details");
+    } finally {
+      setContactDetailLoading(false);
+    }
+  };
+
+  const sendContactReply = async (event) => {
+    event.preventDefault();
+    if (!selectedContactDetail?.id || !replyText.trim()) {
+      toast.error("Write a reply first");
+      return;
+    }
+    setSendingReply(true);
+    try {
+      const res = await adminService.replyToContact(selectedContactDetail.id, { message: replyText.trim() });
+      toast.success(res.data.message || "Reply sent");
+      setReplyText("");
+      const detail = await adminService.getContactById(selectedContactDetail.id);
+      setSelectedContactDetail(detail.data.data);
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Reply failed");
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const contactStatusTone = (status) => {
+    if (status === "replied") return "done";
+    if (status === "archived") return "muted";
+    if (status === "read") return "progress";
+    return "pending";
+  };
+
+  const contactTicketNo = (id) => `#INQ-${String(id).padStart(3, "0")}`;
+
+  const contactStats = useMemo(() => {
+    const total = (contacts || []).length;
+    const replied = (contacts || []).filter((c) => c.status === "replied").length;
+    const pending = (contacts || []).filter((c) => c.status === "pending" || c.status === "read").length;
+    const closed = (contacts || []).filter((c) => c.status === "archived").length;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, replied, pending, closed, pct };
+  }, [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    return (contacts || []).filter((message) => {
+      const matchesSearch =
+        !q ||
+        [message.name, message.email, message.subject, message.message, message.phone]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus = contactStatusFilter === "all" || message.status === contactStatusFilter;
+      let matchesDate = true;
+      if (contactDateFilter && message.created_at) {
+        const d = new Date(message.created_at);
+        matchesDate = !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === contactDateFilter;
+      }
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [contacts, contactSearch, contactStatusFilter, contactDateFilter]);
+
+  const contactTotalPages = Math.max(1, Math.ceil(filteredContacts.length / contactPerPage));
+  const safeContactPage = Math.min(contactPage, contactTotalPages);
+  const paginatedContacts = filteredContacts.slice(
+    (safeContactPage - 1) * contactPerPage,
+    safeContactPage * contactPerPage
+  );
+
+  const toggleContactSelect = (id) => {
+    setSelectedContactIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleContactSelectAll = () => {
+    const pageIds = paginatedContacts.map((m) => m.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedContactIds.includes(id));
+    setSelectedContactIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
   };
 
   /* ===================== HERO BANNERS ===================== */
@@ -1019,10 +1718,302 @@ function AdminPanel() {
   const tabById = Object.fromEntries(tabs.map((tab) => [tab.id, tab]));
 
   const printSubTabs = [
-    { id: "orders", label: "3D Printing Orders", count: printOrders.length },
-    { id: "colors", label: "Colors", count: colors.length },
-    { id: "materials", label: "Materials", count: materials.length },
+    { id: "orders", label: "3D Printing Orders", count: printOrders.length, Icon: Box },
+    { id: "colors", label: "Colors", count: colors.length, Icon: Palette },
+    { id: "materials", label: "Materials", count: materials.length, Icon: Cuboid },
   ];
+
+  const colorUsageMap = useMemo(() => {
+    const map = {};
+    (printOrders || []).forEach((order) => {
+      const cid = order.color_id;
+      if (cid !== null && cid !== undefined) map[cid] = (map[cid] || 0) + 1;
+    });
+    return map;
+  }, [printOrders]);
+
+  const filteredColors = useMemo(() => {
+    const q = colorSearch.trim().toLowerCase();
+    return (colors || []).filter((color) => {
+      const matchesSearch =
+        !q ||
+        [color.name, color.hex_code].filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus =
+        colorStatusFilter === "all" ||
+        (colorStatusFilter === "active" ? Boolean(color.is_active) : !color.is_active);
+      return matchesSearch && matchesStatus;
+    });
+  }, [colors, colorSearch, colorStatusFilter]);
+
+  const colorTotalPages = Math.max(1, Math.ceil(filteredColors.length / colorPerPage));
+  const safeColorPage = Math.min(colorPage, colorTotalPages);
+  const paginatedColors = filteredColors.slice(
+    (safeColorPage - 1) * colorPerPage,
+    safeColorPage * colorPerPage
+  );
+
+  const formatColorDate = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const printStats = useMemo(() => {
+    const total = (printOrders || []).length;
+    const completed = (printOrders || []).filter((o) => o.status === "delivered").length;
+    const cancelled = (printOrders || []).filter((o) => o.status === "cancelled").length;
+    const inProduction = Math.max(0, total - completed - cancelled);
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, completed, cancelled, inProduction, pct };
+  }, [printOrders]);
+
+  const filteredPrintOrders = useMemo(() => {
+    const q = printSearch.trim().toLowerCase();
+    return (printOrders || []).filter((order) => {
+      const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        [order.order_number, customerName, order.email, order.file_name]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus = printStatusFilter === "all" || order.status === printStatusFilter;
+      const matchesMaterial =
+        printMaterialFilter === "all" ||
+        String(order.material_id) === String(printMaterialFilter) ||
+        (order.material_name || "").toLowerCase() === String(printMaterialFilter).toLowerCase();
+      let matchesDate = true;
+      if (printDateFilter && order.created_at) {
+        const d = new Date(order.created_at);
+        matchesDate = !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === printDateFilter;
+      }
+      return matchesSearch && matchesStatus && matchesMaterial && matchesDate;
+    });
+  }, [printOrders, printSearch, printStatusFilter, printMaterialFilter, printDateFilter]);
+
+  const printTotalPages = Math.max(1, Math.ceil(filteredPrintOrders.length / printPerPage));
+  const safePrintPage = Math.min(printPage, printTotalPages);
+  const paginatedPrintOrders = filteredPrintOrders.slice(
+    (safePrintPage - 1) * printPerPage,
+    safePrintPage * printPerPage
+  );
+
+  const clearPrintFilters = () => {
+    setPrintSearch("");
+    setPrintStatusFilter("all");
+    setPrintMaterialFilter("all");
+    setPrintDateFilter("");
+    setPrintPage(1);
+    setSelectedPrintIds([]);
+  };
+
+  const formatPrintDate = (value) => {
+    if (!value) return { date: "—", time: "" };
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return { date: "—", time: "" };
+    return {
+      date: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+      time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+    };
+  };
+
+  const printStatusTone = (status) => {
+    if (status === "delivered") return "done";
+    if (status === "cancelled") return "cancel";
+    if (["pending", "confirmed", "reviewing"].includes(status)) return "pending";
+    return "progress";
+  };
+
+  const togglePrintSelect = (id) => {
+    setSelectedPrintIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const togglePrintSelectAll = () => {
+    const pageIds = paginatedPrintOrders.map((o) => o.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedPrintIds.includes(id));
+    setSelectedPrintIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
+  };
+
+  const MATERIAL_META = {
+    PLA: { chemical: "Polylactic Acid", type: "Bioplastic", tone: "green", image: "/images/products/blue_filament.png" },
+    PETG: { chemical: "Polyethylene Terephthalate Glycol", type: "Thermoplastic", tone: "blue", image: "/images/products/petg_filament.jpg" },
+    ABS: { chemical: "Acrylonitrile Butadiene Styrene", type: "Thermoplastic", tone: "blue", image: "/images/products/abs_filament.jpg" },
+    TPU: { chemical: "Thermoplastic Polyurethane", type: "Flexible", tone: "purple", image: "/images/products/tpu_filament.jpg" },
+  };
+
+  const getMaterialMeta = (material) => {
+    const key = String(material?.name || material?.code || "").trim().toUpperCase();
+    return (
+      MATERIAL_META[key] || {
+        chemical: material?.code || material?.slug || "Printing material",
+        type: "Standard",
+        tone: "gray",
+        image: "/images/products/blue_filament.png",
+      }
+    );
+  };
+
+  const materialStats = useMemo(() => {
+    const total = (materials || []).length;
+    const active = (materials || []).filter((m) => Boolean(m.is_active)).length;
+    const inactive = Math.max(0, total - active);
+    const avgPrice =
+      total > 0
+        ? (materials || []).reduce((sum, m) => sum + Number(m.price_per_gram || 0), 0) / total
+        : 0;
+    const now = new Date();
+    const thisMonth = (materials || []).filter((m) => {
+      const d = new Date(m.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = (materials || []).filter((m) => {
+      const d = new Date(m.created_at);
+      return !Number.isNaN(d.getTime()) && d.getMonth() === prev.getMonth() && d.getFullYear() === prev.getFullYear();
+    }).length;
+    const growth = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : thisMonth > 0 ? 100 : 0;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, active, inactive, avgPrice, growth, pct };
+  }, [materials]);
+
+  const materialTypeOptions = useMemo(() => {
+    const types = new Set();
+    (materials || []).forEach((m) => types.add(getMaterialMeta(m).type));
+    return [...types];
+  }, [materials]);
+
+  const filteredMaterials = useMemo(() => {
+    const q = materialSearch.trim().toLowerCase();
+    return (materials || []).filter((material) => {
+      const matchesSearch =
+        !q ||
+        [material.name, material.code, material.description, material.best_for]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesType =
+        materialTypeFilter === "all" || getMaterialMeta(material).type === materialTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [materials, materialSearch, materialTypeFilter]);
+
+  const materialTotalPages = Math.max(1, Math.ceil(filteredMaterials.length / materialPerPage));
+  const safeMaterialPage = Math.min(materialPage, materialTotalPages);
+  const paginatedMaterials = filteredMaterials.slice(
+    (safeMaterialPage - 1) * materialPerPage,
+    safeMaterialPage * materialPerPage
+  );
+
+  const duplicateMaterial = async (material) => {
+    try {
+      const payload = {
+        name: `${material.name} Copy`,
+        code: material.code || material.slug || material.name,
+        description: material.description || "",
+        price_per_gram: Number(material.price_per_gram),
+        density_g_cm3: Number(material.density_g_cm3 || 1.24),
+        is_active: Boolean(material.is_active),
+      };
+      await adminService.createMaterial(payload);
+      toast.success("Material duplicated");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Material duplicate failed");
+    }
+  };
+
+  const getCouponState = (coupon, now = new Date()) => {
+    if (coupon.valid_until && new Date(coupon.valid_until) < now) return "expired";
+    if (coupon.valid_from && new Date(coupon.valid_from) > now) return "scheduled";
+    return coupon.is_active ? "active" : "inactive";
+  };
+
+  const couponStats = useMemo(() => {
+    const now = new Date();
+    const total = (coupons || []).length;
+    const active = (coupons || []).filter((c) => getCouponState(c, now) === "active").length;
+    const scheduled = (coupons || []).filter((c) => getCouponState(c, now) === "scheduled").length;
+    const expired = (coupons || []).filter((c) => getCouponState(c, now) === "expired").length;
+    const pct = (n) => (total ? `${Math.round((n / total) * 100)}% of total` : "0% of total");
+    return { total, active, scheduled, expired, pct };
+  }, [coupons]);
+
+  const filteredCoupons = useMemo(() => {
+    const now = new Date();
+    const q = couponSearch.trim().toLowerCase();
+    return (coupons || []).filter((coupon) => {
+      const matchesSearch =
+        !q ||
+        [coupon.code, coupon.description]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      const matchesStatus =
+        couponStatusFilter === "all" || getCouponState(coupon, now) === couponStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [coupons, couponSearch, couponStatusFilter]);
+
+  const couponTotalPages = Math.max(1, Math.ceil(filteredCoupons.length / couponPerPage));
+  const safeCouponPage = Math.min(couponPage, couponTotalPages);
+  const paginatedCoupons = filteredCoupons.slice(
+    (safeCouponPage - 1) * couponPerPage,
+    safeCouponPage * couponPerPage
+  );
+
+  const toggleCouponSelect = (id) => {
+    setSelectedCouponIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleCouponSelectAll = () => {
+    const pageIds = paginatedCoupons.map((c) => c.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedCouponIds.includes(id));
+    setSelectedCouponIds((prev) =>
+      allSelected ? prev.filter((id) => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]
+    );
+  };
+
+  const copyCouponCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success(`Code ${code} copied`);
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const duplicateCoupon = async (coupon) => {
+    try {
+      const toDateInput = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "");
+      const payload = {
+        code: `${coupon.code}-COPY`,
+        discount_type: coupon.discount_type || "percentage",
+        discount_value: coupon.discount_value,
+        min_order_amount: coupon.min_order_amount ?? 0,
+        max_discount: coupon.max_discount ?? null,
+        usage_limit: coupon.usage_limit ?? null,
+        valid_from: toDateInput(coupon.valid_from),
+        valid_until: toDateInput(coupon.valid_until),
+        is_active: Boolean(coupon.is_active),
+      };
+      await adminService.createCoupon(payload);
+      toast.success("Coupon duplicated");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Coupon duplicate failed");
+    }
+  };
+
+  const formatShortDate = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
 
   return (
     <div className="admin-page">
@@ -1049,8 +2040,43 @@ function AdminPanel() {
                       setActiveTab(id);
                       setSelectedOrderDetail(null);
                       setSelectedPrintOrderDetail(null);
+                      setSelectedUserDetail(null);
+                      setSelectedContactDetail(null);
                       setOrderStatusFilter("all");
+                      setOrderSearch("");
+                      setOrderDateFilter("");
+                      setOrderPaymentFilter("all");
+                      setOrderPage(1);
+                      setSelectedOrderIds([]);
+                      setOrderMenuId(null);
                       setPrintStatusFilter("all");
+                      setPrintSearch("");
+                      setPrintMaterialFilter("all");
+                      setPrintDateFilter("");
+                      setPrintPage(1);
+                      setSelectedPrintIds([]);
+                      setMaterialSearch("");
+                      setMaterialTypeFilter("all");
+                      setMaterialPage(1);
+                      setSearch("");
+                      setProductCategoryFilter("all");
+                      setProductStatusFilter("all");
+                      setProductPage(1);
+                      setSelectedProductIds([]);
+                      setCategorySearch("");
+                      setCategoryStatusFilter("all");
+                      setCategoryPage(1);
+                      setSelectedCategoryIds([]);
+                      setUserSearch("");
+                      setUserRoleFilter("all");
+                      setUserStatusFilter("all");
+                      setUserPage(1);
+                      setSelectedUserIds([]);
+                      setContactSearch("");
+                      setContactStatusFilter("all");
+                      setContactDateFilter("");
+                      setContactPage(1);
+                      setSelectedContactIds([]);
                     }}
                   >
                     <Icon size={18} />
@@ -1222,68 +2248,162 @@ function AdminPanel() {
             )}
 
             {activeTab === "products" && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+              <section className="admin-products-layout">
+                <div className="admin-print-stats admin-products-stats">
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico blue"><Box size={22} /></span>
                     <div>
-                      <h2>Products</h2>
-                      <p className="admin-panel-subtitle">Manage backend products and review storefront catalog items.</p>
+                      <strong>{productStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Products</span>
+                      <span className="admin-print-stat-sub up">↑ {productStats.growth}% from last month</span>
                     </div>
-                    <div className="admin-actions">
-                      <label className="admin-search">
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico green"><Box size={22} /></span>
+                    <div>
+                      <strong>{productStats.inCount}</strong>
+                      <span className="admin-print-stat-label">In Stock</span>
+                      <span className="admin-print-stat-sub">{productStats.pct(productStats.inCount)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico amber"><Clock size={22} /></span>
+                    <div>
+                      <strong>{productStats.lowCount}</strong>
+                      <span className="admin-print-stat-label">Low Stock</span>
+                      <span className="admin-print-stat-sub">{productStats.pct(productStats.lowCount)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico red"><XCircle size={22} /></span>
+                    <div>
+                      <strong>{productStats.outCount}</strong>
+                      <span className="admin-print-stat-label">Out of Stock</span>
+                      <span className="admin-print-stat-sub">{productStats.pct(productStats.outCount)}</span>
+                    </div>
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-products-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-coupons-ico">
+                        <Box size={22} />
+                      </span>
+                      <div>
+                        <h2>Products</h2>
+                        <p className="admin-panel-subtitle">Manage backend products and review storefront catalog items.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-products-tools">
+                      <label className="admin-search admin-products-search">
                         <Search size={15} />
-                        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." />
+                        <input value={search} onChange={(e) => { setSearch(e.target.value); setProductPage(1); }} placeholder="Search products..." />
                       </label>
+                      <select
+                        className="admin-filter-select"
+                        value={productCategoryFilter}
+                        onChange={(e) => { setProductCategoryFilter(e.target.value); setProductPage(1); }}
+                        aria-label="Filter products by category"
+                      >
+                        <option value="all">All Categories</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="admin-filter-select"
+                        value={productStatusFilter}
+                        onChange={(e) => { setProductStatusFilter(e.target.value); setProductPage(1); }}
+                        aria-label="Filter products by status"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="in">In Stock</option>
+                        <option value="low">Low Stock</option>
+                        <option value="out">Out of Stock</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
                       <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetProductForm(); setActiveModal("product"); }}>
                         <Plus size={16} />
                         <span>Add Product</span>
                       </button>
                     </div>
                   </div>
-                  <div className="admin-product-list">
-                    <div className="admin-product-head">
+
+                  <div className="admin-products-table-wrap">
+                    <div className="admin-products-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.includes(p.id))}
+                        onChange={toggleProductSelectAll}
+                        aria-label="Select all products on page"
+                      />
+                      <span>#</span>
                       <span>Product</span>
                       <span>Category</span>
-                      <span>Price</span>
+                      <span>Price (Rs.)</span>
                       <span>Stock</span>
-                      <span>Action</span>
+                      <span>Status</span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
                     </div>
-                    {filteredProducts.length ? (
-                      filteredProducts.map((product) => {
+                    {paginatedProducts.length ? (
+                      paginatedProducts.map((product, idx) => {
+                        const rowNum = (safeProductPage - 1) * productPerPage + idx + 1;
                         const stockQty = Number(product.stock || 0);
-                        const stockState = stockQty <= 0 ? "out" : stockQty <= 5 ? "low" : "in";
-                        const stockLabel = stockQty <= 0 ? "Out of stock" : stockQty <= 5 ? `Low (${stockQty})` : "In stock";
+                        const stockState = getStockState(product);
+                        const stockMeta = STOCK_META[stockState];
                         const isActive = product.is_active ?? true;
+                        const created = formatPrintDate(product.created_at);
                         return (
-                          <article className={`admin-product-row ${isActive ? "" : "inactive"}`} key={product.id}>
-                            <img src={product.primary_image || "/images/placeholder.png"} alt={product.name} />
-                            <div className="admin-product-info">
-                              <strong>{product.name}</strong>
-                              <span>{product.sku || product.brand_name || "No SKU"}</span>
-                            </div>
-                            <span className="admin-muted-cell">{product.category_name || "Catalog"}{product.brand_name ? ` · ${product.brand_name}` : ""}</span>
+                          <div className={`admin-products-table-row ${isActive ? "" : "inactive"}`} key={product.id}>
                             <input
-                              type="number"
-                              defaultValue={product.price}
-                              onBlur={(e) => updateProduct(product.id, { price: Number(e.target.value) })}
-                              aria-label="Price"
+                              type="checkbox"
+                              checked={selectedProductIds.includes(product.id)}
+                              onChange={() => toggleProductSelect(product.id)}
+                              aria-label={`Select product ${product.name}`}
                             />
-                            <div className="admin-stock-cell">
-                              <input
-                                type="number"
-                                defaultValue={product.stock}
-                                onBlur={(e) => updateProduct(product.id, { stock: Number(e.target.value) })}
-                                aria-label="Stock"
-                              />
-                              <span className="admin-stock-line">
-                                <i className={`admin-stock-dot ${stockState}`} />
-                                {stockLabel}
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <span className="admin-product-cell">
+                                <ProductThumb src={product.primary_image} alt={product.name} />
+                                <span>
+                                  <strong className="admin-product-name">{product.name}</strong>
+                                  <span className="admin-print-sub">{product.sku || product.brand_name || "No SKU"}</span>
+                                </span>
                               </span>
-                            </div>
-                            <div className="admin-row-actions">
+                            </span>
+                            <span>
+                              <span className={`admin-category-pill ${categoryTone(product.category_name || "Catalog")}`}>
+                                {product.category_name || "Catalog"}
+                              </span>
+                            </span>
+                            <span className="admin-material-value">{Number(product.price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className={`admin-stock-count ${stockMeta.tone}`}>{stockQty}</span>
+                            <span>
+                              <span className={`admin-stock-pill ${stockMeta.tone}`}>
+                                <i className="admin-status-dot" />
+                                {stockMeta.label}
+                              </span>
+                              {!isActive && <span className="admin-print-sub">Hidden</span>}
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <Link
+                                to={`/product/${product.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="admin-icon-btn view"
+                                title="View on storefront"
+                              >
+                                <Eye size={16} />
+                              </Link>
                               <button
                                 type="button"
-                                className="admin-icon"
+                                className="admin-icon-btn edit"
                                 onClick={() => openEditProduct(product.id)}
                                 title="Edit product details"
                               >
@@ -1291,109 +2411,407 @@ function AdminPanel() {
                               </button>
                               <button
                                 type="button"
-                                className={`admin-icon ${isActive ? "danger" : "success"}`}
-                                onClick={() => updateProduct(product.id, { is_active: !isActive })}
-                                title={isActive ? "Deactivate product" : "Activate product"}
+                                className="admin-icon-btn copy"
+                                onClick={() => duplicateProduct(product.id)}
+                                title="Duplicate product"
                               >
-                                <Power size={16} />
+                                <Copy size={16} />
                               </button>
-                            </div>
-                          </article>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete product "${product.name}"?`)) {
+                                    deleteProduct(product.id);
+                                  }
+                                }}
+                                title="Delete product"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </span>
+                          </div>
                         );
                       })
                     ) : (
                       <div className="admin-empty small">No products found</div>
                     )}
                   </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={productPerPage}
+                        onChange={(e) => { setProductPerPage(Number(e.target.value)); setProductPage(1); }}
+                        aria-label="Products per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredProducts.length
+                          ? `Showing ${(safeProductPage - 1) * productPerPage + 1} to ${Math.min(safeProductPage * productPerPage, filteredProducts.length)} of ${filteredProducts.length} products`
+                          : "No products to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeProductPage <= 1}
+                        onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeProductPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeProductPage >= productTotalPages}
+                        onClick={() => setProductPage((p) => Math.min(productTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </section>
             )}
 
             {activeTab === "orders" && !selectedOrderDetail && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+              <section className="admin-orders-layout">
+                <div className="admin-print-stats admin-orders-stats">
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico blue"><ShoppingCart size={22} /></span>
                     <div>
-                      <h2>Customer Orders</h2>
-                      <p className="admin-panel-subtitle">Manage customer orders and update delivery status.</p>
+                      <strong>{customerOrderStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Orders</span>
+                      <span className="admin-print-stat-sub up">↑ 100% from last month</span>
                     </div>
-                    <div className="admin-filter-bar">
-                      <span className="admin-count-badge">{orders.length} orders</span>
+                    <Sparkline tone="blue" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico green"><CheckCircle2 size={22} /></span>
+                    <div>
+                      <strong>{customerOrderStats.confirmed}</strong>
+                      <span className="admin-print-stat-label">Confirmed</span>
+                      <span className="admin-print-stat-sub">{customerOrderStats.pct(customerOrderStats.confirmed)}</span>
+                    </div>
+                    <Sparkline tone="green" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico amber"><Clock size={22} /></span>
+                    <div>
+                      <strong>{customerOrderStats.pending}</strong>
+                      <span className="admin-print-stat-label">Pending</span>
+                      <span className="admin-print-stat-sub">{customerOrderStats.pct(customerOrderStats.pending)}</span>
+                    </div>
+                    <Sparkline tone="amber" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico red"><XCircle size={22} /></span>
+                    <div>
+                      <strong>{customerOrderStats.cancelled}</strong>
+                      <span className="admin-print-stat-label">Cancelled</span>
+                      <span className="admin-print-stat-sub">{customerOrderStats.pct(customerOrderStats.cancelled)}</span>
+                    </div>
+                    <Sparkline tone="red" />
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-orders-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-orders-ico">
+                        <ClipboardList size={22} />
+                      </span>
+                      <div>
+                        <h2>Customer Orders</h2>
+                        <p className="admin-panel-subtitle">Manage customer orders and update delivery status.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-orders-tools">
+                      <label className="admin-search admin-orders-search">
+                        <Search size={15} />
+                        <input
+                          value={orderSearch}
+                          onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
+                          placeholder="Search orders..."
+                        />
+                      </label>
+                      <label className="admin-filter-wrap">
+                        <Filter size={15} />
+                        <select
+                          className="admin-filter-select"
+                          value={orderStatusFilter}
+                          onChange={(e) => { setOrderStatusFilter(e.target.value); setOrderPage(1); }}
+                          aria-label="Filter orders by status"
+                        >
+                          <option value="all">All statuses</option>
+                          {statusOptions.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="admin-print-date">
+                        <Calendar size={15} />
+                        <input
+                          type="date"
+                          value={orderDateFilter}
+                          onChange={(e) => { setOrderDateFilter(e.target.value); setOrderPage(1); }}
+                          aria-label="Filter orders by date"
+                        />
+                        {!orderDateFilter && <span className="admin-print-date-ph">Select date range</span>}
+                      </label>
+                      <button
+                        type="button"
+                        className={`admin-secondary admin-filter-toggle ${showOrderFilters ? "on" : ""}`}
+                        onClick={() => setShowOrderFilters((v) => !v)}
+                        title="More filters"
+                        aria-label="Toggle more filters"
+                      >
+                        <Filter size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  {showOrderFilters && (
+                    <div className="admin-orders-extra-filters">
                       <select
                         className="admin-filter-select"
-                        value={orderStatusFilter}
-                        onChange={(e) => setOrderStatusFilter(e.target.value)}
-                        aria-label="Filter orders by status"
+                        value={orderPaymentFilter}
+                        onChange={(e) => { setOrderPaymentFilter(e.target.value); setOrderPage(1); }}
+                        aria-label="Filter orders by payment status"
                       >
-                        <option value="all">All statuses</option>
-                        {statusOptions.map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
+                        <option value="all">All payments</option>
+                        <option value="pending">Pending</option>
+                        <option value="paid">Paid</option>
+                        <option value="failed">Failed</option>
+                        <option value="refunded">Refunded</option>
                       </select>
+                      <button type="button" className="admin-secondary" onClick={clearOrderFilters}>
+                        Clear
+                      </button>
                     </div>
-                  </div>
-                  <div className="admin-list">
-                    {(() => {
-                      const visibleOrders = orders.filter(
-                        (order) => orderStatusFilter === "all" || order.status === orderStatusFilter
-                      );
-                      if (!visibleOrders.length) {
+                  )}
+
+                  <div className="admin-orders-table-wrap">
+                    <div className="admin-orders-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedCustomerOrders.length > 0 && paginatedCustomerOrders.every((o) => selectedOrderIds.includes(o.id))}
+                        onChange={toggleOrderSelectAll}
+                        aria-label="Select all orders on page"
+                      />
+                      <span>#</span>
+                      <span>Order ID</span>
+                      <span>Customer</span>
+                      <span>Items</span>
+                      <span>Total Amount</span>
+                      <span>Payment Status</span>
+                      <span>Order Status</span>
+                      <span>Ordered On</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedCustomerOrders.length ? (
+                      paginatedCustomerOrders.map((order, idx) => {
+                        const rowNum = (safeOrderPage - 1) * orderPerPage + idx + 1;
+                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || "Guest";
+                        const items = Array.isArray(order.items) ? order.items : [];
+                        const itemCount = order.item_count ?? items.length ?? 0;
+                        const firstItem = items[0];
+                        const created = formatPrintDate(order.created_at);
                         return (
-                          <div className="admin-empty small">
-                            {orders.length ? `No orders with status "${orderStatusFilter}"` : "No customer orders yet"}
-                          </div>
-                        );
-                      }
-                      return visibleOrders.map((order) => (
-                        <article
-                          className="admin-order-row admin-order-clickable"
-                          key={order.id}
-                          onClick={(e) => {
-                            if (e.target.tagName !== "SELECT" && e.target.tagName !== "OPTION") {
-                              loadOrderDetails(order.id);
-                            }
-                          }}
-                        >
-                          <div className="admin-order-info-click" title="View order details">
-                            <strong>#{order.order_number}</strong>
-                            <span>{order.first_name} {order.last_name} | {order.item_count || 0} items</span>
-                            <span className="admin-row-meta">
-                              <span className={`admin-status-pill ${order.status}`}>{order.status}</span>
-                              {order.payment_status && (
-                                <span className="admin-count-badge" style={{ minHeight: 24 }}>
-                                  {order.payment_status}
+                          <div className="admin-orders-table-row" key={order.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedOrderIds.includes(order.id)}
+                              onChange={() => toggleOrderSelect(order.id)}
+                              aria-label={`Select order ${order.order_number}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <span className="admin-order-id-cell">
+                                <button
+                                  type="button"
+                                  className="admin-order-link"
+                                  onClick={() => loadOrderDetails(order.id)}
+                                  title="View order details"
+                                >
+                                  #{order.order_number}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-order-copy"
+                                  onClick={() => copyOrderNumber(order.order_number)}
+                                  title="Copy order ID"
+                                >
+                                  <Copy size={13} />
+                                </button>
+                              </span>
+                              <span className="admin-print-sub">ID {order.id}</span>
+                            </span>
+                            <span>
+                              <span className="admin-customer-cell">
+                                <span className={`admin-avatar-sm ${avatarTone(customerName)}`}>
+                                  {(customerName[0] || "G").toUpperCase()}
                                 </span>
-                              )}
+                                <span>
+                                  <strong className="admin-print-customer">{customerName}</strong>
+                                  <span className="admin-print-sub">{order.email || "—"}</span>
+                                  {order.shipping_phone && (
+                                    <span className="admin-print-sub">+91 {order.shipping_phone}</span>
+                                  )}
+                                </span>
+                              </span>
+                            </span>
+                            <span>
+                              <span className="admin-order-items-cell">
+                                {firstItem?.product_image ? (
+                                  <img src={firstItem.product_image} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                                ) : (
+                                  <span className="admin-order-items-thumb"><Box size={20} /></span>
+                                )}
+                                <span>
+                                  <strong className="admin-print-file-name">{itemCount} item{itemCount === 1 ? "" : "s"}</strong>
+                                  {items.slice(0, 2).map((it, i) => (
+                                    <span className="admin-print-sub" key={i}>{it.product_name}</span>
+                                  ))}
+                                </span>
+                              </span>
+                            </span>
+                            <strong className="admin-print-price">{money(order.total_amount)}</strong>
+                            <span>
+                              <span className={`admin-pay-pill ${paymentTone(order.payment_status)}`}>
+                                <i className="admin-status-dot" />
+                                {(order.payment_status || "pending").charAt(0).toUpperCase() + (order.payment_status || "pending").slice(1)}
+                              </span>
+                            </span>
+                            <span>
+                              <span className={`admin-print-status ${orderStatusTone(order.status)}`}>
+                                <Clock size={13} />
+                                {(order.status || "pending").replace(/_/g, " ")}
+                              </span>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn view"
+                                onClick={() => loadOrderDetails(order.id)}
+                                title="View details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <span className="admin-menu-wrap">
+                                <button
+                                  type="button"
+                                  className="admin-icon-btn menu"
+                                  onClick={() => setOrderMenuId(orderMenuId === order.id ? null : order.id)}
+                                  title="Change status"
+                                  aria-label="Change order status"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                                {orderMenuId === order.id && (
+                                  <>
+                                    <span className="admin-menu-overlay" onClick={() => setOrderMenuId(null)} />
+                                    <span className="admin-menu">
+                                      {statusOptions.map((status) => (
+                                        <button
+                                          key={status}
+                                          type="button"
+                                          className={order.status === status ? "current" : ""}
+                                          onClick={() => {
+                                            updateOrder(order.id, status);
+                                            setOrderMenuId(null);
+                                          }}
+                                        >
+                                          {status}
+                                        </button>
+                                      ))}
+                                    </span>
+                                  </>
+                                )}
+                              </span>
                             </span>
                           </div>
-                          <strong>{money(order.total_amount)}</strong>
-                          <select
-                            value={order.status}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              updateOrder(order.id, e.target.value);
-                            }}
-                          >
-                            {statusOptions.map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className="admin-view-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              loadOrderDetails(order.id);
-                            }}
-                            title="View Details"
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </article>
-                      ));
-                    })()}
+                        );
+                      })
+                    ) : (
+                      <div className="admin-empty small">
+                        {orders.length ? "No orders match these filters" : "No customer orders yet"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={orderPerPage}
+                        onChange={(e) => { setOrderPerPage(Number(e.target.value)); setOrderPage(1); }}
+                        aria-label="Orders per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredCustomerOrders.length
+                          ? `Showing ${(safeOrderPage - 1) * orderPerPage + 1} to ${Math.min(safeOrderPage * orderPerPage, filteredCustomerOrders.length)} of ${filteredCustomerOrders.length} orders`
+                          : "No orders to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeOrderPage <= 1}
+                        onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeOrderPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeOrderPage >= orderTotalPages}
+                        onClick={() => setOrderPage((p) => Math.min(orderTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
+
+                {showOrderTip && (
+                  <div className="admin-pro-tip">
+                    <span className="admin-pro-tip-ico">
+                      <Lightbulb size={22} />
+                    </span>
+                    <div>
+                      <strong>Pro Tip</strong>
+                      <p>Keep order statuses updated to improve customer trust and streamline fulfillment.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-pro-tip-close"
+                      onClick={() => setShowOrderTip(false)}
+                      aria-label="Dismiss tip"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
@@ -1427,89 +2845,278 @@ function AdminPanel() {
                       role="tab"
                       aria-selected={printSubTab === tab.id}
                     >
-                      <span>{tab.label}</span>
+                      <span className="admin-subtab-label">
+                        {tab.Icon && <tab.Icon size={20} />}
+                        <span>{tab.label}</span>
+                      </span>
                       <strong>{tab.count}</strong>
                     </button>
                   ))}
                 </div>
 
                 {printSubTab === "orders" && !selectedPrintOrderDetail && (
-                <div className="admin-panel admin-section-panel">
-                  <div className="admin-panel-title-row">
-                    <div>
-                      <h2>3D Print Orders</h2>
-                      <p className="admin-panel-subtitle">Track custom print jobs and update production status.</p>
+                <div className="admin-panel admin-section-panel admin-print-orders-panel">
+                  <div className="admin-panel-title-row admin-print-orders-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-print-orders-ico">
+                        <FileText size={22} />
+                      </span>
+                      <div>
+                        <h2>3D Print Orders</h2>
+                        <p className="admin-panel-subtitle">Track custom print jobs and update production status.</p>
+                      </div>
                     </div>
-                    <div className="admin-filter-bar">
-                      <span className="admin-count-badge">{printOrders.length} orders</span>
-                      <select
-                        className="admin-filter-select"
-                        value={printStatusFilter}
-                        onChange={(e) => setPrintStatusFilter(e.target.value)}
-                        aria-label="Filter print orders by status"
-                      >
-                        <option value="all">All statuses</option>
-                        {printStatusOptions.map((status) => (
-                          <option key={status} value={status}>{status.replace(/_/g, " ")}</option>
-                        ))}
-                      </select>
+                    <div className="admin-actions compact">
+                      <Link to="/printing" className="admin-primary admin-new-order-btn">
+                        <Plus size={16} />
+                        <span>New Order</span>
+                      </Link>
                     </div>
                   </div>
-                  <div className="admin-list">
-                    {(() => {
-                      const visiblePrintOrders = printOrders.filter(
-                        (order) => printStatusFilter === "all" || order.status === printStatusFilter
-                      );
-                      if (!visiblePrintOrders.length) {
+
+                  <div className="admin-print-stats">
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico blue"><FileText size={22} /></span>
+                      <div>
+                        <strong>{printStats.total}</strong>
+                        <span className="admin-print-stat-label">Total Orders</span>
+                        <span className="admin-print-stat-sub up">↑ 100% from last month</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico green"><CheckCircle2 size={22} /></span>
+                      <div>
+                        <strong>{printStats.completed}</strong>
+                        <span className="admin-print-stat-label">Completed</span>
+                        <span className="admin-print-stat-sub">{printStats.pct(printStats.completed)}</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico amber"><Clock size={22} /></span>
+                      <div>
+                        <strong>{printStats.inProduction}</strong>
+                        <span className="admin-print-stat-label">In Production</span>
+                        <span className="admin-print-stat-sub">{printStats.pct(printStats.inProduction)}</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico red"><XCircle size={22} /></span>
+                      <div>
+                        <strong>{printStats.cancelled}</strong>
+                        <span className="admin-print-stat-label">Cancelled</span>
+                        <span className="admin-print-stat-sub">{printStats.pct(printStats.cancelled)}</span>
+                      </div>
+                    </article>
+                  </div>
+
+                  <div className="admin-print-filters">
+                    <label className="admin-search admin-print-search">
+                      <Search size={15} />
+                      <input
+                        value={printSearch}
+                        onChange={(e) => { setPrintSearch(e.target.value); setPrintPage(1); }}
+                        placeholder="Search by Order ID, customer, file name..."
+                      />
+                    </label>
+                    <select
+                      className="admin-filter-select"
+                      value={printStatusFilter}
+                      onChange={(e) => { setPrintStatusFilter(e.target.value); setPrintPage(1); }}
+                      aria-label="Filter print orders by status"
+                    >
+                      <option value="all">All Statuses</option>
+                      {printStatusOptions.map((status) => (
+                        <option key={status} value={status}>{status.replace(/_/g, " ")}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="admin-filter-select"
+                      value={printMaterialFilter}
+                      onChange={(e) => { setPrintMaterialFilter(e.target.value); setPrintPage(1); }}
+                      aria-label="Filter print orders by material"
+                    >
+                      <option value="all">All Materials</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    <label className="admin-print-date">
+                      <Calendar size={15} />
+                      <input
+                        type="date"
+                        value={printDateFilter}
+                        onChange={(e) => { setPrintDateFilter(e.target.value); setPrintPage(1); }}
+                        aria-label="Filter print orders by date"
+                      />
+                      {!printDateFilter && <span className="admin-print-date-ph">Select date range</span>}
+                    </label>
+                    <button type="button" className="admin-secondary" onClick={clearPrintFilters}>
+                      Clear
+                    </button>
+                  </div>
+
+                  <div className="admin-print-table-wrap">
+                    <div className="admin-print-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedPrintOrders.length > 0 && paginatedPrintOrders.every((o) => selectedPrintIds.includes(o.id))}
+                        onChange={togglePrintSelectAll}
+                        aria-label="Select all orders on page"
+                      />
+                      <span>#</span>
+                      <span>Order ID</span>
+                      <span>Customer</span>
+                      <span>Model/File</span>
+                      <span>Material</span>
+                      <span>Color</span>
+                      <span>Price <ArrowUpDown size={12} /></span>
+                      <span>Status <ArrowUpDown size={12} /></span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedPrintOrders.length ? (
+                      paginatedPrintOrders.map((order, idx) => {
+                        const rowNum = (safePrintPage - 1) * printPerPage + idx + 1;
+                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || "Guest";
+                        const colorHex = order.color_hex || order.custom_color_hex || "#cbd5e1";
+                        const colorName = order.color_name || (order.custom_color_hex ? "Custom" : "—");
+                        const created = formatPrintDate(order.created_at);
                         return (
-                          <div className="admin-empty small">
-                            {printOrders.length ? `No print orders with status "${printStatusFilter.replace(/_/g, " ")}"` : "No 3D print orders yet"}
+                          <div className="admin-print-table-row" key={order.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedPrintIds.includes(order.id)}
+                              onChange={() => togglePrintSelect(order.id)}
+                              aria-label={`Select order ${order.order_number}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <button
+                                type="button"
+                                className="admin-print-order-link"
+                                onClick={() => loadPrintOrderDetails(order.id)}
+                                title="View order details"
+                              >
+                                #{order.order_number}
+                              </button>
+                              <span className="admin-print-sub">ID {order.id}</span>
+                            </span>
+                            <span>
+                              <strong className="admin-print-customer">{customerName}</strong>
+                              <span className="admin-print-sub">{order.email || "—"}</span>
+                            </span>
+                            <span>
+                              <span className="admin-print-file">
+                                <span className="admin-print-file-thumb">
+                                  <Box size={22} />
+                                </span>
+                                <span>
+                                  <strong className="admin-print-file-name">{order.file_name || "model.stl"}</strong>
+                                  <span className="admin-print-sub">{order.file_size ? `${order.file_size} MB` : `${order.quantity || 1} pc(s)`}</span>
+                                </span>
+                              </span>
+                            </span>
+                            <span>
+                              {order.material_name ? (
+                                <span className="admin-print-material">{order.material_name}</span>
+                              ) : "—"}
+                            </span>
+                            <span>
+                              <span className="admin-print-color">
+                                <i style={{ backgroundColor: colorHex }} />
+                                {colorName}
+                              </span>
+                            </span>
+                            <strong className="admin-print-price">{money(order.total_amount)}</strong>
+                            <span>
+                              <span className={`admin-print-status ${printStatusTone(order.status)}`}>
+                                <Clock size={13} />
+                                {(order.status || "pending").replace(/_/g, " ")}
+                              </span>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn view"
+                                onClick={() => loadPrintOrderDetails(order.id)}
+                                title="View details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => loadPrintOrderDetails(order.id)}
+                                title="Edit production status"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Cancel print order #${order.order_number}?`)) {
+                                    updatePrintOrder(order.id, "cancelled");
+                                  }
+                                }}
+                                title="Cancel order"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </span>
                           </div>
                         );
-                      }
-                      return visiblePrintOrders.map((order) => (
-                      <article
-                        className="admin-order-row admin-print-order-row admin-order-clickable"
-                        key={order.id}
-                        onClick={(e) => {
-                          if (e.target.tagName !== "SELECT" && e.target.tagName !== "OPTION") {
-                            loadPrintOrderDetails(order.id);
-                          }
-                        }}
+                      })
+                    ) : (
+                      <div className="admin-empty small">
+                        {printOrders.length ? "No print orders match these filters" : "No 3D print orders yet"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={printPerPage}
+                        onChange={(e) => { setPrintPerPage(Number(e.target.value)); setPrintPage(1); }}
+                        aria-label="Print orders per page"
                       >
-                        <div className="admin-order-info-click" title="View order details">
-                          <strong>#{order.order_number}</strong>
-                          <span>{order.file_name} | {order.material_name || "Material"}</span>
-                          <span className="admin-row-meta">
-                            <span className={`admin-status-pill ${order.status}`}>{order.status?.replace(/_/g, " ")}</span>
-                          </span>
-                        </div>
-                        <strong>{money(order.total_amount)}</strong>
-                        <select
-                          value={order.status}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            updatePrintOrder(order.id, e.target.value);
-                          }}
-                        >
-                          {printStatusOptions.map((status) => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="admin-view-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            loadPrintOrderDetails(order.id);
-                          }}
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-</button>
-                        </article>
-                      ));
-                    })()}
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredPrintOrders.length
+                          ? `Showing ${(safePrintPage - 1) * printPerPage + 1} to ${Math.min(safePrintPage * printPerPage, filteredPrintOrders.length)} of ${filteredPrintOrders.length} orders`
+                          : "No orders to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safePrintPage <= 1}
+                        onClick={() => setPrintPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safePrintPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safePrintPage >= printTotalPages}
+                        onClick={() => setPrintPage((p) => Math.min(printTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 )}
@@ -1533,136 +3140,366 @@ function AdminPanel() {
                 )}
 
                 {printSubTab === "materials" && (
-                <div className="admin-panel admin-section-panel">
-                  <div className="admin-panel-title-row">
-                    <div>
-                      <h2>Materials</h2>
-                      <p className="admin-panel-subtitle">Control material code, density, active state, and price per gram.</p>
+                <div className="admin-panel admin-section-panel admin-materials-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-print-orders-ico">
+                        <Box size={22} />
+                      </span>
+                      <div>
+                        <h2>Materials</h2>
+                        <p className="admin-panel-subtitle">Manage 3D printing materials, their properties, pricing and availability.</p>
+                      </div>
                     </div>
-                    <div className="admin-actions compact">
-                      <span className="admin-count-badge">{materials.length} types</span>
+                    <div className="admin-actions compact admin-colors-tools">
+                      <label className="admin-search admin-colors-search">
+                        <Search size={15} />
+                        <input
+                          value={materialSearch}
+                          onChange={(e) => { setMaterialSearch(e.target.value); setMaterialPage(1); }}
+                          placeholder="Search materials..."
+                        />
+                      </label>
+                      <label className="admin-filter-wrap">
+                        <Filter size={15} />
+                        <select
+                          className="admin-filter-select"
+                          value={materialTypeFilter}
+                          onChange={(e) => { setMaterialTypeFilter(e.target.value); setMaterialPage(1); }}
+                          aria-label="Filter materials by type"
+                        >
+                          <option value="all">Filter by type</option>
+                          {materialTypeOptions.map((type) => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                      </label>
                       <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetMaterialForm(); setActiveModal("material"); }}>
                         <Plus size={16} />
                         <span>Add Material</span>
                       </button>
                     </div>
                   </div>
-                  <div className="admin-material-list">
-                    {materials.length ? (
-                      materials.map((material) => (
-                        <article className="admin-material-row" key={material.id}>
-                          <div>
-                            <strong>{material.name}</strong>
-                            <span>{material.code || material.slug || "MATERIAL"}</span>
+
+                  <div className="admin-print-stats">
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico blue"><Layers size={22} /></span>
+                      <div>
+                        <strong>{materialStats.total}</strong>
+                        <span className="admin-print-stat-label">Total Materials</span>
+                        <span className="admin-print-stat-sub up">↑ {materialStats.growth}% from last month</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico green"><CheckCircle2 size={22} /></span>
+                      <div>
+                        <strong>{materialStats.active}</strong>
+                        <span className="admin-print-stat-label">Active Materials</span>
+                        <span className="admin-print-stat-sub">{materialStats.pct(materialStats.active)}</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico red"><CirclePause size={22} /></span>
+                      <div>
+                        <strong>{materialStats.inactive}</strong>
+                        <span className="admin-print-stat-label">Inactive Materials</span>
+                        <span className="admin-print-stat-sub">{materialStats.pct(materialStats.inactive)}</span>
+                      </div>
+                    </article>
+                    <article className="admin-print-stat">
+                      <span className="admin-print-stat-ico purple"><Tag size={22} /></span>
+                      <div>
+                        <strong>Rs. {Number(materialStats.avgPrice || 0).toFixed(2)}</strong>
+                        <span className="admin-print-stat-label">Avg. Price per Gram</span>
+                        <span className="admin-print-stat-sub">Across all materials</span>
+                      </div>
+                    </article>
+                  </div>
+
+                  <div className="admin-materials-table-wrap">
+                    <div className="admin-materials-table-head">
+                      <span>#</span>
+                      <span>Material</span>
+                      <span>Type</span>
+                      <span>Density (g/cm³)</span>
+                      <span>Price / g (Rs.)</span>
+                      <span>Status</span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedMaterials.length ? (
+                      paginatedMaterials.map((material, idx) => {
+                        const rowNum = (safeMaterialPage - 1) * materialPerPage + idx + 1;
+                        const meta = getMaterialMeta(material);
+                        const created = formatPrintDate(material.created_at);
+                        return (
+                          <div className="admin-materials-table-row" key={material.id}>
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <span className="admin-material-cell">
+                                <img
+                                  className="admin-material-thumb"
+                                  src={meta.image}
+                                  alt={`${material.name} filament spool`}
+                                  onError={(e) => { e.currentTarget.src = "/images/products/blue_filament.png"; }}
+                                />
+                                <span>
+                                  <strong className="admin-material-name">{material.name}</strong>
+                                  <span className="admin-print-sub">{meta.chemical}</span>
+                                  <span className="admin-print-sub">{material.description || material.best_for || material.code || "—"}</span>
+                                </span>
+                              </span>
+                            </span>
+                            <span>
+                              <span className={`admin-material-type ${meta.tone}`}>{meta.type}</span>
+                            </span>
+                            <span className="admin-material-value">{Number(material.density_g_cm3 || 0).toFixed(2)}</span>
+                            <span className="admin-material-value">{Number(material.price_per_gram || 0).toFixed(2)}</span>
+                            <span>
+                              <button
+                                type="button"
+                                className={`admin-status-pill-btn ${material.is_active ? "active" : "inactive"}`}
+                                onClick={() => updateMaterial(material.id, { is_active: !material.is_active })}
+                                title={material.is_active ? "Deactivate material" : "Activate material"}
+                              >
+                                <i className="admin-status-dot" />
+                                {material.is_active ? "Active" : "Inactive"}
+                              </button>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => openEditMaterial(material)}
+                                title="Edit material"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn copy"
+                                onClick={() => duplicateMaterial(material)}
+                                title="Duplicate material"
+                              >
+                                <Copy size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete material "${material.name}"?`)) {
+                                    deleteMaterial(material.id);
+                                  }
+                                }}
+                                title="Delete material"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </span>
                           </div>
-                          <label>
-                            <span>Rs./g</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              defaultValue={material.price_per_gram}
-                              onBlur={(e) => updateMaterial(material.id, { price_per_gram: Number(e.target.value) })}
-                            />
-                          </label>
-                          <label>
-                            <span>Density</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              defaultValue={material.density_g_cm3}
-                              onBlur={(e) => updateMaterial(material.id, { density_g_cm3: Number(e.target.value) })}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className={`admin-toggle ${material.is_active ? "active" : ""}`}
-                            onClick={() => updateMaterial(material.id, { is_active: !material.is_active })}
-                          >
-                            {material.is_active ? "Active" : "Inactive"}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon"
-                            onClick={() => openEditMaterial(material)}
-                            title="Edit material"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon danger"
-                            onClick={() => deleteMaterial(material.id)}
-                            title="Delete material"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </article>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="admin-empty small">No materials found</div>
                     )}
+                  </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={materialPerPage}
+                        onChange={(e) => { setMaterialPerPage(Number(e.target.value)); setMaterialPage(1); }}
+                        aria-label="Materials per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredMaterials.length
+                          ? `Showing ${(safeMaterialPage - 1) * materialPerPage + 1} to ${Math.min(safeMaterialPage * materialPerPage, filteredMaterials.length)} of ${filteredMaterials.length} materials`
+                          : "No materials to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeMaterialPage <= 1}
+                        onClick={() => setMaterialPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeMaterialPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeMaterialPage >= materialTotalPages}
+                        onClick={() => setMaterialPage((p) => Math.min(materialTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 )}
 
                 {printSubTab === "colors" && (
-                <div className="admin-panel admin-section-panel">
-                  <div className="admin-panel-title-row">
-                    <div>
-                      <h2>Colors</h2>
-                      <p className="admin-panel-subtitle">Manage visible colors for 3D print orders.</p>
+                <div className="admin-panel admin-section-panel admin-colors-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-colors-ico">
+                        <Palette size={22} />
+                      </span>
+                      <div>
+                        <h2>Colors</h2>
+                        <p className="admin-panel-subtitle">Manage visible colors for 3D print orders. These colors will be available for customers to choose.</p>
+                      </div>
                     </div>
-                    <div className="admin-actions compact">
-                      <span className="admin-count-badge">{colors.length} colors</span>
+                    <div className="admin-actions compact admin-colors-tools">
+                      <label className="admin-search admin-colors-search">
+                        <Search size={15} />
+                        <input
+                          value={colorSearch}
+                          onChange={(e) => { setColorSearch(e.target.value); setColorPage(1); }}
+                          placeholder="Search colors..."
+                        />
+                      </label>
+                      <label className="admin-filter-wrap">
+                        <Filter size={15} />
+                        <select
+                          className="admin-filter-select"
+                          value={colorStatusFilter}
+                          onChange={(e) => { setColorStatusFilter(e.target.value); setColorPage(1); }}
+                          aria-label="Filter colors by status"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </label>
                       <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetColorForm(); setActiveModal("color"); }}>
                         <Plus size={16} />
                         <span>Add Color</span>
                       </button>
                     </div>
                   </div>
-                  <div className="admin-color-grid">
-                    {colors.length ? (
-                      colors.map((color) => (
-                        <article className="admin-color-row" key={color.id}>
-                          <span className="admin-color-dot" style={{ backgroundColor: color.hex_code }} />
-                          <div>
-                            <strong>{color.name}</strong>
-                            <span>{color.hex_code}</span>
-                          </div>
-                          <input
-                            type="color"
-                            defaultValue={color.hex_code || "#000000"}
-                            onBlur={(e) => updateColor(color.id, { hex_code: e.target.value })}
-                            aria-label={`${color.name} color`}
-                          />
-                          <button
-                            type="button"
-                            className={`admin-toggle ${color.is_active ? "active" : ""}`}
-                            onClick={() => updateColor(color.id, { is_active: !color.is_active })}
-                          >
-                            {color.is_active ? "Active" : "Inactive"}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon"
-                            onClick={() => openEditColor(color)}
-                            title="Edit color"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon danger"
-                            onClick={() => deleteColor(color.id)}
-                            title="Delete color"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </article>
-                      ))
+                  <div className="admin-colors-table-wrap">
+                    <div className="admin-colors-table-head">
+                      <span>#</span>
+                      <span>Color</span>
+                      <span>Name</span>
+                      <span>HEX Code</span>
+                      <span>Preview</span>
+                      <span>Status</span>
+                      <span>Usage</span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedColors.length ? (
+                      paginatedColors.map((color, idx) => {
+                        const rowNum = (safeColorPage - 1) * colorPerPage + idx + 1;
+                        const usage = colorUsageMap[color.id] || 0;
+                        return (
+                        <div className="admin-colors-table-row" key={color.id}>
+                          <span className="admin-colors-num">{rowNum}</span>
+                          <span>
+                            <i className="admin-colors-dot" style={{ backgroundColor: color.hex_code }} />
+                          </span>
+                          <strong>{color.name}</strong>
+                          <span>
+                            <code className="admin-colors-hex">{color.hex_code}</code>
+                          </span>
+                          <span>
+                            <i className="admin-colors-preview" style={{ backgroundColor: color.hex_code }} />
+                          </span>
+                          <span>
+                            <button
+                              type="button"
+                              className={`admin-status-pill-btn ${color.is_active ? "active" : "inactive"}`}
+                              onClick={() => updateColor(color.id, { is_active: !color.is_active })}
+                              title={color.is_active ? "Deactivate color" : "Activate color"}
+                            >
+                              <i className="admin-status-dot" />
+                              {color.is_active ? "Active" : "Inactive"}
+                            </button>
+                          </span>
+                          <span className="admin-colors-usage">
+                            <Cuboid size={15} />
+                            {usage} orders
+                          </span>
+                          <span className="admin-colors-date">{formatColorDate(color.created_at)}</span>
+                          <span className="admin-colors-actions">
+                            <button
+                              type="button"
+                              className="admin-icon-btn edit"
+                              onClick={() => openEditColor(color)}
+                              title="Edit color"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-icon-btn delete"
+                              onClick={() => deleteColor(color.id)}
+                              title="Delete color"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </span>
+                        </div>
+                        );
+                      })
                     ) : (
                       <div className="admin-empty small">No colors found</div>
                     )}
+                  </div>
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={colorPerPage}
+                        onChange={(e) => { setColorPerPage(Number(e.target.value)); setColorPage(1); }}
+                        aria-label="Colors per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredColors.length
+                          ? `Showing ${(safeColorPage - 1) * colorPerPage + 1} to ${Math.min(safeColorPage * colorPerPage, filteredColors.length)} of ${filteredColors.length} colors`
+                          : "No colors to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeColorPage <= 1}
+                        onClick={() => setColorPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeColorPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeColorPage >= colorTotalPages}
+                        onClick={() => setColorPage((p) => Math.min(colorTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 )}
@@ -1670,201 +3507,842 @@ function AdminPanel() {
               </section>
             )}
 
-            {activeTab === "users" && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+            {activeTab === "users" && !selectedUserDetail && (
+              <section className="admin-users-layout">
+                <div className="admin-print-stats admin-users-stats">
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico blue"><Users size={22} /></span>
                     <div>
+                      <strong>{userStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Users</span>
+                      <span className="admin-print-stat-sub up">↑ 100% from last month</span>
+                    </div>
+                    <Sparkline tone="blue" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico green"><User size={22} /></span>
+                    <div>
+                      <strong>{userStats.customers}</strong>
+                      <span className="admin-print-stat-label">Customers</span>
+                      <span className="admin-print-stat-sub">{userStats.pct(userStats.customers)}</span>
+                    </div>
+                    <Sparkline tone="green" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico purple"><ShieldCheck size={22} /></span>
+                    <div>
+                      <strong>{userStats.admins}</strong>
+                      <span className="admin-print-stat-label">Admins</span>
+                      <span className="admin-print-stat-sub">{userStats.pct(userStats.admins)}</span>
+                    </div>
+                    <Sparkline tone="purple" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico red"><Ban size={22} /></span>
+                    <div>
+                      <strong>{userStats.inactive}</strong>
+                      <span className="admin-print-stat-label">Inactive Users</span>
+                      <span className="admin-print-stat-sub">{userStats.pct(userStats.inactive)}</span>
+                    </div>
+                    <Sparkline tone="red" />
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-users-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-users-title">
                       <h2>Users</h2>
                       <p className="admin-panel-subtitle">Manage customer and administrative accounts.</p>
                     </div>
-                    <span className="admin-count-badge">{users.length} users</span>
+                    <div className="admin-actions compact admin-users-tools">
+                      <label className="admin-search admin-users-search">
+                        <Search size={15} />
+                        <input
+                          value={userSearch}
+                          onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
+                          placeholder="Search users..."
+                        />
+                      </label>
+                      <select
+                        className="admin-filter-select"
+                        value={userRoleFilter}
+                        onChange={(e) => { setUserRoleFilter(e.target.value); setUserPage(1); }}
+                        aria-label="Filter users by role"
+                      >
+                        <option value="all">All Roles</option>
+                        <option value="customer">Customer</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <select
+                        className="admin-filter-select"
+                        value={userStatusFilter}
+                        onChange={(e) => { setUserStatusFilter(e.target.value); setUserPage(1); }}
+                        aria-label="Filter users by status"
+                      >
+                        <option value="all">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                      <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetUserForm(); setActiveModal("user"); }}>
+                        <Plus size={16} />
+                        <span>Add User</span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="admin-list">
-                    {users.length ? (
-                      users.map((user) => (
-                        <article className="admin-user-row" key={user.id} style={{ gridTemplateColumns: "44px minmax(0, 1fr) 180px 44px 110px" }}>
-                          <div className="admin-avatar">{`${user.first_name?.[0] || ""}${user.last_name?.[0] || ""}`}</div>
-                          <div>
-                            <strong>{user.first_name} {user.last_name}</strong>
-                            <span>{user.email}</span>
-                            <span className="admin-row-meta">
-                              <span className={`admin-role-pill ${user.role === "admin" ? "admin" : "customer"}`}>{user.role}</span>
-                              <span className={`admin-status-pill ${user.is_active ? "delivered" : "cancelled"}`}>
+
+                  <div className="admin-users-table-wrap">
+                    <div className="admin-users-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedUsers.length > 0 && paginatedUsers.every((u) => selectedUserIds.includes(u.id))}
+                        onChange={toggleUserSelectAll}
+                        aria-label="Select all users on page"
+                      />
+                      <span>#</span>
+                      <span>Name</span>
+                      <span>Email</span>
+                      <span>Role</span>
+                      <span>Status</span>
+                      <span>Joined On</span>
+                      <span>Last Login</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedUsers.length ? (
+                      paginatedUsers.map((user, idx) => {
+                        const rowNum = (safeUserPage - 1) * userPerPage + idx + 1;
+                        const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Unnamed";
+                        const joined = formatPrintDate(user.created_at);
+                        const lastLogin = user.last_login ? formatPrintDate(user.last_login) : null;
+                        return (
+                          <div className="admin-users-table-row" key={user.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.includes(user.id)}
+                              onChange={() => toggleUserSelect(user.id)}
+                              aria-label={`Select user ${fullName}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <span className="admin-user-cell">
+                                <span className={`admin-user-avatar ${userAvatarTone(fullName)}`}>
+                                  {userInitials(user)}
+                                </span>
+                                <span>
+                                  <strong className="admin-product-name">{fullName}</strong>
+                                  <span className="admin-print-sub">{user.phone ? `+91 ${user.phone}` : "No phone"}</span>
+                                </span>
+                              </span>
+                            </span>
+                            <span className="admin-user-email">{user.email}</span>
+                            <span>
+                              <span className={`admin-role-pill ${user.role === "admin" ? "admin" : "customer"}`}>
+                                {user.role === "admin" ? "Admin" : "Customer"}
+                              </span>
+                            </span>
+                            <span>
+                              <span className={`admin-user-status ${user.is_active ? "active" : "inactive"}`}>
+                                <i className="admin-status-dot" />
                                 {user.is_active ? "Active" : "Inactive"}
                               </span>
                             </span>
+                            <span>
+                              <strong className="admin-print-date-text">{joined.date}</strong>
+                              <span className="admin-print-sub">{joined.time}</span>
+                            </span>
+                            <span>
+                              {lastLogin ? (
+                                <>
+                                  <strong className="admin-print-date-text">{lastLogin.date}</strong>
+                                  <span className="admin-print-sub">{lastLogin.time}</span>
+                                </>
+                              ) : (
+                                <span className="admin-print-sub">—</span>
+                              )}
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => openEditUser(user)}
+                                title="Edit user"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn view"
+                                onClick={() => loadUserDetails(user)}
+                                title="View details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete user "${fullName}"? Their orders, cart and addresses will be removed too.`)) {
+                                    deleteUser(user.id, fullName);
+                                  }
+                                }}
+                                title="Delete user"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </span>
                           </div>
-                          <button
-                            type="button"
-                            className="admin-icon"
-                            onClick={() => openEditUser(user)}
-                            title="Edit user"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-secondary"
-                            onClick={() =>
-                              adminService
-                                .updateUser(user.id, { is_active: !user.is_active })
-                                .then(() => {
-                                  toast.success(`User ${user.is_active ? "deactivated" : "activated"}`);
-                                  loadAdminData();
-                                })
-                                .catch((error) => toast.error(error?.response?.data?.message || "User update failed"))
-                            }
-                          >
-                            {user.is_active ? "Deactivate" : "Activate"}
-                          </button>
-                        </article>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="admin-empty small">No users found</div>
                     )}
                   </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={userPerPage}
+                        onChange={(e) => { setUserPerPage(Number(e.target.value)); setUserPage(1); }}
+                        aria-label="Users per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredUsers.length
+                          ? `Showing ${(safeUserPage - 1) * userPerPage + 1} to ${Math.min(safeUserPage * userPerPage, filteredUsers.length)} of ${filteredUsers.length} users`
+                          : "No users to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeUserPage <= 1}
+                        onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeUserPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeUserPage >= userTotalPages}
+                        onClick={() => setUserPage((p) => Math.min(userTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                {showUserTip && (
+                  <div className="admin-pro-tip">
+                    <span className="admin-pro-tip-ico">
+                      <Lightbulb size={22} />
+                    </span>
+                    <div>
+                      <strong>Pro Tip</strong>
+                      <p>Keep user accounts up to date and assign the right roles to ensure security and a smooth experience.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-pro-tip-close"
+                      onClick={() => setShowUserTip(false)}
+                      aria-label="Dismiss tip"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeTab === "users" && selectedUserDetail && (
+              <section className="admin-detail-view">
+                <button type="button" className="admin-detail-back" onClick={() => setSelectedUserDetail(null)}>
+                  <ArrowLeft size={15} />
+                  <span>Back to users</span>
+                </button>
+                <div className="admin-detail-header">
+                  <div className="admin-detail-header-left admin-user-detail-head">
+                    <span className={`admin-user-avatar large ${userAvatarTone(`${selectedUserDetail.first_name} ${selectedUserDetail.last_name}`)}`}>
+                      {userInitials(selectedUserDetail)}
+                    </span>
+                    <div>
+                      <h2>{selectedUserDetail.first_name} {selectedUserDetail.last_name}</h2>
+                      <span className="admin-detail-date">{selectedUserDetail.email}{selectedUserDetail.phone ? ` · +91 ${selectedUserDetail.phone}` : ""}</span>
+                      <span className="admin-row-meta">
+                        <span className={`admin-role-pill ${selectedUserDetail.role === "admin" ? "admin" : "customer"}`}>
+                          {selectedUserDetail.role}
+                        </span>
+                        <span className={`admin-user-status ${selectedUserDetail.is_active ? "active" : "inactive"}`}>
+                          <i className="admin-status-dot" />
+                          {selectedUserDetail.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="admin-actions compact">
+                    <button type="button" className="admin-secondary" onClick={() => { setSelectedUserDetail(null); openEditUser(selectedUserDetail); }}>
+                      <Pencil size={15} />
+                      <span>Edit</span>
+                    </button>
+                  </div>
+                </div>
+                {userDetailLoading ? (
+                  <div className="admin-empty">Loading user details...</div>
+                ) : (
+                  <>
+                    <div className="admin-print-stats">
+                      <article className="admin-print-stat">
+                        <span className="admin-print-stat-ico blue"><ClipboardList size={22} /></span>
+                        <div>
+                          <strong>{selectedUserDetail.total_orders ?? (selectedUserDetail.orders || []).length}</strong>
+                          <span className="admin-print-stat-label">Product Orders</span>
+                        </div>
+                      </article>
+                      <article className="admin-print-stat">
+                        <span className="admin-print-stat-ico green"><BadgePercent size={22} /></span>
+                        <div>
+                          <strong>{money(selectedUserDetail.total_spent || 0)}</strong>
+                          <span className="admin-print-stat-label">Total Spent</span>
+                        </div>
+                      </article>
+                      <article className="admin-print-stat">
+                        <span className="admin-print-stat-ico amber"><Cuboid size={22} /></span>
+                        <div>
+                          <strong>{(selectedUserDetail.printOrders || []).length}</strong>
+                          <span className="admin-print-stat-label">3D Print Orders</span>
+                        </div>
+                      </article>
+                      <article className="admin-print-stat">
+                        <span className="admin-print-stat-ico purple"><MapPin size={22} /></span>
+                        <div>
+                          <strong>{(selectedUserDetail.addresses || []).length}</strong>
+                          <span className="admin-print-stat-label">Saved Addresses</span>
+                        </div>
+                      </article>
+                    </div>
+                    <div className="admin-detail-card">
+                      <div className="admin-detail-card-head">
+                        <ClipboardList size={18} />
+                        <h3>Recent Product Orders</h3>
+                      </div>
+                      <div className="admin-detail-card-body">
+                        {(selectedUserDetail.orders || []).length ? (
+                          selectedUserDetail.orders.map((o) => (
+                            <div className="admin-user-order-row" key={o.id}>
+                              <strong>#{o.order_number}</strong>
+                              <span className={`admin-print-status ${orderStatusTone(o.status)}`}>{(o.status || "").replace(/_/g, " ")}</span>
+                              <strong>{money(o.total_amount)}</strong>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="admin-detail-muted">No product orders yet.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="admin-detail-card">
+                      <div className="admin-detail-card-head">
+                        <Cuboid size={18} />
+                        <h3>3D Print Orders</h3>
+                      </div>
+                      <div className="admin-detail-card-body">
+                        {(selectedUserDetail.printOrders || []).length ? (
+                          selectedUserDetail.printOrders.map((o) => (
+                            <div className="admin-user-order-row" key={o.id}>
+                              <strong>#{o.order_number}</strong>
+                              <span className={`admin-print-status ${printStatusTone(o.status)}`}>{(o.status || "").replace(/_/g, " ")}</span>
+                              <strong>{money(o.total_amount)}</strong>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="admin-detail-muted">No 3D print orders yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
             {activeTab === "coupons" && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+              <section className="admin-coupons-layout">
+                <div className="admin-print-stats admin-coupons-stats">
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico blue"><Ticket size={22} /></span>
                     <div>
-                      <h2>Coupons</h2>
-                      <p className="admin-panel-subtitle">Create and review active promotional offers.</p>
+                      <strong>{couponStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Coupons</span>
+                      <span className="admin-print-stat-sub up">↑ 100% from last month</span>
                     </div>
-                    <div className="admin-actions compact">
-                      <span className="admin-count-badge">{coupons.length} coupons</span>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico green"><CheckCircle2 size={22} /></span>
+                    <div>
+                      <strong>{couponStats.active}</strong>
+                      <span className="admin-print-stat-label">Active Coupons</span>
+                      <span className="admin-print-stat-sub">{couponStats.pct(couponStats.active)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico amber"><Clock size={22} /></span>
+                    <div>
+                      <strong>{couponStats.scheduled}</strong>
+                      <span className="admin-print-stat-label">Scheduled Coupons</span>
+                      <span className="admin-print-stat-sub">{couponStats.pct(couponStats.scheduled)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico red"><XCircle size={22} /></span>
+                    <div>
+                      <strong>{couponStats.expired}</strong>
+                      <span className="admin-print-stat-label">Expired Coupons</span>
+                      <span className="admin-print-stat-sub">{couponStats.pct(couponStats.expired)}</span>
+                    </div>
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-coupons-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-coupons-ico">
+                        <Tag size={22} />
+                      </span>
+                      <div>
+                        <h2>Coupons</h2>
+                        <p className="admin-panel-subtitle">Create and manage promotional codes for your 3D printing store.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-colors-tools">
+                      <label className="admin-search admin-colors-search">
+                        <Search size={15} />
+                        <input
+                          value={couponSearch}
+                          onChange={(e) => { setCouponSearch(e.target.value); setCouponPage(1); }}
+                          placeholder="Search coupons..."
+                        />
+                      </label>
+                      <label className="admin-filter-wrap">
+                        <Filter size={15} />
+                        <select
+                          className="admin-filter-select"
+                          value={couponStatusFilter}
+                          onChange={(e) => { setCouponStatusFilter(e.target.value); setCouponPage(1); }}
+                          aria-label="Filter coupons by status"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="scheduled">Scheduled</option>
+                          <option value="expired">Expired</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </label>
                       <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetCouponForm(); setActiveModal("coupon"); }}>
                         <Plus size={16} />
                         <span>Add Coupon</span>
                       </button>
                     </div>
                   </div>
-                  <div className="admin-list">
-                    {coupons.length ? (
-                      coupons.map((coupon) => (
-                        <article className="admin-user-row" key={coupon.id} style={{ gridTemplateColumns: "minmax(0, 1fr) 110px 44px 44px" }}>
-                          <div>
-                            <strong><span className="admin-code-chip">{coupon.code}</span></strong>
+
+                  <div className="admin-coupons-table-wrap">
+                    <div className="admin-coupons-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedCoupons.length > 0 && paginatedCoupons.every((c) => selectedCouponIds.includes(c.id))}
+                        onChange={toggleCouponSelectAll}
+                        aria-label="Select all coupons on page"
+                      />
+                      <span>#</span>
+                      <span>Code</span>
+                      <span>Discount</span>
+                      <span>Minimum Order</span>
+                      <span>Usage</span>
+                      <span>Validity</span>
+                      <span>Status</span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedCoupons.length ? (
+                      paginatedCoupons.map((coupon, idx) => {
+                        const rowNum = (safeCouponPage - 1) * couponPerPage + idx + 1;
+                        const state = getCouponState(coupon);
+                        const used = Number(coupon.used_count || 0);
+                        const limit = coupon.usage_limit ? Number(coupon.usage_limit) : null;
+                        const usagePct = limit ? Math.min(100, Math.round((used / limit) * 100)) : used > 0 ? 12 : 0;
+                        const created = formatPrintDate(coupon.created_at);
+                        return (
+                          <div className="admin-coupons-table-row" key={coupon.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedCouponIds.includes(coupon.id)}
+                              onChange={() => toggleCouponSelect(coupon.id)}
+                              aria-label={`Select coupon ${coupon.code}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
                             <span>
-                              {coupon.discount_type === "percentage" ? `${coupon.discount_value}% off` : `${money(coupon.discount_value)} off`}
-                              {" "}· Min: {money(coupon.min_order_amount)} · Used: {coupon.used_count || 0}/{coupon.usage_limit || "∞"}
-                            </span>
-                            {(coupon.valid_from || coupon.valid_until) && (
-                              <span>
-                                Valid {coupon.valid_from ? `from ${new Date(coupon.valid_from).toLocaleDateString("en-IN")}` : ""}
-                                {coupon.valid_from && coupon.valid_until ? " " : ""}
-                                {coupon.valid_until ? `until ${new Date(coupon.valid_until).toLocaleDateString("en-IN")}` : ""}
+                              <span className="admin-coupon-code-cell">
+                                <code className="admin-coupon-chip">{coupon.code}</code>
+                                <button
+                                  type="button"
+                                  className="admin-coupon-copy"
+                                  onClick={() => copyCouponCode(coupon.code)}
+                                  title="Copy code"
+                                >
+                                  <Copy size={14} />
+                                </button>
                               </span>
-                            )}
+                            </span>
+                            <span>
+                              <span className="admin-coupon-discount">
+                                {coupon.discount_type === "percentage"
+                                  ? `${coupon.discount_value}%`
+                                  : `Rs. ${Number(coupon.discount_value || 0).toLocaleString("en-IN")}`}
+                              </span>
+                            </span>
+                            <span className="admin-material-value">Rs. {Number(coupon.min_order_amount || 0).toLocaleString("en-IN")}</span>
+                            <span>
+                              <span className="admin-coupon-usage-top">{used} / {limit || "∞"}</span>
+                              <span className="admin-coupon-bar">
+                                <i style={{ width: `${usagePct}%` }} />
+                              </span>
+                              <span className="admin-print-sub">{limit ? `${Math.max(0, limit - used)} left` : "Unlimited"}</span>
+                            </span>
+                            <span className="admin-coupon-validity">
+                              {coupon.valid_from || coupon.valid_until ? (
+                                <>
+                                  <span>{formatShortDate(coupon.valid_from)} -</span>
+                                  <span>{formatShortDate(coupon.valid_until)}</span>
+                                </>
+                              ) : "—"}
+                            </span>
+                            <span>
+                              <span className={`admin-coupon-status ${state}`}>
+                                <i className="admin-status-dot" />
+                                {state.charAt(0).toUpperCase() + state.slice(1)}
+                              </span>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => openEditCoupon(coupon)}
+                                title="Edit coupon"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn copy"
+                                onClick={() => duplicateCoupon(coupon)}
+                                title="Duplicate coupon"
+                              >
+                                <Copy size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete coupon "${coupon.code}"?`)) {
+                                    deleteCoupon(coupon.id);
+                                  }
+                                }}
+                                title="Delete coupon"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </span>
                           </div>
-                          <button
-                            type="button"
-                            className={`admin-toggle ${coupon.is_active ? "active" : ""}`}
-                            onClick={() =>
-                              adminService
-                                .updateCoupon(coupon.id, { is_active: !coupon.is_active })
-                                .then(() => {
-                                  toast.success(`Coupon ${coupon.is_active ? "deactivated" : "activated"}`);
-                                  loadAdminData();
-                                })
-                                .catch((error) => toast.error(error?.response?.data?.message || "Coupon update failed"))
-                            }
-                          >
-                            {coupon.is_active ? "Active" : "Inactive"}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon"
-                            onClick={() => openEditCoupon(coupon)}
-                            title="Edit coupon"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon danger"
-                            onClick={() => deleteCoupon(coupon.id)}
-                            title="Delete coupon"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </article>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="admin-empty small">No coupons found</div>
                     )}
                   </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={couponPerPage}
+                        onChange={(e) => { setCouponPerPage(Number(e.target.value)); setCouponPage(1); }}
+                        aria-label="Coupons per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredCoupons.length
+                          ? `Showing ${(safeCouponPage - 1) * couponPerPage + 1} to ${Math.min(safeCouponPage * couponPerPage, filteredCoupons.length)} of ${filteredCoupons.length} coupons`
+                          : "No coupons to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeCouponPage <= 1}
+                        onClick={() => setCouponPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeCouponPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeCouponPage >= couponTotalPages}
+                        onClick={() => setCouponPage((p) => Math.min(couponTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                {showCouponTip && (
+                  <div className="admin-pro-tip">
+                    <span className="admin-pro-tip-ico">
+                      <Lightbulb size={22} />
+                    </span>
+                    <div>
+                      <strong>Pro Tip</strong>
+                      <p>Use coupons to boost first-time orders, clear inventory, or run special campaigns during festivals.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-pro-tip-close"
+                      onClick={() => setShowCouponTip(false)}
+                      aria-label="Dismiss tip"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
             {activeTab === "catalog" && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+              <section className="admin-catalog-layout">
+                <div className="admin-print-stats admin-catalog-stats">
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico blue"><Layers size={22} /></span>
                     <div>
-                      <h2>Categories</h2>
-                      <p className="admin-panel-subtitle">Manage catalog categories used by storefront products.</p>
+                      <strong>{categoryStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Categories</span>
+                      <span className="admin-print-stat-sub up">↑ {categoryStats.growth}% from last month</span>
                     </div>
-                    <div className="admin-actions compact">
-                      <span className="admin-count-badge">{categories.length} categories</span>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico green"><CheckCircle2 size={22} /></span>
+                    <div>
+                      <strong>{categoryStats.active}</strong>
+                      <span className="admin-print-stat-label">Active Categories</span>
+                      <span className="admin-print-stat-sub">{categoryStats.pct(categoryStats.active)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico amber"><Box size={22} /></span>
+                    <div>
+                      <strong>{categoryStats.inactive}</strong>
+                      <span className="admin-print-stat-label">Inactive Categories</span>
+                      <span className="admin-print-stat-sub">{categoryStats.pct(categoryStats.inactive)}</span>
+                    </div>
+                  </article>
+                  <article className="admin-print-stat">
+                    <span className="admin-print-stat-ico purple"><Tag size={22} /></span>
+                    <div>
+                      <strong>{categoryStats.totalProducts}</strong>
+                      <span className="admin-print-stat-label">Total Products</span>
+                      <span className="admin-print-stat-sub">Across all categories</span>
+                    </div>
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-catalog-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-catalog-ico">
+                        <Layers size={22} />
+                      </span>
+                      <div>
+                        <h2>Product Categories</h2>
+                        <p className="admin-panel-subtitle">Manage catalog categories used by storefront products.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-colors-tools">
+                      <label className="admin-search admin-colors-search">
+                        <Search size={15} />
+                        <input
+                          value={categorySearch}
+                          onChange={(e) => { setCategorySearch(e.target.value); setCategoryPage(1); }}
+                          placeholder="Search categories..."
+                        />
+                      </label>
+                      <label className="admin-filter-wrap">
+                        <Filter size={15} />
+                        <select
+                          className="admin-filter-select"
+                          value={categoryStatusFilter}
+                          onChange={(e) => { setCategoryStatusFilter(e.target.value); setCategoryPage(1); }}
+                          aria-label="Filter categories by status"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </label>
                       <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetCategoryForm(); setActiveModal("category"); }}>
                         <Plus size={16} />
                         <span>Add Category</span>
                       </button>
                     </div>
                   </div>
-                  <div className="admin-list">
-                    {categories.length ? (
-                      categories.map((category) => (
-                        <article className="admin-user-row" key={category.id} style={{ gridTemplateColumns: "minmax(0, 1fr) 110px 44px 44px" }}>
-                          <div>
-                            <strong>{category.name}</strong>
+
+                  <div className="admin-catalog-table-wrap">
+                    <div className="admin-catalog-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedCategories.length > 0 && paginatedCategories.every((c) => selectedCategoryIds.includes(c.id))}
+                        onChange={toggleCategorySelectAll}
+                        aria-label="Select all categories on page"
+                      />
+                      <span>#</span>
+                      <span>Category</span>
+                      <span>Description</span>
+                      <span>Products</span>
+                      <span>Status</span>
+                      <span>Created At</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedCategories.length ? (
+                      paginatedCategories.map((category, idx) => {
+                        const rowNum = (safeCategoryPage - 1) * categoryPerPage + idx + 1;
+                        const CategoryIcon = categoryIconFor(category.name);
+                        const active = isCategoryActive(category);
+                        const created = formatPrintDate(category.created_at);
+                        return (
+                          <div className="admin-catalog-table-row" key={category.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedCategoryIds.includes(category.id)}
+                              onChange={() => toggleCategorySelect(category.id)}
+                              aria-label={`Select category ${category.name}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
                             <span>
-                              {category.product_count || 0} products{category.description ? ` · ${category.description}` : ""}
+                              <span className="admin-category-cell">
+                                <span className="admin-category-ico-sm">
+                                  <CategoryIcon size={20} />
+                                </span>
+                                <strong className="admin-category-name">{category.name}</strong>
+                              </span>
+                            </span>
+                            <span className="admin-catalog-desc">{category.description || "—"}</span>
+                            <span className="admin-material-value">{category.product_count || 0}</span>
+                            <span>
+                              <button
+                                type="button"
+                                className={`admin-status-pill-btn ${active ? "active" : "inactive"}`}
+                                onClick={() => toggleCategory(category)}
+                                title={active ? "Deactivate category" : "Activate category"}
+                              >
+                                <i className="admin-status-dot" />
+                                {active ? "Active" : "Inactive"}
+                              </button>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{created.date}</strong>
+                              <span className="admin-print-sub">{created.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => openEditCategory(category)}
+                                title="Edit category"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <Link
+                                to={`/products?category=${encodeURIComponent(category.slug || category.name)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="admin-icon-btn view"
+                                title="View on storefront"
+                              >
+                                <Eye size={16} />
+                              </Link>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete category "${category.name}"?`)) {
+                                    deleteCategory(category.id);
+                                  }
+                                }}
+                                title="Delete category"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className={`admin-toggle ${category.is_active || category.is_active === undefined ? "active" : ""}`}
-                            onClick={() =>
-                              adminService
-                                .updateCategory(category.id, { is_active: !(category.is_active || category.is_active === undefined) })
-                                .then(() => {
-                                  toast.success("Category updated");
-                                  loadAdminData();
-                                })
-                                .catch((error) => toast.error(error?.response?.data?.message || "Category update failed"))
-                            }
-                          >
-                            {category.is_active || category.is_active === undefined ? "Active" : "Inactive"}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon"
-                            onClick={() => openEditCategory(category)}
-                            title="Edit category"
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-icon danger"
-                            onClick={() => deleteCategory(category.id)}
-                            title="Delete category"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </article>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="admin-empty small">No categories found</div>
                     )}
+                  </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={categoryPerPage}
+                        onChange={(e) => { setCategoryPerPage(Number(e.target.value)); setCategoryPage(1); }}
+                        aria-label="Categories per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredCategories.length
+                          ? `Showing ${(safeCategoryPage - 1) * categoryPerPage + 1} to ${Math.min(safeCategoryPage * categoryPerPage, filteredCategories.length)} of ${filteredCategories.length} categories`
+                          : "No categories to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeCategoryPage <= 1}
+                        onClick={() => setCategoryPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeCategoryPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeCategoryPage >= categoryTotalPages}
+                        onClick={() => setCategoryPage((p) => Math.min(categoryTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -2029,52 +4507,424 @@ function AdminPanel() {
               </section>
             )}
 
-            {activeTab === "contacts" && (
-              <section className="admin-grid">
-                <div className="admin-panel">
-                  <div className="admin-panel-title-row">
+            {activeTab === "contacts" && !selectedContactDetail && (
+              <section className="admin-contacts-layout">
+                <div className="admin-print-stats admin-contacts-stats">
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico blue"><Mail size={22} /></span>
                     <div>
-                      <h2>Contact Inquiries</h2>
-                      <p className="admin-panel-subtitle">Messages submitted through the contact page.</p>
+                      <strong>{contactStats.total}</strong>
+                      <span className="admin-print-stat-label">Total Inquiries</span>
+                      <span className="admin-print-stat-sub up">↑ 100% from last month</span>
                     </div>
-                    <span className="admin-count-badge">{contacts.length} messages</span>
+                    <Sparkline tone="blue" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico green"><MessageSquare size={22} /></span>
+                    <div>
+                      <strong>{contactStats.replied}</strong>
+                      <span className="admin-print-stat-label">Replied</span>
+                      <span className="admin-print-stat-sub">{contactStats.pct(contactStats.replied)}</span>
+                    </div>
+                    <Sparkline tone="green" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico amber"><Clock size={22} /></span>
+                    <div>
+                      <strong>{contactStats.pending}</strong>
+                      <span className="admin-print-stat-label">Pending</span>
+                      <span className="admin-print-stat-sub">{contactStats.pct(contactStats.pending)}</span>
+                    </div>
+                    <Sparkline tone="amber" />
+                  </article>
+                  <article className="admin-print-stat admin-stat-spark">
+                    <span className="admin-print-stat-ico red"><XCircle size={22} /></span>
+                    <div>
+                      <strong>{contactStats.closed}</strong>
+                      <span className="admin-print-stat-label">Closed</span>
+                      <span className="admin-print-stat-sub">{contactStats.pct(contactStats.closed)}</span>
+                    </div>
+                    <Sparkline tone="red" />
+                  </article>
+                </div>
+
+                <div className="admin-panel admin-contacts-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-contacts-ico">
+                        <Mail size={22} />
+                      </span>
+                      <div>
+                        <h2>Customer Inquiries</h2>
+                        <p className="admin-panel-subtitle">Manage customer inquiries submitted through the contact page.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-contacts-tools">
+                      <label className="admin-search admin-contacts-search">
+                        <Search size={15} />
+                        <input
+                          value={contactSearch}
+                          onChange={(e) => { setContactSearch(e.target.value); setContactPage(1); }}
+                          placeholder="Search inquiries..."
+                        />
+                      </label>
+                      <select
+                        className="admin-filter-select"
+                        value={contactStatusFilter}
+                        onChange={(e) => { setContactStatusFilter(e.target.value); setContactPage(1); }}
+                        aria-label="Filter inquiries by status"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="read">Read</option>
+                        <option value="replied">Replied</option>
+                        <option value="archived">Archived</option>
+                      </select>
+                      <label className="admin-print-date">
+                        <Calendar size={15} />
+                        <input
+                          type="date"
+                          value={contactDateFilter}
+                          onChange={(e) => { setContactDateFilter(e.target.value); setContactPage(1); }}
+                          aria-label="Filter inquiries by date"
+                        />
+                        {!contactDateFilter && <span className="admin-print-date-ph">Select date range</span>}
+                      </label>
+                      <button
+                        type="button"
+                        className="admin-secondary"
+                        onClick={() => { setContactSearch(""); setContactStatusFilter("all"); setContactDateFilter(""); setContactPage(1); setSelectedContactIds([]); }}
+                        title="Clear filters"
+                        aria-label="Clear filters"
+                      >
+                        <Filter size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="admin-list">
-                    {contacts.length ? (
-                      contacts.map((message) => (
-                        <article className="admin-user-row" key={message.id} style={{ gridTemplateColumns: "minmax(0, 1fr) 130px 44px" }}>
-                          <div>
-                            <strong>{message.name} · {message.email}</strong>
-                            <span>{message.subject ? `${message.subject} — ` : ""}{message.message}</span>
-                            {message.phone && <span>Phone: {message.phone}</span>}
-                            <span className="admin-row-meta">
-                              <span className={`admin-status-pill ${message.status}`}>{message.status}</span>
-                              <span className="admin-detail-muted">{new Date(message.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+
+                  <div className="admin-contacts-table-wrap">
+                    <div className="admin-contacts-table-head">
+                      <input
+                        type="checkbox"
+                        checked={paginatedContacts.length > 0 && paginatedContacts.every((m) => selectedContactIds.includes(m.id))}
+                        onChange={toggleContactSelectAll}
+                        aria-label="Select all inquiries on page"
+                      />
+                      <span>#</span>
+                      <span>Name</span>
+                      <span>Email</span>
+                      <span>Subject</span>
+                      <span>Message Preview</span>
+                      <span>Status</span>
+                      <span>Received On</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {paginatedContacts.length ? (
+                      paginatedContacts.map((message, idx) => {
+                        const rowNum = (safeContactPage - 1) * contactPerPage + idx + 1;
+                        const received = formatPrintDate(message.created_at);
+                        return (
+                          <div className="admin-contacts-table-row" key={message.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedContactIds.includes(message.id)}
+                              onChange={() => toggleContactSelect(message.id)}
+                              aria-label={`Select inquiry from ${message.name}`}
+                            />
+                            <span className="admin-print-num">{rowNum}</span>
+                            <span>
+                              <span className="admin-user-cell">
+                                <span className={`admin-user-avatar small ${userAvatarTone(message.name || "")}`}>
+                                  {`${message.name?.trim()?.[0] || "?"}`.toUpperCase()}
+                                </span>
+                                <span>
+                                  <strong className="admin-product-name">{message.name}</strong>
+                                  <span className="admin-print-sub">{contactTicketNo(message.id)}</span>
+                                </span>
+                              </span>
+                            </span>
+                            <span className="admin-user-email">{message.email}</span>
+                            <span className="admin-contact-subject">{message.subject || "—"}</span>
+                            <span>
+                              <button
+                                type="button"
+                                className="admin-contact-preview"
+                                onClick={() => loadContactDetails(message.id)}
+                                title="Open conversation"
+                              >
+                                {(message.message || "").slice(0, 60)}{(message.message || "").length > 60 ? "…" : ""}
+                              </button>
+                            </span>
+                            <span>
+                              <span className={`admin-contact-status ${contactStatusTone(message.status)}`}>
+                                <i className="admin-status-dot" />
+                                {(message.status || "pending").charAt(0).toUpperCase() + (message.status || "pending").slice(1)}
+                              </span>
+                            </span>
+                            <span>
+                              <strong className="admin-print-date-text">{received.date}</strong>
+                              <span className="admin-print-sub">{received.time}</span>
+                            </span>
+                            <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn view"
+                                onClick={() => loadContactDetails(message.id)}
+                                title="View conversation"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn reply"
+                                onClick={() => loadContactDetails(message.id)}
+                                title="Reply"
+                              >
+                                <Reply size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="admin-icon-btn delete"
+                                onClick={() => {
+                                  if (window.confirm(`Delete inquiry from "${message.name}"?`)) {
+                                    deleteContact(message.id);
+                                  }
+                                }}
+                                title="Delete inquiry"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </span>
                           </div>
-                          <select
-                            value={message.status}
-                            onChange={(e) => updateContact(message.id, e.target.value)}
-                          >
-                            {["pending", "read", "replied", "archived"].map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className="admin-icon danger"
-                            onClick={() => deleteContact(message.id)}
-                            title="Delete message"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </article>
-                      ))
+                        );
+                      })
                     ) : (
-                      <div className="admin-empty small">No contact messages yet</div>
+                      <div className="admin-empty small">No inquiries found</div>
                     )}
                   </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <select
+                        className="admin-filter-select"
+                        value={contactPerPage}
+                        onChange={(e) => { setContactPerPage(Number(e.target.value)); setContactPage(1); }}
+                        aria-label="Inquiries per page"
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                      </select>
+                      <span>
+                        {filteredContacts.length
+                          ? `Showing ${(safeContactPage - 1) * contactPerPage + 1} to ${Math.min(safeContactPage * contactPerPage, filteredContacts.length)} of ${filteredContacts.length} inquiries`
+                          : "No inquiries to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeContactPage <= 1}
+                        onClick={() => setContactPage((p) => Math.max(1, p - 1))}
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="admin-page-current">{safeContactPage}</span>
+                      <button
+                        type="button"
+                        className="admin-page-btn"
+                        disabled={safeContactPage >= contactTotalPages}
+                        onClick={() => setContactPage((p) => Math.min(contactTotalPages, p + 1))}
+                        aria-label="Next page"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                {showContactTip && (
+                  <div className="admin-pro-tip">
+                    <span className="admin-pro-tip-ico">
+                      <Lightbulb size={22} />
+                    </span>
+                    <div>
+                      <strong>Pro Tip</strong>
+                      <p>Respond to inquiries promptly to improve customer satisfaction and increase conversions.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-pro-tip-close"
+                      onClick={() => setShowContactTip(false)}
+                      aria-label="Dismiss tip"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeTab === "contacts" && selectedContactDetail && (
+              <section className="admin-inquiry-detail">
+                <button type="button" className="admin-detail-back" onClick={() => setSelectedContactDetail(null)}>
+                  <ArrowLeft size={15} />
+                  <span>Back to Inquiries</span>
+                </button>
+                {contactDetailLoading || !selectedContactDetail.id ? (
+                  <div className="admin-empty">Loading inquiry...</div>
+                ) : (
+                  <>
+                    <header className="admin-inquiry-head">
+                      <div>
+                        <span className="admin-kicker">PrintyNozzle Control Room</span>
+                        <h1>Inquiry {contactTicketNo(selectedContactDetail.id)}</h1>
+                        <p className="admin-header-sub">View conversation and reply to the customer.</p>
+                        <span className="admin-header-meta">
+                          <i className="admin-live-dot" />
+                          {new Date(selectedContactDetail.created_at).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        </span>
+                      </div>
+                      <div className="admin-actions compact">
+                        <select
+                          className={`admin-inquiry-status ${contactStatusTone(selectedContactDetail.status)}`}
+                          value={selectedContactDetail.status || "pending"}
+                          onChange={(e) => updateContact(selectedContactDetail.id, e.target.value)}
+                          aria-label="Change inquiry status"
+                        >
+                          {["pending", "read", "replied", "archived"].map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="admin-icon-btn delete"
+                          onClick={() => {
+                            if (window.confirm(`Delete inquiry from "${selectedContactDetail.name}"?`)) {
+                              deleteContact(selectedContactDetail.id);
+                            }
+                          }}
+                          title="Delete inquiry"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </header>
+
+                    <div className="admin-panel admin-inquiry-customer">
+                      <h2>Customer &amp; Inquiry Details</h2>
+                      <div className="admin-inquiry-customer-grid">
+                        <div className="admin-user-cell">
+                          <span className={`admin-user-avatar ${userAvatarTone(selectedContactDetail.name || "")}`}>
+                            {`${selectedContactDetail.name?.trim()?.[0] || "?"}`.toUpperCase()}
+                          </span>
+                          <div>
+                            <strong className="admin-product-name">
+                              {selectedContactDetail.name}
+                              <span className="admin-role-pill customer">Customer</span>
+                            </strong>
+                            <span className="admin-print-sub">✉ {selectedContactDetail.email}</span>
+                            <span className="admin-print-sub">☎ {selectedContactDetail.phone || "—"}</span>
+                          </div>
+                        </div>
+                        <div className="admin-inquiry-meta">
+                          <span>Subject</span>
+                          <strong>{selectedContactDetail.subject || "—"}</strong>
+                        </div>
+                        <div className="admin-inquiry-meta">
+                          <span>Received</span>
+                          <strong>{formatShortDate(selectedContactDetail.created_at)}</strong>
+                        </div>
+                        <div className="admin-inquiry-meta">
+                          <span>Status</span>
+                          <span className={`admin-contact-status ${contactStatusTone(selectedContactDetail.status)}`}>
+                            <i className="admin-status-dot" />
+                            {(selectedContactDetail.status || "pending").charAt(0).toUpperCase() + (selectedContactDetail.status || "pending").slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="admin-panel admin-inquiry-conversation">
+                      <div className="admin-panel-title-row">
+                        <div className="admin-colors-title">
+                          <span className="admin-contacts-ico">
+                            <MessageSquare size={20} />
+                          </span>
+                          <div>
+                            <h2>Conversation</h2>
+                            <p className="admin-panel-subtitle">Messages submitted through the contact page.</p>
+                          </div>
+                        </div>
+                        <span className="admin-count-badge">
+                          {1 + (selectedContactDetail.replies || []).length} messages
+                        </span>
+                      </div>
+
+                      <article className="admin-convo-msg customer">
+                        <span className={`admin-user-avatar small ${userAvatarTone(selectedContactDetail.name || "")}`}>
+                          {`${selectedContactDetail.name?.trim()?.[0] || "?"}`.toUpperCase()}
+                        </span>
+                        <div className="admin-convo-body">
+                          <div className="admin-convo-head">
+                            <strong>
+                              {selectedContactDetail.name}
+                              <span className="admin-role-pill customer">Customer</span>
+                            </strong>
+                            <span className="admin-print-sub">To: Support Team</span>
+                          </div>
+                          <p>{selectedContactDetail.message}</p>
+                          <span className="admin-convo-time">
+                            {formatShortDate(selectedContactDetail.created_at)} · {formatPrintDate(selectedContactDetail.created_at).time}
+                          </span>
+                        </div>
+                      </article>
+
+                      {(selectedContactDetail.replies || []).map((reply) => (
+                        <article className="admin-convo-msg staff" key={reply.id}>
+                          <span className="admin-user-avatar small purple">
+                            {(reply.sender_name?.trim()?.[0] || "S").toUpperCase()}
+                          </span>
+                          <div className="admin-convo-body">
+                            <div className="admin-convo-head">
+                              <strong>
+                                {reply.sender_name || "Support Team"}
+                                <span className="admin-role-pill admin">Staff</span>
+                              </strong>
+                              <span className="admin-print-sub">To: {selectedContactDetail.email}</span>
+                            </div>
+                            <p>{reply.message}</p>
+                            <span className="admin-convo-time">
+                              {formatShortDate(reply.created_at)} · {formatPrintDate(reply.created_at).time}
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+
+                      <form className="admin-reply-box" onSubmit={sendContactReply}>
+                        <span className="admin-reply-label">
+                          <Reply size={15} />
+                          Reply to Customer
+                        </span>
+                        <textarea
+                          rows={4}
+                          placeholder="Type your reply here..."
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                        />
+                        <div className="admin-reply-actions">
+                          <span className="admin-print-sub">Replies to {selectedContactDetail.email} by email</span>
+                          <button className="admin-primary" type="submit" disabled={sendingReply || !replyText.trim()}>
+                            <Send size={15} />
+                            <span>{sendingReply ? "Sending..." : "Send Reply"}</span>
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
@@ -2176,123 +5026,320 @@ function AdminPanel() {
 
       <AdminModal
         open={activeModal === "product"}
+        wide
+        icon={Box}
         title={editing?.id ? "Edit Product" : "Add Product"}
         subtitle={editing?.id ? "Update the product details shown on the storefront page." : "Create a product with all details customers will see on its page."}
         onClose={closeModal}
       >
-        <form className="admin-form" onSubmit={submitProduct}>
-          <h4 className="admin-form-section-title">Basic Information</h4>
-          <div className="admin-form-grid">
-            <input required placeholder="Product name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
-            <input placeholder="SKU" value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} />
+        <form className="pf-form" onSubmit={submitProduct}>
+          <section className="pf-section">
+            <div className="pf-section-head">
+              <span className="pf-section-ico"><Boxes size={18} /></span>
+              <div>
+                <h3>Basic Information</h3>
+                <p>Essential product details for your catalog.</p>
+              </div>
+            </div>
+            <div className="pf-grid cols-2">
+              <label className="pf-field">
+                <span>Product Name <b>*</b></span>
+                <input required placeholder="ESP32 WROOM-32 WiFi + Bluetooth" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} />
+              </label>
+              <label className="pf-field">
+                <span>Short Name / SKU <b>*</b></span>
+                <input required placeholder="ESP32-WROOM-32" value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} />
+              </label>
+              <label className="pf-field">
+                <span>Short Description <b>*</b></span>
+                <input required maxLength={300} placeholder="High Performance Wireless MCU Module" value={productForm.tagline} onChange={(e) => setProductForm({ ...productForm, tagline: e.target.value })} />
+              </label>
+              <label className="pf-field">
+                <span>Category <b>*</b></span>
+                <select required value={productForm.category_id} onChange={(e) => setProductForm({ ...productForm, category_id: e.target.value })}>
+                  <option value="">Select category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="pf-grid cols-3">
+              <label className="pf-field">
+                <span>Brand / Manufacturer</span>
+                <select value={productForm.brand_id} onChange={(e) => setProductForm({ ...productForm, brand_id: e.target.value })}>
+                  <option value="">Select brand (optional)</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pf-field">
+                <span>Price (Rs.) <b>*</b></span>
+                <input required type="number" min="0" step="0.01" placeholder="449.00" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} />
+              </label>
+              <label className="pf-field">
+                <span>MRP / Actual Price (Rs.)</span>
+                <input type="number" min="0" step="0.01" placeholder="599.00" value={productForm.compare_price} onChange={(e) => setProductForm({ ...productForm, compare_price: e.target.value })} />
+              </label>
+            </div>
+            <div className="pf-grid cols-2">
+              <label className="pf-field">
+                <span>Stock Quantity <b>*</b></span>
+                <input required type="number" min="0" step="1" placeholder="30" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} />
+              </label>
+              <label className="pf-field">
+                <span>Status</span>
+                <span className="pf-status-wrap">
+                  <i className={`pf-status-dot ${productForm.is_active ? "on" : "off"}`} />
+                  <select
+                    value={productForm.is_active ? "active" : "inactive"}
+                    onChange={(e) => setProductForm({ ...productForm, is_active: e.target.value === "active" })}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section className="pf-section">
+            <div className="pf-section-head">
+              <span className="pf-section-ico"><FileText size={18} /></span>
+              <div>
+                <h3>Product Description &amp; Features</h3>
+                <p>Detailed product information for customers.</p>
+              </div>
+            </div>
+            <div className="pf-grid cols-2">
+              <label className="pf-field">
+                <span>Product Description <b>*</b></span>
+                <textarea rows={5} maxLength={5000} required placeholder="Full product description shown on the Overview tab" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
+                <em className="pf-count">{productForm.description.length}/5000</em>
+              </label>
+              <label className="pf-field">
+                <span>Key Features (one per line)</span>
+                <textarea rows={5} maxLength={5000} placeholder="One feature per line (shown on Overview tab)" value={productForm.keyFeaturesText} onChange={(e) => setProductForm({ ...productForm, keyFeaturesText: e.target.value })} />
+                <em className="pf-count">{productForm.keyFeaturesText.length}/5000</em>
+              </label>
+            </div>
+          </section>
+
+          <section className="pf-section">
+            <div className="pf-section-head">
+              <span className="pf-section-ico"><Settings2 size={18} /></span>
+              <div>
+                <h3>Specifications</h3>
+                <p>Technical specifications (one per line).</p>
+              </div>
+            </div>
+            <div className="pf-grid cols-2">
+              <label className="pf-field">
+                <textarea rows={6} maxLength={5000} placeholder="One per line as  Name : Value  (shown on Specifications tab)" value={productForm.specificationsText} onChange={(e) => setProductForm({ ...productForm, specificationsText: e.target.value })} />
+                <em className="pf-count">{productForm.specificationsText.length}/5000</em>
+              </label>
+              <label className="pf-field">
+                <span>Applications (one per line)</span>
+                <textarea rows={6} maxLength={5000} placeholder="One per line (e.g. IoT Projects)" value={productForm.applicationsText} onChange={(e) => setProductForm({ ...productForm, applicationsText: e.target.value })} />
+                <em className="pf-count">{productForm.applicationsText.length}/5000</em>
+              </label>
+            </div>
+          </section>
+
+          <div className="pf-grid cols-2 pf-split">
+            <section className="pf-section">
+              <div className="pf-section-head">
+                <span className="pf-section-ico"><Cpu size={18} /></span>
+                <div>
+                  <h3>Pinout</h3>
+                  <p>Upload pinout diagram (optional).</p>
+                </div>
+              </div>
+              <label className="pf-dropzone">
+                <Upload size={20} />
+                <strong>Click to upload pinout diagram</strong>
+                <span>PNG, JPG (Max 5MB)</span>
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => { handlePinoutSelect(e.target.files?.[0]); e.target.value = ""; }}
+                />
+              </label>
+              {(productForm.pinoutImageFile || existingPinout) && (
+                <div className="pf-file-chip">
+                  {productForm.pinoutImageFile ? (
+                    <ImageIcon size={26} />
+                  ) : (
+                    <img src={existingPinout} alt="Pinout diagram" />
+                  )}
+                  <div>
+                    <strong>{productForm.pinoutImageFile ? productForm.pinoutImageFile.name : "Current pinout diagram"}</strong>
+                    <span>{productForm.pinoutImageFile ? formatFileSize(productForm.pinoutImageFile.size) : "Upload a new file to replace it"}</span>
+                  </div>
+                  {productForm.pinoutImageFile && (
+                    <button type="button" aria-label="Remove pinout file" onClick={() => setProductForm((prev) => ({ ...prev, pinoutImageFile: null }))}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
+              <label className="pf-field">
+                <span>Pinout description</span>
+                <textarea rows={3} maxLength={500} placeholder="Explains the diagram shown on the Pinout tab" value={productForm.pinout_description} onChange={(e) => setProductForm({ ...productForm, pinout_description: e.target.value })} />
+                <em className="pf-count">{productForm.pinout_description.length}/500</em>
+              </label>
+            </section>
+
+            <div className="pf-stack">
+              <section className="pf-section">
+                <div className="pf-section-head">
+                  <span className="pf-section-ico"><Link2 size={18} /></span>
+                  <div>
+                    <h3>Resources (Datasheets &amp; Downloads)</h3>
+                    <p>Add useful links for customers (one per line).</p>
+                  </div>
+                </div>
+                <label className="pf-field">
+                  <textarea rows={4} maxLength={1000} placeholder="Name | Type | URL  (types: pdf, github, link, image, file)" value={productForm.resourcesText} onChange={(e) => setProductForm({ ...productForm, resourcesText: e.target.value })} />
+                  <em className="pf-count">{productForm.resourcesText.length}/1000</em>
+                </label>
+              </section>
+              <section className="pf-section">
+                <div className="pf-section-head">
+                  <span className="pf-section-ico"><MessageSquare size={18} /></span>
+                  <div>
+                    <h3>FAQs</h3>
+                    <p>Add frequently asked questions (one per line).</p>
+                  </div>
+                </div>
+                <label className="pf-field">
+                  <textarea rows={4} maxLength={1000} placeholder="Question | Answer" value={productForm.faqsText} onChange={(e) => setProductForm({ ...productForm, faqsText: e.target.value })} />
+                  <em className="pf-count">{productForm.faqsText.length}/1000</em>
+                </label>
+              </section>
+            </div>
           </div>
-          <input placeholder="Tagline / subtitle (shown under the product title)" value={productForm.tagline} onChange={(e) => setProductForm({ ...productForm, tagline: e.target.value })} />
-          <select required value={productForm.category_id} onChange={(e) => setProductForm({ ...productForm, category_id: e.target.value })}>
-            <option value="">Select category</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-          <select value={productForm.brand_id} onChange={(e) => setProductForm({ ...productForm, brand_id: e.target.value })}>
-            <option value="">Select brand (optional)</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
-              </option>
-            ))}
-          </select>
-          <div className="admin-form-grid">
-            <input required type="number" step="0.01" placeholder="Price (Rs.)" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} />
-            <input type="number" step="0.01" placeholder="Compare price (was Rs.)" value={productForm.compare_price} onChange={(e) => setProductForm({ ...productForm, compare_price: e.target.value })} />
-            <input type="number" placeholder="Stock quantity" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} />
+
+          <div className="pf-gallery-row">
+            <section className="pf-section pf-gallery">
+              <div className="pf-section-head">
+                <span className="pf-section-ico"><ImageIcon size={18} /></span>
+                <div>
+                  <h3>Gallery Images</h3>
+                  <p>Add product images (up to 5).</p>
+                </div>
+              </div>
+              <div className="pf-thumbs">
+                {existingGallery.map((img) => (
+                  <span className="pf-thumb" key={img.id}>
+                    <img src={img.image_url} alt="Product gallery" />
+                    {img.is_primary ? (
+                      <em className="pf-primary-badge"><Star size={11} /> Primary</em>
+                    ) : (
+                      <button
+                        type="button"
+                        className="pf-thumb-star"
+                        title="Set as primary image"
+                        onClick={() => editing?.id && setPrimaryGalleryImage(editing.id, img.id)}
+                      >
+                        <Star size={13} />
+                      </button>
+                    )}
+                    <button type="button" className="pf-thumb-x" title="Remove image" onClick={() => removeExistingGalleryImage(img.id)}>
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))}
+                {productForm.galleryFiles.map((file, idx) => (
+                  <span className="pf-thumb" key={`${file.name}-${idx}`}>
+                    <img src={file.preview} alt="New gallery upload" />
+                    <em className="pf-new-badge">New</em>
+                    <button
+                      type="button"
+                      className="pf-thumb-x"
+                      title="Remove image"
+                      onClick={() => setProductForm((prev) => ({ ...prev, galleryFiles: prev.galleryFiles.filter((_, i) => i !== idx) }))}
+                    >
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))}
+                {(existingGallery.length + productForm.galleryFiles.length) < 5 && (
+                  <label className="pf-add-tile">
+                    <Plus size={18} />
+                    <strong>Add Image</strong>
+                    <span>PNG, JPG (Max 5MB)</span>
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => { handleGallerySelect(e.target.files); e.target.value = ""; }}
+                    />
+                  </label>
+                )}
+              </div>
+              <p className="pf-hint">Star an image to make it the primary storefront photo. New images upload on save.</p>
+            </section>
+
+            <section className="pf-section pf-options">
+              <div className="pf-section-head">
+                <span className="pf-section-ico"><Sparkles size={18} /></span>
+                <div>
+                  <h3>Additional Options</h3>
+                </div>
+              </div>
+              <label className="pf-check-card">
+                <input type="checkbox" checked={productForm.is_featured} onChange={(e) => setProductForm({ ...productForm, is_featured: e.target.checked })} />
+                <span>
+                  <strong>Featured product</strong>
+                  <em>Show on homepage or featured sections</em>
+                </span>
+              </label>
+              <label className="pf-check-card">
+                <input type="checkbox" checked={productForm.is_active} onChange={(e) => setProductForm({ ...productForm, is_active: e.target.checked })} />
+                <span>
+                  <strong>Active (visible on storefront)</strong>
+                  <em>Make this product visible to customers</em>
+                </span>
+              </label>
+            </section>
           </div>
-          <textarea maxLength={500} placeholder="Short description (one-liner used on product cards)" value={productForm.short_description} onChange={(e) => setProductForm({ ...productForm, short_description: e.target.value })} />
 
-          <h4 className="admin-form-section-title">Product Description &amp; Features</h4>
-          <textarea rows={4} placeholder="Full product description shown on the Overview tab" value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} />
-          <textarea
-            rows={4}
-            placeholder="Key features - one per line (shown on Overview tab)"
-            value={productForm.keyFeaturesText}
-            onChange={(e) => setProductForm({ ...productForm, keyFeaturesText: e.target.value })}
-          />
-          <textarea
-            rows={3}
-            placeholder="Applications - one per line (e.g. IoT Projects)"
-            value={productForm.applicationsText}
-            onChange={(e) => setProductForm({ ...productForm, applicationsText: e.target.value })}
-          />
-
-          <h4 className="admin-form-section-title">Specifications</h4>
-          <textarea
-            rows={5}
-            placeholder="One per line as  Name : Value  (shown on Specifications tab)"
-            value={productForm.specificationsText}
-            onChange={(e) => setProductForm({ ...productForm, specificationsText: e.target.value })}
-          />
-          <h4 className="admin-form-section-title">Pinout</h4>
-          {editing?.id && !productForm.pinoutImageFile && (
-            <p className="admin-form-hint">Pick a file only if you want to replace the existing pinout diagram.</p>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setProductForm({ ...productForm, pinoutImageFile: e.target.files?.[0] })}
-            aria-label="Pinout image"
-          />
-          <textarea
-            rows={3}
-            placeholder="Pinout description (explains the diagram shown on the Pinout tab)"
-            value={productForm.pinout_description}
-            onChange={(e) => setProductForm({ ...productForm, pinout_description: e.target.value })}
-          />
-
-          <h4 className="admin-form-section-title">Resources (Datasheets &amp; Downloads)</h4>
-          <textarea
-            rows={4}
-            placeholder="One per line as  Name | Type | URL  (types: pdf, github, link, image, file)"
-            value={productForm.resourcesText}
-            onChange={(e) => setProductForm({ ...productForm, resourcesText: e.target.value })}
-          />
-          <p className="admin-form-hint">Example: Datasheet | pdf | https://www.ti.com/lit/ds/symlink/lm35.pdf</p>
-
-          <h4 className="admin-form-section-title">FAQs</h4>
-          <textarea
-            rows={3}
-            placeholder="One per line as  Question | Answer"
-            value={productForm.faqsText}
-            onChange={(e) => setProductForm({ ...productForm, faqsText: e.target.value })}
-          />
-          <p className="admin-form-hint">Example: What is the operating voltage? | 2.5V to 5.5V</p>
-
-          <h4 className="admin-form-section-title">Gallery Images</h4>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => setProductForm({ ...productForm, galleryFiles: Array.from(e.target.files || []) })}
-            aria-label="Gallery images"
-          />
-          <p className="admin-form-hint">
-            {productForm.galleryFiles.length > 0
-              ? `${productForm.galleryFiles.length} new image(s) selected`
-              : "Add up to 5 gallery images (appended when editing)"}
-          </p>
-
-          <label className="admin-check">
-            <input type="checkbox" checked={productForm.is_featured} onChange={(e) => setProductForm({ ...productForm, is_featured: e.target.checked })} />
-            Featured product
-          </label>
-          <label className="admin-check">
-            <input type="checkbox" checked={productForm.is_active} onChange={(e) => setProductForm({ ...productForm, is_active: e.target.checked })} />
-            Active (visible on storefront)
-          </label>
-          <button className="admin-primary" type="submit">
-            <Save size={16} />
-            <span>{editing?.id ? "Update Product" : "Create Product"}</span>
-          </button>
+          <div className="pf-footer">
+            {editing?.id ? (
+              <button
+                type="button"
+                className="pf-delete"
+                onClick={() => {
+                  if (window.confirm(`Delete "${productForm.name}"? It will be hidden from the storefront.`)) {
+                    deleteProduct(editing.id);
+                    closeModal();
+                  }
+                }}
+              >
+                <Trash2 size={15} />
+                <span>Delete Product</span>
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="pf-footer-actions">
+              <button type="button" className="pf-cancel" onClick={closeModal}>
+                Cancel
+              </button>
+              <button className="admin-primary" type="submit" disabled={savingProduct}>
+                <Save size={16} />
+                <span>{savingProduct ? "Saving..." : editing?.id ? "Update Product" : "Create Product"}</span>
+              </button>
+            </div>
+          </div>
         </form>
       </AdminModal>
 
@@ -2398,8 +5445,8 @@ function AdminPanel() {
 
       <AdminModal
         open={activeModal === "user"}
-        title="Edit User"
-        subtitle="Update customer/administrator account details."
+        title={editing?.id ? "Edit User" : "Add User"}
+        subtitle={editing?.id ? "Update customer/administrator account details." : "Create a new customer or administrator account."}
         onClose={closeModal}
       >
         <form className="admin-form" onSubmit={submitUser}>
@@ -2409,6 +5456,9 @@ function AdminPanel() {
             <input required type="email" placeholder="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
             <input placeholder="Phone" value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} />
           </div>
+          {!editing?.id && (
+            <input required type="password" minLength={6} placeholder="Password (min 6 characters)" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} autoComplete="new-password" />
+          )}
           <select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
             <option value="customer">Customer</option>
             <option value="admin">Admin</option>
@@ -2419,7 +5469,7 @@ function AdminPanel() {
           </label>
           <button className="admin-primary" type="submit">
             <Save size={16} />
-            <span>Save User</span>
+            <span>{editing?.id ? "Save User" : "Create User"}</span>
           </button>
         </form>
       </AdminModal>
@@ -2484,22 +5534,58 @@ function AdminPanel() {
   );
 }
 
-function AdminModal({ open, title, subtitle, children, onClose }) {
+function ProductThumb({ src, alt }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <span className="admin-product-thumb dummy" aria-label="No product image">
+        <Box size={22} />
+      </span>
+    );
+  }
+  return (
+    <img
+      className="admin-product-thumb"
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function Sparkline({ tone = "blue" }) {
+  return (
+    <svg className={`admin-spark admin-spark-${tone}`} viewBox="0 0 96 40" aria-hidden="true">
+      <path d="M2 30 C 14 28, 18 20, 30 22 S 46 30, 56 18 S 76 8, 94 4" fill="none" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M2 30 C 14 28, 18 20, 30 22 S 46 30, 56 18 S 76 8, 94 4 L 94 40 L 2 40 Z" strokeWidth="0" />
+    </svg>
+  );
+}
+
+function AdminModal({ open, title, subtitle, children, onClose, wide = false, icon: Icon = null }) {
   if (!open) return null;
 
   return (
     <div className="admin-modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section
-        className="admin-modal"
+        className={`admin-modal${wide ? " wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="admin-modal-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="admin-modal-header">
-          <div>
-            <h2 id="admin-modal-title">{title}</h2>
-            {subtitle && <p>{subtitle}</p>}
+          <div className="admin-modal-title-wrap">
+            {Icon && (
+              <span className="admin-modal-ico">
+                <Icon size={22} />
+              </span>
+            )}
+            <div>
+              <h2 id="admin-modal-title">{title}</h2>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
           </div>
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="Close modal">
             <X size={18} />

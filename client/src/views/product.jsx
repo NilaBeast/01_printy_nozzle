@@ -49,6 +49,7 @@ export default function Product() {
   // UX & Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [loadedImages, setLoadedImages] = useState({});
+  const [failedImages, setFailedImages] = useState({});
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [addedCartIds, setAddedCartIds] = useState([]);
 
@@ -145,6 +146,13 @@ export default function Product() {
   // Image load handler
   const handleImageLoad = (id) => {
     setLoadedImages((prev) => ({ ...prev, [id]: true }));
+  };
+
+  // Broken image URLs fall back to the dummy so cards never show a broken icon.
+  const DUMMY_IMAGE = "/images/products/01.png";
+  const handleImageError = (id) => {
+    setFailedImages((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+    handleImageLoad(id);
   };
 
   // Brand toggle
@@ -700,12 +708,12 @@ export default function Product() {
                       <div className="product-image-box">
                         {!isImageLoaded && <div className="skeleton product-img-skeleton" />}
                         <img
-                          src={product.image}
+                          src={failedImages[product.id] ? DUMMY_IMAGE : product.image}
                           alt={product.name}
                           className="product-img"
                           loading="lazy"
                           onLoad={() => handleImageLoad(product.id)}
-                          onError={() => handleImageLoad(product.id)}
+                          onError={() => handleImageError(product.id)}
                           style={{
                             opacity: isImageLoaded ? 1 : 0.8,
                             transition: "opacity 0.2s ease",
@@ -790,12 +798,12 @@ export default function Product() {
                       <div className="product-image-box">
                         {!isImageLoaded && <div className="skeleton product-img-skeleton" />}
                         <img
-                          src={product.image}
+                          src={failedImages[product.id] ? DUMMY_IMAGE : product.image}
                           alt={product.name}
                           className="product-img"
                           loading="lazy"
                           onLoad={() => handleImageLoad(product.id)}
-                          onError={() => handleImageLoad(product.id)}
+                          onError={() => handleImageError(product.id)}
                           style={{
                             opacity: isImageLoaded ? 1 : 0.8,
                             transition: "opacity 0.2s ease",

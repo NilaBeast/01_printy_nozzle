@@ -152,6 +152,29 @@ const ensurePrintCartSchema = async () => {
         await ensureTable(conn, "cart_items", true);
         await ensureTable(conn, "order_items", false);
         await ensurePrintOrdersTable(conn);
+        // Track last login for the admin Users table (old DBs lack the column).
+        try {
+          if (!(await columnExists(conn, "users", "last_login"))) {
+            await conn.query("ALTER TABLE `users` ADD COLUMN `last_login` TIMESTAMP NULL DEFAULT NULL");
+          }
+        } catch (e) {
+          if (!warned) console.warn("⚠️ Could not add users.last_login:", e.message);
+        }
+        // Every product with gallery images needs exactly one primary image —
+        // storefront cards read only `primary_image`, so without this they
+        // fall back to the dummy even when gallery photos exist.
+        try {
+          await conn.query(`
+            UPDATE product_images SET is_primary = 1 WHERE id IN (
+              SELECT first_id FROM (
+                SELECT MIN(pi.id) AS first_id FROM product_images pi
+                LEFT JOIN product_images prim ON prim.product_id = pi.product_id AND prim.is_primary = 1
+                WHERE prim.id IS NULL GROUP BY pi.product_id
+              ) t
+            )`);
+        } catch (e) {
+          if (!warned) console.warn("⚠️ Could not backfill primary product images:", e.message);
+        }
       } finally {
         conn.release();
       }

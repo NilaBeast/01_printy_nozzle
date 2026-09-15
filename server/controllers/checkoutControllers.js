@@ -133,7 +133,7 @@ const initiateCheckout = async (req, res) => {
 /* ===================== CREATE RAZORPAY ORDER ===================== */
 const createRazorpayOrder = async (req, res) => {
   try {
-    const { amount, order_id } = req.body;
+    const { amount, order_id, order_type = "order", print_order_ids = [] } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ success: false, message: "Invalid amount" });
@@ -148,8 +148,17 @@ const createRazorpayOrder = async (req, res) => {
 
     const razorpayOrder = await razorpay.orders.create(options);
 
-    // Update order with razorpay order id if order exists
-    if (order_id) {
+    // Link the gateway order to our record. Print-only checkouts live
+    // solely in printing_orders (no `orders` row), so update those instead.
+    if (order_type === "print") {
+      const ids = (print_order_ids.length ? print_order_ids : [order_id]).filter(Boolean);
+      if (ids.length) {
+        await db.query(
+          `UPDATE printing_orders SET razorpay_order_id = ? WHERE id IN (${ids.map(() => "?").join(",")}) AND user_id = ?`,
+          [razorpayOrder.id, ...ids, req.user.id]
+        );
+      }
+    } else if (order_id) {
       await db.query(
         "UPDATE orders SET razorpay_order_id = ? WHERE id = ? AND user_id = ?",
         [razorpayOrder.id, order_id, req.user.id]
@@ -172,7 +181,7 @@ const createRazorpayOrder = async (req, res) => {
 /* ===================== VERIFY PAYMENT ===================== */
 const verifyPayment = async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_id, order_type = "order", print_order_ids = [] } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({ success: false, message: "Payment details missing" });
@@ -185,9 +194,17 @@ const verifyPayment = async (req, res) => {
       .update(body)
       .digest("hex");
 
+    const printIds = (print_order_ids.length ? print_order_ids : [order_id]).filter(Boolean);
+    const isPrint = order_type === "print" && printIds.length > 0;
+
     if (expectedSignature !== razorpay_signature) {
       // Payment failed
-      if (order_id) {
+      if (isPrint) {
+        await db.query(
+          `UPDATE printing_orders SET payment_status = 'failed' WHERE id IN (${printIds.map(() => "?").join(",")}) AND user_id = ?`,
+          [...printIds, req.user.id]
+        );
+      } else if (order_id) {
         await db.query(
           "UPDATE orders SET payment_status = 'failed' WHERE id = ? AND user_id = ?",
           [order_id, req.user.id]
@@ -198,7 +215,43 @@ const verifyPayment = async (req, res) => {
 
     // Payment success — update order
     let confirmedOrder = null;
-    if (order_id) {
+    if (isPrint) {
+      await db.query(
+        `UPDATE printing_orders SET payment_status = 'paid', razorpay_payment_id = ? WHERE id IN (${printIds.map(() => "?").join(",")}) AND user_id = ?`,
+        [razorpay_payment_id, ...printIds, req.user.id]
+      );
+      const [printRows] = await db.query(
+        `SELECT * FROM printing_orders WHERE id IN (${printIds.map(() => "?").join(",")}) AND user_id = ?`,
+        [...printIds, req.user.id]
+      );
+      const first = printRows[0] || null;
+      if (first) {
+        // Shape it like an order so the confirmation mailer can reuse it.
+        confirmedOrder = {
+          ...first,
+          payment_method_label: "Online Payment (Razorpay)",
+        };
+        try {
+          const [userRows] = await db.query("SELECT first_name, last_name, email FROM users WHERE id = ?", [
+            req.user.id,
+          ]);
+          const customer = userRows[0] || {};
+          const recipient = first.shipping_email || customer.email;
+          sendPaymentConfirmationMail({
+            to: recipient,
+            name: first.shipping_name || `${customer.first_name || ""} ${customer.last_name || ""}`.trim(),
+            order: confirmedOrder,
+            items: printRows.map((r) => ({
+              product_name: `3D Print: ${r.file_name}`,
+              quantity: r.quantity,
+              total: r.total_amount,
+            })),
+          }).catch(() => {});
+        } catch (mailError) {
+          console.error("Confirmation email lookup failed:", mailError.message);
+        }
+      }
+    } else if (order_id) {
       await db.query(
         `UPDATE orders SET payment_status = 'paid', status = 'confirmed',
          razorpay_payment_id = ?, razorpay_signature = ?

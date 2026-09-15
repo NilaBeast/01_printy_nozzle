@@ -10,6 +10,9 @@ const adminService = {
   updateProduct: (id, payload) =>
     api.put(`/admin/products/${id}`, payload, { headers: { "Content-Type": undefined } }),
   deleteProduct: (id) => api.delete(`/admin/products/${id}`),
+  deleteProductImage: (imageId) => api.delete(`/admin/products/images/${imageId}`),
+  setPrimaryProductImage: (productId, imageId) =>
+    api.put(`/admin/products/${productId}/images/${imageId}/primary`),
   getOrders: (params = {}) => api.get("/admin/orders", { params }),
   getOrderDetails: (id) => api.get(`/admin/orders/${id}`),
   updateOrderStatus: (id, payload) => api.put(`/admin/orders/${id}/status`, payload),
@@ -18,7 +21,10 @@ const adminService = {
   updatePrintOrderStatus: (id, payload) =>
     api.put(`/admin/printing/orders/${id}/status`, payload),
   getUsers: (params = {}) => api.get("/admin/users", { params }),
+  getUserById: (id) => api.get(`/admin/users/${id}`),
+  createUser: (payload) => api.post("/admin/users", payload),
   updateUser: (id, payload) => api.put(`/admin/users/${id}`, payload),
+  deleteUser: (id) => api.delete(`/admin/users/${id}`),
   getCoupons: () => api.get("/admin/coupons"),
   createCoupon: (payload) => api.post("/admin/coupons", payload),
   updateCoupon: (id, payload) => api.put(`/admin/coupons/${id}`, payload),
@@ -46,8 +52,10 @@ const adminService = {
   getSubscribers: (params = {}) => api.get("/admin/newsletter/subscribers", { params }),
   deleteSubscriber: (id) => api.delete(`/admin/newsletter/subscribers/${id}`),
   getContacts: (params = {}) => api.get("/admin/newsletter/contacts", { params }),
+  getContactById: (id) => api.get(`/admin/newsletter/contacts/${id}`),
   updateContactStatus: (id, payload) =>
     api.put(`/admin/newsletter/contacts/${id}`, payload),
+  replyToContact: (id, payload) => api.post(`/admin/newsletter/contacts/${id}/reply`, payload),
   deleteContact: (id) => api.delete(`/admin/newsletter/contacts/${id}`),
   getSettings: () => api.get("/admin/settings"),
   updateSettings: (payload) => api.put("/admin/settings", payload),
