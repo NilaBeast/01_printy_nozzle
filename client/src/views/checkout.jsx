@@ -319,11 +319,50 @@ export default function Checkout() {
   });
 
   // Persist the typed checkout address into My Profile → My Addresses.
-  // Returns true when saved (or when the user opted out).
+  // Skips saving when the exact same address is already stored, so repeat
+  // orders don't create duplicates. Returns true when saved, reused,
+  // or when the user opted out.
   const saveTypedAddress = async () => {
     if (!formData.saveAddress) return true;
+    const normText = (v) => String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+    const normPhone = (v) => String(v ?? "").replace(/\D/g, "");
+    const typed = {
+      full_name: normText(formData.fullName),
+      phone: normPhone(formData.phoneNumber),
+      email: normText(formData.emailAddress),
+      address_line1: normText(formData.addressLine1),
+      address_line2: normText(formData.addressLine2),
+      city: normText(formData.city),
+      state: normText(formData.state),
+      pincode: normPhone(formData.pincode),
+      country: normText(formData.country || "India"),
+    };
+    const isSame = (addr) =>
+      normText(addr.full_name) === typed.full_name &&
+      normPhone(addr.phone) === typed.phone &&
+      normText(addr.email) === typed.email &&
+      normText(addr.address_line1) === typed.address_line1 &&
+      normText(addr.address_line2) === typed.address_line2 &&
+      normText(addr.city) === typed.city &&
+      normText(addr.state) === typed.state &&
+      normPhone(addr.pincode) === typed.pincode &&
+      normText(addr.country || "India") === typed.country;
+    // Refresh first so the check runs against the latest saved list.
+    let existing = savedAddresses;
     try {
-      await profileService.addAddress({
+      const res = await profileService.getAddresses();
+      existing = res.data?.addresses || [];
+      setSavedAddresses(existing);
+    } catch (e) {
+      /* fall back to the picker state */
+    }
+    const match = (existing || []).find(isSame);
+    if (match) {
+      setSelectedSavedAddressId(String(match.id));
+      return true;
+    }
+    try {
+      const res = await profileService.addAddress({
         type: "Home",
         full_name: formData.fullName,
         phone: formData.phoneNumber,
@@ -336,10 +375,12 @@ export default function Checkout() {
         country: formData.country || "India",
         is_default: false,
       });
+      const newId = res.data?.address_id;
+      if (newId) setSelectedSavedAddressId(String(newId));
       // Refresh the saved-address picker so the new address appears immediately.
       try {
-        const res = await profileService.getAddresses();
-        setSavedAddresses(res.data?.addresses || []);
+        const res2 = await profileService.getAddresses();
+        setSavedAddresses(res2.data?.addresses || []);
       } catch (e) {
         /* picker refresh is best-effort */
       }

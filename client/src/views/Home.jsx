@@ -28,6 +28,54 @@ export default function Home() {
   ===================================================== */
 
   const [homeCategories, setHomeCategories] = useState([]);
+  const [failedCategoryImages, setFailedCategoryImages] = useState({});
+
+  /* Map a category name/slug to a fallback icon type (used when
+     there is no image, or the image URL fails to load) */
+  const getCategoryIconType = (name = "", slug = "") => {
+    const n = `${name} ${slug}`.toLowerCase();
+    if (
+      n.includes("micro") ||
+      n.includes("controller") ||
+      n.includes("arduino") ||
+      n.includes("esp32") ||
+      n.includes("esp")
+    )
+      return "cpu";
+    if (
+      n.includes("sensor") ||
+      n.includes("module") ||
+      n.includes("iot") ||
+      n.includes("communic")
+    )
+      return "sensor";
+    if (
+      n.includes("power") ||
+      n.includes("battery") ||
+      n.includes("supply")
+    )
+      return "power";
+    if (
+      n.includes("tool") ||
+      n.includes("accessor") ||
+      n.includes("cable") ||
+      n.includes("wire")
+    )
+      return "tools";
+    if (n.includes("display") || n.includes("lcd") || n.includes("oled") || n.includes("tft"))
+      return "display";
+    if (n.includes("robot") || n.includes("motor") || n.includes("chassis"))
+      return "robot";
+    if (
+      n.includes("3d") ||
+      n.includes("additive") ||
+      n.includes("filament") ||
+      n.includes("print") ||
+      n.includes("nozzle")
+    )
+      return "box3d";
+    return "box";
+  };
 
   /* =====================================================
      AUTO SLIDE
@@ -105,11 +153,18 @@ export default function Home() {
 
         const categoryList = homeData.categories || [];
         setHomeCategories(
-          categoryList.map((c) => ({
-            name: c.name || c.category_name || "Category",
-            slug: c.slug || c.category_slug || "",
-            image: c.image_url || "",
-          }))
+          categoryList.map((c) => {
+            const name = c.name || c.category_name || "Category";
+            const slug = c.slug || c.category_slug || "";
+            const rawImage =
+              c.image_url || c.image || c.category_image || "";
+            return {
+              name,
+              slug,
+              image: String(rawImage || "").trim(),
+              icon: getCategoryIconType(name, slug),
+            };
+          })
         );
 
         const items = (productsRes.data.products || []).map(normalizeProduct);
@@ -234,6 +289,39 @@ export default function Home() {
         <svg viewBox="0 0 24 24">
           <path d="m14.7 6.3 3-3a5 5 0 0 0 0 7.1l-7.1 7.1a3 3 0 1 0 4.2 4.2l7.1-7.1a5 5 0 0 0 0-7.1l-3 3" />
           <path d="m3 3 5.5 5.5" />
+        </svg>
+      );
+    }
+
+    if (type === "display") {
+      return (
+        <svg viewBox="0 0 24 24">
+          <rect x="2" y="4" width="20" height="13" rx="2" />
+          <path d="M8 21h8M12 17v4" />
+        </svg>
+      );
+    }
+
+    if (type === "robot") {
+      return (
+        <svg viewBox="0 0 24 24">
+          <rect x="5" y="8" width="14" height="11" rx="2" />
+          <path d="M12 8V4M8 4h8" />
+          <circle cx="9.5" cy="13" r="1" />
+          <circle cx="14.5" cy="13" r="1" />
+          <path d="M9.5 16.5h5" />
+          <path d="M2 13v3M22 13v3" />
+        </svg>
+      );
+    }
+
+    if (type === "box3d") {
+      return (
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2 3 7v10l9 5 9-5V7z" />
+          <path d="m3 7 9 5 9-5" />
+          <path d="M12 12v10" />
+          <path d="m7.5 4.5 9 5" />
         </svg>
       );
     }
@@ -505,12 +593,17 @@ export default function Home() {
 
           {homeCategories.map((category) => {
             const image = category.image;
+            const imageKey = category.slug || category.name;
+            const imageFailed = Boolean(
+              failedCategoryImages[imageKey]
+            );
+            const showImage = Boolean(image) && !imageFailed;
 
             return (
               <button
                 type="button"
                 className="home-category-card"
-                key={category.name}
+                key={category.slug || category.name}
                 onClick={() =>
                   navigate(
                     `/products?category=${encodeURIComponent(
@@ -520,11 +613,18 @@ export default function Home() {
                 }
               >
                 <div className="home-category-image">
-                  {image ? (
+                  {showImage ? (
                     <img
                       src={image}
                       alt={category.name}
                       loading="lazy"
+                      onError={() =>
+                        setFailedCategoryImages((prev) =>
+                          prev[imageKey]
+                            ? prev
+                            : { ...prev, [imageKey]: true }
+                        )
+                      }
                     />
                   ) : (
                     <div className="home-category-icon">

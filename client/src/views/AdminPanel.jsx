@@ -71,9 +71,10 @@ const money = (value) =>
     maximumFractionDigits: 2,
   })}`;
 
-const statusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const statusOptions = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "returned"];
 const printStatusOptions = [
   "pending",
+  "confirmed",
   "reviewing",
   "in_production",
   "printing",
@@ -1630,8 +1631,10 @@ function AdminPanel() {
       await adminService.updateOrderStatus(id, { status });
       toast.success("Order status updated");
       loadAdminData();
+      return true;
     } catch (error) {
       toast.error(error?.response?.data?.message || "Order update failed");
+      return false;
     }
   };
 
@@ -1651,8 +1654,10 @@ function AdminPanel() {
       await adminService.updatePrintOrderStatus(id, { status });
       toast.success("Print order status updated");
       loadAdminData();
+      return true;
     } catch (error) {
       toast.error(error?.response?.data?.message || "Print order update failed");
+      return false;
     }
   };
 
@@ -1663,8 +1668,10 @@ function AdminPanel() {
       });
       toast.success("Print order notes updated");
       loadAdminData();
+      return true;
     } catch (error) {
       toast.error(error?.response?.data?.message || "Print order notes update failed");
+      return false;
     }
   };
 
@@ -2820,9 +2827,12 @@ function AdminPanel() {
                 order={selectedOrderDetail}
                 loading={detailLoading}
                 onBack={() => setSelectedOrderDetail(null)}
-                onStatusUpdate={(id, status) => {
-                  updateOrder(id, status);
-                  loadOrderDetails(id);
+                onStatusUpdate={async (id, status) => {
+                  // Wait for the PUT to finish before re-fetching details,
+                  // otherwise the detail view reloads the old status.
+                  if (await updateOrder(id, status)) {
+                    loadOrderDetails(id);
+                  }
                 }}
                 onTrackingUpdate={updateOrderDetails}
                 statusOptions={statusOptions}
@@ -3126,13 +3136,17 @@ function AdminPanel() {
                     order={selectedPrintOrderDetail}
                     loading={detailLoading}
                     onBack={() => setSelectedPrintOrderDetail(null)}
-                    onStatusUpdate={(id, status) => {
-                      updatePrintOrder(id, status);
-                      loadPrintOrderDetails(id);
+                    onStatusUpdate={async (id, status) => {
+                      // Wait for the PUT to finish before re-fetching details,
+                      // otherwise the detail view reloads the old status.
+                      if (await updatePrintOrder(id, status)) {
+                        loadPrintOrderDetails(id);
+                      }
                     }}
-                    onNotesUpdate={(id, value) => {
-                      updatePrintOrderNotes(id, value);
-                      loadPrintOrderDetails(id);
+                    onNotesUpdate={async (id, value) => {
+                      if (await updatePrintOrderNotes(id, value)) {
+                        loadPrintOrderDetails(id);
+                      }
                     }}
                     statusOptions={printStatusOptions}
                     money={money}

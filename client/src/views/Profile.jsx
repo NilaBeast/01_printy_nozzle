@@ -139,6 +139,25 @@ function Profile() {
         setProfileData(nextProfile);
         setEditData(nextProfile);
         setAvatarUrl(user.avatar_url || null);
+        // Keep the navbar in sync with the latest server profile.
+        try {
+          const stored = JSON.parse(localStorage.getItem("user") || "null");
+          if (stored) {
+            const merged = {
+              ...stored,
+              first_name: user.first_name ?? stored.first_name,
+              last_name: user.last_name ?? stored.last_name,
+              phone: user.phone ?? stored.phone,
+              avatar_url: user.avatar_url ?? stored.avatar_url,
+            };
+            if (JSON.stringify(merged) !== JSON.stringify(stored)) {
+              localStorage.setItem("user", JSON.stringify(merged));
+              window.dispatchEvent(new Event("authChange"));
+            }
+          }
+        } catch (err) {
+          /* non-fatal */
+        }
         setPreferences({
           emailNotifications: Boolean(profilePayload.preferences?.email_notifications ?? true),
           marketingUpdates: Boolean(profilePayload.preferences?.marketing_updates),
@@ -204,14 +223,46 @@ function Profile() {
       return;
     }
     try {
-      await profileService.updateProfile({
+      const res = await profileService.updateProfile({
         first_name: editData.firstName,
         last_name: editData.lastName,
         phone: editData.phone,
         dob: editData.dob || null,
         gender: editData.gender,
       });
-      setProfileData({ ...editData });
+      const updated = res.data?.user;
+      const nextProfile = updated
+        ? {
+            firstName: updated.first_name || "",
+            lastName: updated.last_name || "",
+            email: updated.email || editData.email,
+            phone: updated.phone || "",
+            dob: updated.dob || "",
+            gender: updated.gender || editData.gender,
+          }
+        : { ...editData };
+      setProfileData(nextProfile);
+      setEditData(nextProfile);
+      if (updated?.avatar_url !== undefined) setAvatarUrl(updated.avatar_url || null);
+      // Sync the navbar + any other header reading localStorage, then notify it.
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "null");
+        if (stored && updated) {
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              ...stored,
+              first_name: updated.first_name ?? stored.first_name,
+              last_name: updated.last_name ?? stored.last_name,
+              phone: updated.phone ?? stored.phone,
+              avatar_url: updated.avatar_url ?? stored.avatar_url,
+            })
+          );
+          window.dispatchEvent(new Event("authChange"));
+        }
+      } catch (err) {
+        /* non-fatal */
+      }
       setIsEditing(false);
       toast.success("Profile updated successfully!");
     } catch (error) {
