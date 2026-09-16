@@ -51,8 +51,15 @@ const readCartCount = () => {
 
   const [cartCount, setCartCount] = useState(readCartCount);
 
+  const [avatarError, setAvatarError] = useState(false);
+
   const isLoggedIn = authState.isLoggedIn;
   const user = authState.user;
+  const showAvatar = Boolean(isLoggedIn && user?.avatar_url) && !avatarError;
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar_url]);
 
   /* =====================================================
      CLOSE EVERYTHING
@@ -516,7 +523,16 @@ useEffect(() => {
                 aria-label={isLoggedIn ? "My Account" : "Login"}
                 aria-expanded={isLoggedIn ? accountOpen : undefined}
               >
-                <i className="bi bi-person"></i>
+                {showAvatar ? (
+                  <img
+                    src={user.avatar_url}
+                    alt="Profile"
+                    className="nav-account-avatar-img"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <i className="bi bi-person"></i>
+                )}
               </button>
 
               {/* =================================================
@@ -541,7 +557,15 @@ useEffect(() => {
 
                   <div className="account-dropdown-header">
                     <div className="account-dropdown-avatar">
-                      <i className="bi bi-person"></i>
+                      {showAvatar ? (
+                        <img
+                          src={user.avatar_url}
+                          alt="Profile"
+                          onError={() => setAvatarError(true)}
+                        />
+                      ) : (
+                        <i className="bi bi-person"></i>
+                      )}
                     </div>
 
                     <div className="account-dropdown-user">
@@ -654,22 +678,6 @@ useEffect(() => {
                       <span>Admin Panel</span>
                     </NavLink>
                   )}
-
-                  {/* =================================================
-                      COUPONS
-                      ================================================= */}
-
-                  <NavLink
-                    to="/coupons"
-                    className="account-dropdown-item"
-                    onClick={closeNavbar}
-                  >
-                    <span className="account-dropdown-icon">
-                      <i className="bi bi-ticket-perforated"></i>
-                    </span>
-
-                    <span>Coupons</span>
-                  </NavLink>
 
                   <button
                     type="button"
@@ -996,20 +1004,6 @@ useEffect(() => {
                     </span>
 
                     <span>My Orders</span>
-                  </NavLink>
-
-                  {/* COUPONS */}
-
-                  <NavLink
-                    to="/coupons"
-                    className="mobile-account-button"
-                    onClick={closeNavbar}
-                  >
-                    <span className="mobile-account-icon">
-                      <i className="bi bi-ticket-perforated"></i>
-                    </span>
-
-                    <span>Coupons</span>
                   </NavLink>
 
                   <button

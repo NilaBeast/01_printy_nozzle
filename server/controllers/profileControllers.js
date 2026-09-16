@@ -127,9 +127,17 @@ const updateProfile = async (req, res) => {
       [first_name.trim(), last_name.trim(), phone ? phone.trim() : null, dob || null, gender || null, userId]
     );
 
+    // Return the fresh row so clients (navbar, profile) can sync immediately
+    const [rows] = await db.query(
+      `SELECT id, first_name, last_name, email, phone, avatar_url, dob, gender
+       FROM users WHERE id = ?`,
+      [userId]
+    );
+
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully!",
+      user: rows[0] || null,
     });
   } catch (error) {
     console.error("Update profile error:", error);
@@ -285,6 +293,47 @@ const addAddress = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Full name, phone, address line 1, city, state, and pincode are required",
+      });
+    }
+
+    // Skip exact duplicates (e.g. checkout auto-save on every order):
+    // if the same address is already saved, reuse it instead of inserting again.
+    const normText = (v) => String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+    const normPhone = (v) => String(v ?? "").replace(/\D/g, "");
+    const [existingAddresses] = await db.query(
+      `SELECT id, full_name, phone, email, address_line1, address_line2, city, state, pincode, country
+       FROM addresses WHERE user_id = ?`,
+      [userId]
+    );
+    const incoming = {
+      full_name: normText(full_name),
+      phone: normPhone(phone),
+      email: normText(email),
+      address_line1: normText(address_line1),
+      address_line2: normText(address_line2),
+      city: normText(city),
+      state: normText(state),
+      pincode: normPhone(pincode),
+      country: normText(country || "India"),
+    };
+    const duplicate = existingAddresses.find(
+      (a) =>
+        normText(a.full_name) === incoming.full_name &&
+        normPhone(a.phone) === incoming.phone &&
+        normText(a.email) === incoming.email &&
+        normText(a.address_line1) === incoming.address_line1 &&
+        normText(a.address_line2) === incoming.address_line2 &&
+        normText(a.city) === incoming.city &&
+        normText(a.state) === incoming.state &&
+        normPhone(a.pincode) === incoming.pincode &&
+        normText(a.country || "India") === incoming.country
+    );
+    if (duplicate) {
+      return res.status(200).json({
+        success: true,
+        message: "Address already saved",
+        address_id: duplicate.id,
+        duplicate: true,
       });
     }
 

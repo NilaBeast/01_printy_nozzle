@@ -144,7 +144,7 @@ const login = async (req, res) => {
     const isAdminEmail = envAdminEmail && email.trim().toLowerCase() === envAdminEmail.trim().toLowerCase();
 
     let [rows] = await db.query(
-      "SELECT id, first_name, last_name, email, phone, password_hash, role, is_active FROM users WHERE email = ?",
+      "SELECT id, first_name, last_name, email, phone, password_hash, role, is_active, avatar_url FROM users WHERE email = ?",
       [email.trim()]
     );
 
