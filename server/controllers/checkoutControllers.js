@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { calculateCouponTotals, round2 } = require("../utils/couponHelper");
 const { ensurePrintCartSchema } = require("../utils/printCartSchema");
 const { sendPaymentConfirmationMail } = require("../utils/mailer");
+const { triggerAutoShipment } = require("../utils/shippingSync");
 require("dotenv").config();
 
 const razorpay = new Razorpay({
@@ -220,6 +221,8 @@ const verifyPayment = async (req, res) => {
         `UPDATE printing_orders SET payment_status = 'paid', razorpay_payment_id = ? WHERE id IN (${printIds.map(() => "?").join(",")}) AND user_id = ?`,
         [razorpay_payment_id, ...printIds, req.user.id]
       );
+      // Prepaid prints are now payable → auto-create Delhivery shipments.
+      printIds.forEach((pid) => triggerAutoShipment("print", pid));
       const [printRows] = await db.query(
         `SELECT * FROM printing_orders WHERE id IN (${printIds.map(() => "?").join(",")}) AND user_id = ?`,
         [...printIds, req.user.id]
@@ -263,6 +266,8 @@ const verifyPayment = async (req, res) => {
         req.user.id,
       ]);
       confirmedOrder = orderRows[0] || null;
+      // Prepaid order just got paid → auto-create the Delhivery shipment.
+      if (confirmedOrder) triggerAutoShipment("order", confirmedOrder.id);
     }
 
     // Payment confirmation email (fire-and-forget — never blocks the response)

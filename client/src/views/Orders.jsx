@@ -163,7 +163,9 @@ function Orders() {
             time: step.timestamp || "Pending",
             completed: Boolean(step.is_completed),
             current: Boolean(!step.is_completed && (idx === 0 || arr[idx - 1]?.is_completed)),
-            desc: step.step,
+            desc: step.tracking_number
+              ? `${step.carrier || "Carrier"} (${step.tracking_number})`
+              : step.step,
           }))
         : (data.timeline || []).map((step, idx, arr) => ({
             title: step.step,
@@ -174,7 +176,17 @@ function Orders() {
               ? `${step.carrier || "Carrier"} (${step.tracking_number})`
               : step.step,
           }));
-      setSelectedTrackingOrder({ ...order, trackingSteps: steps });
+      const shipping = data.shipping || {};
+      setSelectedTrackingOrder({
+        ...order,
+        trackingSteps: steps,
+        awb: shipping.awb || null,
+        carrier: shipping.carrier || null,
+        shippingStatus: shipping.shipping_status
+          ? String(shipping.shipping_status).replace(/_/g, " ")
+          : null,
+        shippingEvents: data.shipping_events || [],
+      });
     } catch (error) {
       /* keep modal open with fallback message */
     }
@@ -971,6 +983,33 @@ function Orders() {
             </div>
 
             <div className="orders-modal-body">
+              {selectedTrackingOrder.awb && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    background: "#f0f6ff",
+                    border: "1px solid #d0e1fd",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    marginBottom: 12,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <strong>AWB:</strong>
+                  <span style={{ fontFamily: "monospace" }}>{selectedTrackingOrder.awb}</span>
+                  {selectedTrackingOrder.carrier && (
+                    <span style={{ color: "#475569" }}>• {selectedTrackingOrder.carrier}</span>
+                  )}
+                  {selectedTrackingOrder.shippingStatus && (
+                    <span style={{ color: "#0759d6", fontWeight: 600 }}>
+                      • {selectedTrackingOrder.shippingStatus}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="tracking-stepper">
                 {selectedTrackingOrder.trackingSteps.map((step, idx) => (
                   <div

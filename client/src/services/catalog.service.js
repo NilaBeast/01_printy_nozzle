@@ -47,7 +47,12 @@ const catalogService = {
   getCategories: () => api.get("/categories"),
   getBrands: () => api.get("/brands"),
   getPrintingConfig: () => api.get("/printing/config"),
-  checkPincode: (pincode) => api.post("/products/check-pincode", { pincode }),
+  // Live Delhivery serviceability with local fallback (normalized to the
+  // legacy shape by shipping.service so callers stay unchanged).
+  checkPincode: (pincode) =>
+    import("./shipping.service.js").then(({ default: shippingService }) =>
+      shippingService.checkPincode(pincode)
+    ),
   getContactInfo: () => api.get("/contact/info"),
   submitContact: (payload) => api.post("/contact", payload),
   subscribeNewsletter: (email) => api.post("/newsletter/subscribe", { email }),

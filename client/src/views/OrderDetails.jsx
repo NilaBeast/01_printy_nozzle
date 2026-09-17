@@ -87,8 +87,15 @@ const OrderDetails = () => {
                 title: step.step,
                 time: step.timestamp || "Pending",
                 completed: step.is_completed,
-                desc: step.step,
+                desc: step.tracking_number
+                  ? `${step.carrier || "Carrier"} (${step.tracking_number})`
+                  : step.step,
               })),
+              awb: po.shipping?.awb || po.delhivery_awb || null,
+              carrier: po.shipping?.carrier || (po.delhivery_awb ? "Delhivery" : null),
+              shippingStatus: po.shipping?.shipping_status
+                ? String(po.shipping.shipping_status).replace(/_/g, " ")
+                : null,
               shippingAddress: po.shipping_name
                 ? `${po.shipping_name}, ${shipBits}${po.shipping_phone ? `, ${po.shipping_phone}` : ""}`
                 : shipBits || "Pickup / address on file",
@@ -140,6 +147,11 @@ const OrderDetails = () => {
                 ? `${step.carrier || "Carrier"} (${step.tracking_number})`
                 : step.step,
             })),
+            awb: data.shipping?.awb || null,
+            carrier: data.shipping?.carrier || null,
+            shippingStatus: data.shipping?.shipping_status
+              ? String(data.shipping.shipping_status).replace(/_/g, " ")
+              : null,
             shippingAddress: data.shipping_address?.formatted,
             paymentMethod: data.payment_method_label || data.payment_method,
             summary: data.summary,
@@ -345,6 +357,31 @@ const OrderDetails = () => {
                   {renderStatusBadge()}
                 </div>
               </div>
+
+              {/* Courier / AWB strip (Delhivery) */}
+              {order.awb && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    background: "#f0f6ff",
+                    border: "1px solid #d0e1fd",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    marginBottom: 12,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <strong>AWB:</strong>
+                  <span style={{ fontFamily: "monospace" }}>{order.awb}</span>
+                  {order.carrier && <span style={{ color: "#475569" }}>• {order.carrier}</span>}
+                  {order.shippingStatus && (
+                    <span style={{ color: "#0759d6", fontWeight: 600 }}>• {order.shippingStatus}</span>
+                  )}
+                </div>
+              )}
 
               {/* Stepper / Timeline */}
               {trackingSteps.length > 0 && (

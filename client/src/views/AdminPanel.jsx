@@ -298,6 +298,20 @@ function AdminPanel() {
   });
   const [settingsForm, setSettingsForm] = useState({});
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [shipStatus, setShipStatus] = useState(null);
+
+  const loadShipStatus = async () => {
+    try {
+      const res = await adminService.getShippingStatus();
+      setShipStatus(res.data?.data || null);
+    } catch {
+      setShipStatus(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "settings") loadShipStatus();
+  }, [activeTab]);
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -2835,6 +2849,10 @@ function AdminPanel() {
                   }
                 }}
                 onTrackingUpdate={updateOrderDetails}
+                onShipmentChange={(id) => {
+                  loadAdminData();
+                  loadOrderDetails(id);
+                }}
                 statusOptions={statusOptions}
                 money={money}
               />
@@ -3147,6 +3165,10 @@ function AdminPanel() {
                       if (await updatePrintOrderNotes(id, value)) {
                         loadPrintOrderDetails(id);
                       }
+                    }}
+                    onShipmentChange={(id) => {
+                      loadAdminData();
+                      loadPrintOrderDetails(id);
                     }}
                     statusOptions={printStatusOptions}
                     money={money}
@@ -4976,6 +4998,69 @@ function AdminPanel() {
                   </form>
                 </div>
 
+                <div className="admin-panel">
+                  <div className="admin-panel-title-row">
+                    <div>
+                      <h2>Delhivery Shipping</h2>
+                      <p className="admin-panel-subtitle">
+                        {shipStatus
+                          ? shipStatus.ready
+                            ? `Connected (${shipStatus.env}) — auto-create ${shipStatus.auto_create ? "ON" : "OFF"}`
+                            : `Not ready: ${[
+                                !shipStatus.token_configured ? "add DELHIVERY_API_TOKEN in server .env" : null,
+                                !shipStatus.pickup_configured ? "set pickup warehouse below" : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}`
+                          : "Checking Delhivery configuration…"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-icon-btn view"
+                      onClick={loadShipStatus}
+                      title="Refresh Delhivery status"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
+                  <form className="admin-form" onSubmit={submitSettings}>
+                    <div className="admin-form-grid">
+                      <select
+                        aria-label="Delhivery environment"
+                        value={settingsForm?.delhivery_env || "staging"}
+                        onChange={(e) => updateSettingField("delhivery_env", e.target.value)}
+                      >
+                        <option value="staging">staging</option>
+                        <option value="production">production</option>
+                      </select>
+                      <select
+                        aria-label="Auto-create shipment on payment"
+                        value={String(settingsForm?.delhivery_auto_create ?? "0")}
+                        onChange={(e) => updateSettingField("delhivery_auto_create", e.target.value)}
+                      >
+                        <option value="0">Manual shipment (admin creates)</option>
+                        <option value="1">Auto-create on payment</option>
+                      </select>
+                      <input placeholder="Fallback package weight (grams)" value={settingsForm?.delhivery_default_weight_g || ""} onChange={(e) => updateSettingField("delhivery_default_weight_g", e.target.value)} />
+                      <input placeholder="Pickup warehouse name *" value={settingsForm?.delhivery_pickup_name || ""} onChange={(e) => updateSettingField("delhivery_pickup_name", e.target.value)} />
+                      <input placeholder="Pickup address" value={settingsForm?.delhivery_pickup_address || ""} onChange={(e) => updateSettingField("delhivery_pickup_address", e.target.value)} />
+                      <input placeholder="Pickup city" value={settingsForm?.delhivery_pickup_city || ""} onChange={(e) => updateSettingField("delhivery_pickup_city", e.target.value)} />
+                      <input placeholder="Pickup state" value={settingsForm?.delhivery_pickup_state || ""} onChange={(e) => updateSettingField("delhivery_pickup_state", e.target.value)} />
+                      <input placeholder="Pickup pincode *" value={settingsForm?.delhivery_pickup_pincode || ""} onChange={(e) => updateSettingField("delhivery_pickup_pincode", e.target.value)} maxLength={6} />
+                      <input placeholder="Pickup phone" value={settingsForm?.delhivery_pickup_phone || ""} onChange={(e) => updateSettingField("delhivery_pickup_phone", e.target.value)} />
+                    </div>
+                    <p className="admin-panel-subtitle">
+                      API token lives only in server .env (DELHIVERY_API_TOKEN) — never in the browser.
+                      Webhook URL for the Delhivery panel: /api/webhooks/delhivery
+                    </p>
+                    <button className="admin-primary" type="submit" disabled={settingsSaving}>
+                      <Save size={16} />
+                      <span>{settingsSaving ? "Saving..." : "Save Settings"}</span>
+                    </button>
+                  </form>
+                </div>
+
                 <div className="admin-panel admin-section-panel">
                   <div className="admin-panel-title-row">
                     <div>
@@ -5655,9 +5740,150 @@ function AdminTable({ columns, rows, emptyMessage = "No records yet" }) {
 }
 
 /* ============================================================ */
+/* ADMIN SHIPMENT CARD (Delhivery — orders + 3D print orders)    */
+/* ============================================================ */
+function AdminShipmentCard({ order, orderType, onChanged }) {
+  const [busy, setBusy] = useState(null);
+
+  if (!order) return null;
+  const awb = order.delhivery_awb || null;
+
+  const refresh = () => {
+    if (onChanged) onChanged(order.id);
+  };
+
+  const runAction = async (key, fn, successMsg) => {
+    setBusy(key);
+    try {
+      await fn();
+      if (successMsg) toast.success(successMsg);
+      refresh();
+    } catch (error) {
+      let msg = error?.response?.data?.message || "Action failed";
+      // Label endpoint returns errors as a blob — read the text out of it.
+      try {
+        if (error?.response?.data instanceof Blob) {
+          const text = await error.response.data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.message) msg = parsed.message;
+        }
+      } catch {
+        /* keep default message */
+      }
+      toast.error(msg);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const createShipment = () =>
+    runAction(
+      "create",
+      () => adminService.createShipment({ order_type: orderType, order_id: order.id }),
+      "Shipment created — AWB assigned"
+    );
+
+  const downloadLabel = () =>
+    runAction("label", async () => {
+      const res = await adminService.downloadShippingLabel(awb, true);
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `delhivery-label-${awb}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    });
+
+  const syncStatus = () =>
+    runAction(
+      "sync",
+      () => adminService.syncShipments({ limit: 50 }),
+      "Tracking sync complete"
+    );
+
+  const raisePickup = () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (!window.confirm(`Raise Delhivery pickup for AWB ${awb} on ${tomorrow}?`)) return;
+    runAction(
+      "pickup",
+      () => adminService.raisePickup({ pickup_date: tomorrow, awbs: [awb] }),
+      "Pickup request raised"
+    );
+  };
+
+  return (
+    <div className="admin-detail-card">
+      <div className="admin-detail-card-head">
+        <Truck size={18} />
+        <h3>Courier Shipment (Delhivery)</h3>
+      </div>
+      <div className="admin-detail-card-body">
+        {awb ? (
+          <>
+            <div className="admin-detail-field">
+              <span className="admin-detail-label">AWB</span>
+              <span className="admin-detail-value" style={{ fontFamily: "monospace" }}>{awb}</span>
+            </div>
+            <div className="admin-detail-field">
+              <span className="admin-detail-label">Shipping Status</span>
+              <span className="admin-detail-value" style={{ textTransform: "capitalize" }}>
+                {(order.shipping_status || "manifested").replace(/_/g, " ").toLowerCase()}
+              </span>
+            </div>
+            {order.shipment_created_at && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Created</span>
+                <span className="admin-detail-value">
+                  {new Date(order.shipment_created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                </span>
+              </div>
+            )}
+            {order.pickup_request_id && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Pickup Req.</span>
+                <span className="admin-detail-value" style={{ fontFamily: "monospace" }}>{order.pickup_request_id}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="admin-detail-value" style={{ marginBottom: 4 }}>
+            No courier shipment yet.
+            {order.shipping_error ? ` Last attempt: ${order.shipping_error}` : " Create one to get an AWB + label."}
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          {!awb && (
+            <button type="button" className="admin-primary small" disabled={busy !== null} onClick={createShipment}>
+              <Printer size={15} />
+              <span>{busy === "create" ? "Creating…" : "Create Shipment"}</span>
+            </button>
+          )}
+          {awb && (
+            <>
+              <button type="button" className="admin-primary small" disabled={busy !== null} onClick={downloadLabel}>
+                <Download size={15} />
+                <span>{busy === "label" ? "Loading…" : "Download Label"}</span>
+              </button>
+              <button type="button" className="admin-icon-btn edit" disabled={busy !== null} onClick={syncStatus} title="Sync live tracking status">
+                <RefreshCw size={15} />
+              </button>
+              <button type="button" className="admin-icon-btn view" disabled={busy !== null} onClick={raisePickup} title="Raise pickup request">
+                <Truck size={15} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ */
 /* ADMIN ORDER DETAIL VIEW (Regular product orders)             */
 /* ============================================================ */
-function AdminOrderDetail({ order, loading, onBack, onStatusUpdate, onTrackingUpdate, statusOptions, money }) {
+function AdminOrderDetail({ order, loading, onBack, onStatusUpdate, onTrackingUpdate, onShipmentChange, statusOptions, money }) {
   const [trackingForm, setTrackingForm] = useState({});
   const [trackingSaved, setTrackingSaved] = useState(false);
 
@@ -5830,6 +6056,9 @@ function AdminOrderDetail({ order, loading, onBack, onStatusUpdate, onTrackingUp
             </button>
           </div>
         </div>
+
+        {/* Delhivery courier shipment */}
+        <AdminShipmentCard order={order} orderType="order" onChanged={onShipmentChange} />
       </div>
 
       {/* Order Items */}
@@ -5902,7 +6131,7 @@ function AdminOrderDetail({ order, loading, onBack, onStatusUpdate, onTrackingUp
 /* ============================================================ */
 /* ADMIN 3D PRINT ORDER DETAIL VIEW                             */
 /* ============================================================ */
-function AdminPrintOrderDetail({ order, loading, onBack, onStatusUpdate, onNotesUpdate, statusOptions, money }) {
+function AdminPrintOrderDetail({ order, loading, onBack, onStatusUpdate, onNotesUpdate, onShipmentChange, statusOptions, money }) {
   const [notesForm, setNotesForm] = useState("");
   const [notesSaved, setNotesSaved] = useState(false);
 
@@ -6134,6 +6363,9 @@ function AdminPrintOrderDetail({ order, loading, onBack, onStatusUpdate, onNotes
             </button>
           </div>
         </div>
+
+        {/* Delhivery courier shipment */}
+        <AdminShipmentCard order={order} orderType="print" onChanged={onShipmentChange} />
       </div>
 
       {/* Pricing Summary */}
