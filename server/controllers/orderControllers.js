@@ -2,6 +2,7 @@ const db = require("../config/db");
 const { calculateCouponTotals, round2 } = require("../utils/couponHelper");
 const { ensurePrintCartSchema } = require("../utils/printCartSchema");
 const { calculatePrintPrice } = require("../utils/priceCalculator");
+const { triggerAutoShipment } = require("../utils/shippingSync");
 const crypto = require("crypto");
 
 /* ===================== FORMAT HELPER ===================== */
@@ -40,8 +41,9 @@ const buildTimeline = (order) => {
       step: "Shipped",
       key: "shipped",
       timestamp: formatDateTime(order.shipped_at),
-      carrier: order.shipping_carrier || "BlueDart Express",
-      tracking_number: order.tracking_number || null,
+      carrier: order.shipping_carrier || (order.delhivery_awb ? "Delhivery" : "BlueDart Express"),
+      tracking_number: order.delhivery_awb || order.tracking_number || null,
+      shipping_status: order.shipping_status || null,
       is_completed: Boolean(order.shipped_at) || order.status === "delivered",
     },
     {
@@ -287,6 +289,22 @@ const getOrderById = async (req, res) => {
 
     // 5-Stage Stepper / Timeline
     order.timeline = buildTimeline(order);
+
+    // Delhivery / courier shipping block + tracking history (best-effort)
+    order.shipping = {
+      provider: order.shipping_provider || (order.delhivery_awb ? "delhivery" : null),
+      awb: order.delhivery_awb || order.tracking_number || null,
+      carrier: order.shipping_carrier || (order.delhivery_awb ? "Delhivery" : null),
+      shipping_status: order.shipping_status || null,
+      shipment_created_at: order.shipment_created_at || null,
+      shipping_synced_at: order.shipping_synced_at || null,
+    };
+    try {
+      const { getEvents } = require("./shippingControllers");
+      order.shipping_events = await getEvents("order", order.id);
+    } catch {
+      order.shipping_events = [];
+    }
 
     // Addresses Breakdown
     order.shipping_address = {
@@ -796,6 +814,11 @@ const createOrder = async (req, res) => {
       const printTotal = round2(
         created.reduce((sum, r) => sum + Number(r.total_amount || 0), 0) + shippingCost
       );
+      // COD print orders are payable on delivery → auto-create Delhivery
+      // shipments (fire-and-forget; never blocks the response).
+      if (payment_method === "cod") {
+        created.forEach((r) => triggerAutoShipment("print", r.id));
+      }
       return res.status(201).json({
         success: true,
         message: "3D print order placed successfully!",
@@ -1017,6 +1040,12 @@ const createOrder = async (req, res) => {
     await connection.query("UPDATE cart SET coupon_id = NULL WHERE id = ?", [cart[0].id]);
 
     await connection.commit();
+
+    // COD orders are confirmed on placement → auto-create the Delhivery
+    // shipment (fire-and-forget; prepaid orders hook in verify-payment).
+    if (payment_method === "cod") {
+      triggerAutoShipment("order", orderId);
+    }
 
     return res.status(201).json({
       success: true,

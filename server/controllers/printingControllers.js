@@ -2,6 +2,7 @@ const db = require("../config/db");
 const crypto = require("crypto");
 const { uploadFile } = require("../utils/cloudinaryUploader");
 const { calculatePrintPrice } = require("../utils/priceCalculator");
+const { triggerAutoShipment } = require("../utils/shippingSync");
 
 /* ===================== HELPERS ===================== */
 const formatDateTime = (dt) => {
@@ -24,13 +25,17 @@ const buildPrintTimeline = (order) => {
   }
 
   const currentIdx = PRINT_STATUS_ORDER.indexOf(order.status);
+  const awb = order.delhivery_awb || null;
   const steps = [
     { step: "Order Placed", key: "placed", timestamp: formatDateTime(order.created_at), is_completed: true },
     { step: "Reviewing", key: "reviewing", timestamp: null, is_completed: currentIdx >= 1 },
     { step: "In Production", key: "in_production", timestamp: null, is_completed: currentIdx >= 2 },
     { step: "Printing", key: "printing", timestamp: null, is_completed: currentIdx >= 3 },
     { step: "Quality Check", key: "quality_check", timestamp: null, is_completed: currentIdx >= 4 },
-    { step: "Shipped", key: "shipped", timestamp: null, is_completed: currentIdx >= 5 },
+    {
+      step: "Shipped", key: "shipped", timestamp: null, is_completed: currentIdx >= 5,
+      carrier: awb ? "Delhivery" : null, tracking_number: awb, shipping_status: order.shipping_status || null,
+    },
     { step: "Delivered", key: "delivered", timestamp: null, is_completed: currentIdx >= 6 },
   ];
 
@@ -257,6 +262,12 @@ const createPrintOrder = async (req, res) => {
       ]
     );
 
+    // COD print orders are payable on delivery → auto-create Delhivery
+    // shipment (fire-and-forget; prepaid hooks in verify-payment).
+    if (payment_method === "cod") {
+      triggerAutoShipment("print", result.insertId);
+    }
+
     return res.status(201).json({
       success: true,
       message: "3D print order placed successfully",
@@ -340,6 +351,22 @@ const getPrintOrderById = async (req, res) => {
 
     const order = orders[0];
     order.timeline = buildPrintTimeline(order);
+
+    // Delhivery / courier shipping block + tracking history (best-effort)
+    order.shipping = {
+      provider: order.shipping_provider || (order.delhivery_awb ? "delhivery" : null),
+      awb: order.delhivery_awb || null,
+      carrier: order.delhivery_awb ? "Delhivery" : null,
+      shipping_status: order.shipping_status || null,
+      shipment_created_at: order.shipment_created_at || null,
+      shipping_synced_at: order.shipping_synced_at || null,
+    };
+    try {
+      const { getEvents } = require("./shippingControllers");
+      order.shipping_events = await getEvents("print", order.id);
+    } catch {
+      order.shipping_events = [];
+    }
 
     return res.status(200).json({ success: true, order });
   } catch (error) {

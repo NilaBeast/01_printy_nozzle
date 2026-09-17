@@ -59,6 +59,17 @@ const adminService = {
   deleteContact: (id) => api.delete(`/admin/newsletter/contacts/${id}`),
   getSettings: () => api.get("/admin/settings"),
   updateSettings: (payload) => api.put("/admin/settings", payload),
+  getShippingStatus: () => api.get("/admin/shipping/status"),
+  createShipment: (payload) => api.post("/admin/shipping/shipment", payload),
+  downloadShippingLabel: (awb, pdf = true) =>
+    api.get("/admin/shipping/label", {
+      params: { awb, pdf: pdf ? "true" : "false" },
+      responseType: "blob",
+    }),
+  raisePickup: (payload) => api.post("/admin/shipping/pickup", payload),
+  syncShipments: (payload = {}) => api.post("/admin/shipping/sync", payload),
+  registerWarehouse: (payload) => api.post("/admin/shipping/warehouse", payload),
+  fetchWaybills: (count = 1) => api.get("/admin/shipping/waybills", { params: { count } }),
   getBanners: () => api.get("/admin/settings/banners"),
   createBanner: (payload) =>
     api.post("/admin/settings/banners", payload, { headers: { "Content-Type": undefined } }),

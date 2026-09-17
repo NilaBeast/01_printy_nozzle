@@ -12,6 +12,13 @@ try {
   console.warn("⚠️ printCartSchema preload skipped:", e.message);
 }
 
+// Self-healing DB migration for Delhivery shipping columns/tables (idempotent)
+try {
+  require("./utils/delhiverySchema");
+} catch (e) {
+  console.warn("⚠️ delhiverySchema preload skipped:", e.message);
+}
+
 // Client Routers
 const authRoutes = require("./routers/authRoutes");
 const profileRoutes = require("./routers/profileRoutes");
@@ -26,6 +33,8 @@ const printingRoutes = require("./routers/printingRoutes");
 const reviewRoutes = require("./routers/reviewRoutes");
 const newsletterRoutes = require("./routers/newsletterRoutes");
 const contactRoutes = require("./routers/contactRoutes");
+const shippingRoutes = require("./routers/shippingRoutes");
+const webhookRoutes = require("./routers/webhookRoutes");
 
 // Admin Routers
 const adminDashboardRoutes = require("./routers/admin/adminDashboardRoutes");
@@ -39,6 +48,7 @@ const adminCouponRoutes = require("./routers/admin/adminCouponRoutes");
 const adminSettingsRoutes = require("./routers/admin/adminSettingsRoutes");
 const adminNewsletterRoutes = require("./routers/admin/adminNewsletterRoutes");
 const adminReviewRoutes = require("./routers/admin/adminReviewRoutes");
+const adminShippingRoutes = require("./routers/admin/adminShippingRoutes");
 
 const app = express();
 
@@ -94,6 +104,8 @@ app.use("/api/printing", printingRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/shipping", shippingRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 /* ================= ADMIN API ROUTES ================= */
 app.use("/api/admin/dashboard", adminDashboardRoutes);
@@ -107,6 +119,7 @@ app.use("/api/admin/coupons", adminCouponRoutes);
 app.use("/api/admin/settings", adminSettingsRoutes);
 app.use("/api/admin/newsletter", adminNewsletterRoutes);
 app.use("/api/admin/reviews", adminReviewRoutes);
+app.use("/api/admin/shipping", adminShippingRoutes);
 
 /* ================= 404 HANDLER ================= */
 app.use((req, res) => {
