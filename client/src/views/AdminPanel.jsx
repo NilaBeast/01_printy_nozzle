@@ -274,6 +274,8 @@ function AdminPanel() {
     show_in_announcement: false,
   });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", is_active: true });
+  const [categoryImageFile, setCategoryImageFile] = useState(null);
+  const [existingCategoryImage, setExistingCategoryImage] = useState(null);
   const [materialForm, setMaterialForm] = useState({
     name: "",
     code: "",
@@ -1082,6 +1084,21 @@ function AdminPanel() {
 
   const resetCategoryForm = () => {
     setCategoryForm({ name: "", description: "", is_active: true });
+    setCategoryImageFile(null);
+    setExistingCategoryImage(null);
+  };
+
+  const handleCategoryImageSelect = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file for the category");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Category image must be under 5MB");
+      return;
+    }
+    setCategoryImageFile(file);
   };
 
   const submitCategory = async (event) => {
@@ -1091,11 +1108,22 @@ function AdminPanel() {
       return;
     }
     try {
+      // FormData when an image is attached (route accepts multipart "image"),
+      // plain JSON otherwise.
+      let payload = categoryForm;
+      if (categoryImageFile) {
+        const form = new FormData();
+        form.append("name", categoryForm.name);
+        form.append("description", categoryForm.description || "");
+        form.append("is_active", categoryForm.is_active ? "true" : "false");
+        form.append("image", categoryImageFile);
+        payload = form;
+      }
       if (editing?.id) {
-        await adminService.updateCategory(editing.id, categoryForm);
+        await adminService.updateCategory(editing.id, payload);
         toast.success("Category updated");
       } else {
-        await adminService.createCategory(categoryForm);
+        await adminService.createCategory(payload);
         toast.success("Category created");
       }
       closeModal();
@@ -1112,6 +1140,8 @@ function AdminPanel() {
       description: category.description || "",
       is_active: category.is_active !== undefined ? Boolean(category.is_active) : true,
     });
+    setCategoryImageFile(null);
+    setExistingCategoryImage(category.image_url || null);
     setEditing({ type: "category", id: category.id });
     setActiveModal("category");
   };
@@ -6045,6 +6075,35 @@ function AdminPanel() {
         <form className="admin-form" onSubmit={submitCategory}>
           <input required placeholder="Name" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} />
           <textarea placeholder="Description" value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} />
+          {(categoryImageFile || existingCategoryImage) && (
+            <div className="pf-file-chip">
+              <img
+                src={categoryImageFile ? URL.createObjectURL(categoryImageFile) : existingCategoryImage}
+                alt="Category"
+                style={{ width: 52, height: 52, objectFit: "contain", borderRadius: 8, background: "#f8fafc" }}
+              />
+              <div>
+                <strong>{categoryImageFile ? categoryImageFile.name : "Current category image"}</strong>
+                <span>{categoryImageFile ? "Uploads on save" : "Choose a file below to replace it"}</span>
+              </div>
+              {categoryImageFile && (
+                <button type="button" aria-label="Remove category image" onClick={() => setCategoryImageFile(null)}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
+          <label className="pf-dropzone" style={{ padding: "12px" }}>
+            <Upload size={18} />
+            <strong>Category image (optional)</strong>
+            <span>PNG, JPG, WebP (Max 5MB) — fits the storefront category box; icon shows when empty</span>
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={(e) => { handleCategoryImageSelect(e.target.files?.[0]); e.target.value = ""; }}
+            />
+          </label>
           <label className="admin-check">
             <input type="checkbox" checked={categoryForm.is_active} onChange={(e) => setCategoryForm({ ...categoryForm, is_active: e.target.checked })} />
             Active category
@@ -6500,6 +6559,24 @@ function AdminOrderDetail({ order, loading, onBack, onStatusUpdate, onTrackingUp
                 <span className="admin-detail-value">{order.user_phone}</span>
               </div>
             )}
+            {order.company_name && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Company</span>
+                <span className="admin-detail-value">{order.company_name}</span>
+              </div>
+            )}
+            {order.company_address && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Company Address</span>
+                <span className="admin-detail-value">{order.company_address}</span>
+              </div>
+            )}
+            {order.company_gstin && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Company GSTIN</span>
+                <span className="admin-detail-value">{order.company_gstin}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -6814,6 +6891,18 @@ function AdminPrintOrderDetail({ order, loading, onBack, onStatusUpdate, onNotes
               <div className="admin-detail-field">
                 <span className="admin-detail-label">Phone</span>
                 <span className="admin-detail-value">{order.user_phone}</span>
+              </div>
+            )}
+            {order.company_name && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Company</span>
+                <span className="admin-detail-value">{order.company_name}</span>
+              </div>
+            )}
+            {order.company_gstin && (
+              <div className="admin-detail-field">
+                <span className="admin-detail-label">Company GSTIN</span>
+                <span className="admin-detail-value">{order.company_gstin}</span>
               </div>
             )}
           </div>

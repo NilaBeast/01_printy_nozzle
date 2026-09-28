@@ -260,6 +260,11 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_pincode VARCHAR(10) NOT NULL,
   shipping_country VARCHAR(100) DEFAULT 'India',
 
+  -- Company / GST Details (optional, B2B orders)
+  company_name VARCHAR(200) DEFAULT NULL,
+  company_address VARCHAR(500) DEFAULT NULL,
+  company_gstin VARCHAR(20) DEFAULT NULL,
+
   -- Billing Address
   billing_name VARCHAR(200) DEFAULT NULL,
   billing_phone VARCHAR(20) DEFAULT NULL,
@@ -355,6 +360,9 @@ CREATE TABLE IF NOT EXISTS manual_invoices (
   customer_name VARCHAR(200) NOT NULL,
   customer_email VARCHAR(255) DEFAULT NULL,
   customer_phone VARCHAR(20) NOT NULL,
+  company_name VARCHAR(200) DEFAULT NULL,
+  company_address VARCHAR(500) DEFAULT NULL,
+  company_gstin VARCHAR(20) DEFAULT NULL,
   billing_address1 VARCHAR(500) NOT NULL,
   billing_address2 VARCHAR(500) DEFAULT NULL,
   billing_city VARCHAR(100) NOT NULL,
@@ -488,6 +496,11 @@ CREATE TABLE IF NOT EXISTS printing_orders (
   shipping_state VARCHAR(100) DEFAULT NULL,
   shipping_pincode VARCHAR(10) DEFAULT NULL,
   
+  -- Company / GST Details (optional, B2B orders)
+  company_name VARCHAR(200) DEFAULT NULL,
+  company_address VARCHAR(500) DEFAULT NULL,
+  company_gstin VARCHAR(20) DEFAULT NULL,
+
   -- Payment
   payment_method ENUM('upi', 'card', 'net_banking', 'wallet', 'cod', 'qr') DEFAULT 'cod',
   payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',

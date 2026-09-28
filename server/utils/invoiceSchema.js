@@ -19,8 +19,8 @@ const INVOICE_SETTING_SEEDS = [
     "Company address printed on invoices",
   ],
   ["company_phone", "8583928948", "string", "Company phone printed on invoices"],
-  ["company_email", "support@printynozzle.in", "string", "Company email printed on invoices"],
-  ["company_gstin", "", "string", "Company GSTIN printed on invoices (blank = hidden)"],
+  ["company_email", "info.printynozzle@gmail.com", "string", "Company email printed on invoices"],
+  ["company_gstin", "19EINPB6126F1Z8", "string", "Company GSTIN printed on invoices (blank = hidden)"],
   ["company_website", "https://printynozzle.in", "string", "Company website printed on invoices"],
   ["invoice_jurisdiction", "Kolkata", "string", "Jurisdiction line on invoices (Subject to X Jurisdiction)"],
   ["invoice_default_hsn", "85423900", "string", "Fallback HSN for product lines without one"],
@@ -54,9 +54,39 @@ const ensureInvoiceSchema = async () => {
           }
         }
 
-        // One-time cleanup: older installs carry ElectroLab placeholder
-        // credentials — swap those known dummies for Printynozzle defaults.
-        // Admin-edited (non-dummy) values are never touched.
+        // One-time fill: existing installs have an empty company GSTIN —
+        // fill it with the Printynozzle GSTIN. Admin-edited (non-empty)
+        // values are never touched.
+        try {
+          const [gstRows] = await conn.query(
+            "SELECT setting_value FROM site_settings WHERE setting_key = 'company_gstin'"
+          );
+          if (gstRows.length > 0 && String(gstRows[0].setting_value || "").trim() === "") {
+            await conn.query(
+              "UPDATE site_settings SET setting_value = '19EINPB6126F1Z8' WHERE setting_key = 'company_gstin'"
+            );
+            console.log("🧾 Invoice company GSTIN set to 19EINPB6126F1Z8");
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not refresh invoice company GSTIN: ${e.message}`);
+        }
+        // One-time replacement: older installs carry the placeholder
+        // support@printynozzle.in (or blank) — swap it for the real
+        // info.printynozzle@gmail.com. Admin-edited values are never touched.
+        try {
+          const [mailRows] = await conn.query(
+            "SELECT setting_value FROM site_settings WHERE setting_key = 'company_email'"
+          );
+          const mail = String(mailRows[0]?.setting_value || "").trim().toLowerCase();
+          if (mail === "" || mail === "support@printynozzle.in") {
+            await conn.query(
+              "UPDATE site_settings SET setting_value = 'info.printynozzle@gmail.com' WHERE setting_key = 'company_email'"
+            );
+            console.log("🧾 Invoice company email set to info.printynozzle@gmail.com");
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not refresh invoice company email: ${e.message}`);
+        }
         try {
           const [addrRows] = await conn.query(
             "SELECT setting_value FROM site_settings WHERE setting_key = 'company_address'"

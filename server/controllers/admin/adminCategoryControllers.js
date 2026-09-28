@@ -2,6 +2,14 @@ const db = require("../../config/db");
 const slugify = require("slugify");
 const { uploadFile, deleteFile } = require("../../utils/cloudinaryUploader");
 
+/* Parse checkbox/switch values arriving as real booleans (JSON) or
+ * "true"/"false" strings (multipart FormData). */
+const parseActive = (value, fallback = true) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string") return ["true", "1", "on"].includes(value.toLowerCase());
+  return Boolean(value);
+};
+
 /* ===================== CREATE CATEGORY ===================== */
 const createCategory = async (req, res) => {
   try {
@@ -32,7 +40,7 @@ const createCategory = async (req, res) => {
         imageUrl,
         parent_id || null,
         sort_order || 0,
-        is_active !== undefined ? (is_active ? 1 : 0) : 1,
+        parseActive(is_active, true) ? 1 : 0,
       ]
     );
 
@@ -90,7 +98,7 @@ const updateCategory = async (req, res) => {
         imageUrl || null,
         parent_id !== undefined ? parent_id : null,
         sort_order !== undefined ? sort_order : null,
-        is_active !== undefined ? (is_active ? 1 : 0) : null,
+        is_active !== undefined ? (parseActive(is_active, true) ? 1 : 0) : null,
         id,
       ]
     );

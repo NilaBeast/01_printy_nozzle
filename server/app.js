@@ -47,6 +47,13 @@ try {
   console.warn("⚠️ qrPaymentSchema preload skipped:", e.message);
 }
 
+// Self-healing DB migration for company / GST details on orders + invoices
+try {
+  require("./utils/companyDetailsSchema");
+} catch (e) {
+  console.warn("⚠️ companyDetailsSchema preload skipped:", e.message);
+}
+
 // Client Routers
 const authRoutes = require("./routers/authRoutes");
 const profileRoutes = require("./routers/profileRoutes");
