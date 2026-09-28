@@ -1,4 +1,6 @@
 const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
 const db = require("../config/db");
 
 /**
@@ -23,7 +25,7 @@ const COMPANY_DEFAULTS = {
   company_address:
     "145 Indira Nagar Block 3, Panihati, Sodepur, Opposite Shree Krishna Sweets, North 24 Parganas, 700110, West Bengal, India",
   company_phone: "8583928948",
-  company_email: "support@printynozzle.in",
+  company_email: "info.printynozzle@gmail.com",
   company_gstin: "",
   company_website: "https://printynozzle.in",
   invoice_jurisdiction: "Kolkata",
@@ -275,6 +277,9 @@ const buildOrderInvoiceData = ({ order, items = [], settings }) => {
       line1: bill.bits,
       line2: `${bill.region}${bill.region ? ", " : ""}${bill.country}`,
       placeOfSupply: placeOfSupply(order.billing_state || order.shipping_state),
+      company: order.company_name || "",
+      companyAddress: order.company_address || "",
+      gstin: order.company_gstin || "",
     },
     shipping: {
       name: order.shipping_name || "",
@@ -378,6 +383,9 @@ const buildPrintInvoiceData = ({ prints = [], settings, shippingCost = 0, delive
       line1: ship.line1,
       line2: ship.line2,
       placeOfSupply: placeOfSupply(first.shipping_state),
+      company: first.company_name || "",
+      companyAddress: first.company_address || "",
+      gstin: first.company_gstin || "",
     },
     shipping: { name: first.shipping_name || "", line1: ship.line1, line2: ship.line2, phone: first.shipping_phone || "", email: first.shipping_email || first.customer_email || "" },
     lines,
@@ -433,6 +441,9 @@ const buildManualInvoiceData = ({
       .filter(Boolean)
       .join(", "),
     placeOfSupply: placeOfSupply(clean(customer.state)),
+    company: clean(customer.company_name || customer.company),
+    companyAddress: clean(customer.company_address || customer.companyAddress),
+    gstin: clean(customer.company_gstin || customer.gstin).toUpperCase(),
   };
 
   const shipSrc = shippingSameAsBilling || !shipping ? customer : shipping;
@@ -598,15 +609,33 @@ const generateInvoicePdf = (data) =>
 
       /* ---------- Header: brand (left) + company (right) ---------- */
       const brandY = y;
-      doc.font("Helvetica-Bold").fontSize(21).fillColor(ORANGE);
-      doc.text(data.company.name.toUpperCase(), MARGIN, brandY, { width: 250 });
+      const LOGO_PATH = path.join(__dirname, "..", "assets", "logo.png");
+      let brandBottom = brandY;
+      let logoDrawn = false;
+      try {
+        if (fs.existsSync(LOGO_PATH)) {
+          const logoImg = doc.openImage(LOGO_PATH);
+          const logoW = 150;
+          const logoH = Math.round((logoImg.height / logoImg.width) * logoW);
+          doc.image(logoImg, MARGIN, brandY, { width: logoW });
+          brandBottom = brandY + logoH + 6;
+          logoDrawn = true;
+        }
+      } catch {
+        logoDrawn = false;
+      }
+      if (!logoDrawn) {
+        doc.font("Helvetica-Bold").fontSize(21).fillColor(ORANGE);
+        doc.text(data.company.name.toUpperCase(), MARGIN, brandY, { width: 250 });
+        brandBottom = doc.y;
+      }
       doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY);
-      doc.text("Your Ideas, Our Prints", MARGIN, doc.y + 1, { width: 250 });
+      doc.text("Your Ideas, Our Prints", MARGIN, brandBottom, { width: 250 });
       if (data.company.website) {
         doc.font("Helvetica").fontSize(7.5).fillColor(MUTED);
         doc.text(data.company.website, MARGIN, doc.y + 2, { width: 250 });
       }
-      const brandBottom = doc.y;
+      brandBottom = doc.y;
 
       const compX = MARGIN + 320;
       const compW = CONTENT_W - 320;
@@ -633,7 +662,7 @@ const generateInvoicePdf = (data) =>
         const c1 = MARGIN;
         const c2 = MARGIN + 175;
         const c3 = MARGIN + 350;
-        const bandH = 118;
+        const bandH = 118 + (data.customer.company ? 24 : 0) + (data.customer.gstin ? 10 : 0);
         ensureSpace(bandH + 8);
         const bandY = y;
         doc.rect(MARGIN, bandY, CONTENT_W, bandH).fill(BAND);
@@ -641,14 +670,54 @@ const generateInvoicePdf = (data) =>
         // Customer
         doc.font("Helvetica-Bold").fontSize(8);
         doc.text("Customer", c1 + 6, bandY + 6, { width: 160 });
-        doc.font("Helvetica-Bold").fontSize(8.5);
-        doc.text(data.customer.name || "Customer", c1 + 6, bandY + 18, { width: 160 });
-        doc.font("Helvetica").fontSize(7.5);
-        let cy = bandY + 30;
-        [data.customer.line1, data.customer.line2].filter(Boolean).forEach((t) => {
-          doc.text(t, c1 + 6, cy, { width: 160 });
+        let cy;
+        if (data.customer.company) {
+          // B2B format: company name first, then contact person, address,
+          // phone, email, GSTIN and place of supply.
+          doc.font("Helvetica-Bold").fontSize(8.5);
+          doc.text(data.customer.company, c1 + 6, bandY + 18, { width: 160 });
+          doc.font("Helvetica").fontSize(7.5);
           cy = doc.y + 1;
-        });
+          doc.text(data.customer.name || "Customer", c1 + 6, cy, { width: 160 });
+          cy = doc.y + 1;
+          // Full address as the customer gave it — company address first,
+          // then the order address lines. A line already covered by the
+          // company address (same tokens) is shown only once.
+          const addrTokens = (t) =>
+            new Set(String(t || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+          const isSubset = (sub, sup) => sub.size > 0 && [...sub].every((x) => sup.has(x));
+          const compTokens = addrTokens(data.customer.companyAddress);
+          const seenAddr = new Set();
+          const addrLines = [data.customer.companyAddress, data.customer.line1, data.customer.line2]
+            .filter(Boolean)
+            .filter((t) => {
+              const tt = addrTokens(t);
+              if (compTokens.size > 0 && t !== data.customer.companyAddress && isSubset(tt, compTokens)) {
+                return false;
+              }
+              const key = [...tt].sort().join("|");
+              if (seenAddr.has(key)) return false;
+              seenAddr.add(key);
+              return true;
+            });
+          addrLines.forEach((t) => {
+            doc.text(t, c1 + 6, cy, { width: 160 });
+            cy = doc.y + 1;
+          });
+        } else {
+          doc.font("Helvetica-Bold").fontSize(8.5);
+          doc.text(data.customer.name || "Customer", c1 + 6, bandY + 18, { width: 160 });
+          doc.font("Helvetica").fontSize(7.5);
+          cy = doc.y + 1;
+          [data.customer.line1, data.customer.line2].filter(Boolean).forEach((t) => {
+            doc.text(t, c1 + 6, cy, { width: 160 });
+            cy = doc.y + 1;
+          });
+        }
+        if (data.customer.gstin) {
+          doc.text(`GSTIN: ${data.customer.gstin}`, c1 + 6, cy, { width: 160 });
+          cy = doc.y + 1;
+        }
         if (data.customer.phone) {
           doc.text(`Phone: ${data.customer.phone}`, c1 + 6, cy, { width: 160 });
           cy = doc.y + 1;

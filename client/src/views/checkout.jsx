@@ -82,6 +82,15 @@ export default function Checkout() {
     state: "West Bengal",
     country: "India",
     saveAddress: true,
+    companyOrder: false,
+    companyName: "",
+    companyGstin: "",
+    companyAddress1: "",
+    companyAddress2: "",
+    companyCity: "",
+    companyState: "",
+    companyPincode: "",
+    companyCountry: "India",
   });
 
   // Shipping Option: "standard" | "express"
@@ -390,6 +399,27 @@ export default function Checkout() {
     shipping_pincode: formData.pincode,
     shipping_country: formData.country,
     delivery_option: shippingOption,
+    // Optional company / GST details (B2B) — only sent when opted in.
+    // Company address is composed from structured inputs like the customer
+    // address; the invoice prints it once when it matches (see invoice.js).
+    ...(formData.companyOrder
+      ? {
+          company_name: formData.companyName?.trim() || null,
+          company_address:
+            [
+              formData.companyAddress1,
+              formData.companyAddress2,
+              formData.companyCity,
+              formData.companyState,
+              formData.companyPincode,
+              formData.companyCountry,
+            ]
+              .map((s) => s?.trim())
+              .filter(Boolean)
+              .join(", ") || null,
+          company_gstin: formData.companyGstin?.trim().toUpperCase() || null,
+        }
+      : {}),
     // Razorpay orders store a generic online method; QR stores "qr".
     payment_method: paymentMethod === "qr" ? "qr" : "upi",
     ...extra,
@@ -418,6 +448,21 @@ export default function Checkout() {
     } catch {
       toast.error("Copy failed");
     }
+  };
+
+  // One-tap copy when the company address is the same as the delivery
+  // address — the invoice then prints the address only once.
+  const copyCustomerAddressToCompany = () => {
+    setFormData((prev) => ({
+      ...prev,
+      companyAddress1: prev.addressLine1 || "",
+      companyAddress2: prev.addressLine2 || "",
+      companyCity: prev.city || "",
+      companyState: prev.state || "",
+      companyPincode: prev.pincode || "",
+      companyCountry: prev.country || "India",
+    }));
+    toast.success("Company address copied from delivery address");
   };
 
   // Persist the typed checkout address into My Profile → My Addresses.
@@ -531,6 +576,14 @@ export default function Checkout() {
     }
     if (formData.pincode.trim().length !== 6) {
       toast.warn("Please enter a valid 6-digit pincode.");
+      return;
+    }
+    if (
+      formData.companyOrder &&
+      formData.companyGstin?.trim() &&
+      !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(formData.companyGstin.trim().toUpperCase())
+    ) {
+      toast.warn("Please enter a valid 15-character GSTIN.");
       return;
     }
 
@@ -1029,7 +1082,149 @@ export default function Checkout() {
                       Save this address for faster checkout next time
                     </label>
                   </div>
+
+                  {/* Company order checkbox */}
+                  <div className="checkout-checkbox-row">
+                    <input
+                      type="checkbox"
+                      id="companyOrder"
+                      name="companyOrder"
+                      checked={formData.companyOrder}
+                      onChange={handleInputChange}
+                      className="checkout-checkbox"
+                    />
+                    <label htmlFor="companyOrder" className="checkout-checkbox-label">
+                      This order is for a company (add GST details — optional)
+                    </label>
+                  </div>
                 </div>
+
+                {/* Company Details (optional, B2B) */}
+                {formData.companyOrder && (
+                  <div className="checkout-form-grid" style={{ marginTop: "4px" }}>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyName"
+                        value={formData.companyName}
+                        onChange={handleInputChange}
+                        placeholder="Enter company name"
+                        className="checkout-input"
+                      />
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company GSTIN</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyGstin"
+                        value={formData.companyGstin}
+                        onChange={handleInputChange}
+                        placeholder="15-character GSTIN"
+                        className="checkout-input"
+                        maxLength={15}
+                        style={{ textTransform: "uppercase" }}
+                      />
+                    </div>
+                    <div className="checkout-field-group form-group-full">
+                      <button
+                        type="button"
+                        className="btn-check-pincode"
+                        onClick={copyCustomerAddressToCompany}
+                      >
+                        Same as delivery address
+                      </button>
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company Address Line 1</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyAddress1"
+                        value={formData.companyAddress1}
+                        onChange={handleInputChange}
+                        placeholder="House no., Building, Street"
+                        className="checkout-input"
+                      />
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company Address Line 2 (Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyAddress2"
+                        value={formData.companyAddress2}
+                        onChange={handleInputChange}
+                        placeholder="Apartment, Landmark, Area"
+                        className="checkout-input"
+                      />
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company City</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyCity"
+                        value={formData.companyCity}
+                        onChange={handleInputChange}
+                        placeholder="Enter city"
+                        className="checkout-input"
+                      />
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company State</span>
+                      </label>
+                      <select
+                        name="companyState"
+                        value={formData.companyState}
+                        onChange={handleInputChange}
+                        className="checkout-select"
+                      >
+                        <option value="">Select state</option>
+                        {INDIAN_STATES.map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company Pincode</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="companyPincode"
+                        value={formData.companyPincode}
+                        onChange={handleInputChange}
+                        placeholder="Enter pincode"
+                        className="checkout-input"
+                        maxLength={6}
+                      />
+                    </div>
+                    <div className="checkout-field-group">
+                      <label className="checkout-label">
+                        <span>Company Country</span>
+                      </label>
+                      <select
+                        name="companyCountry"
+                        value={formData.companyCountry}
+                        onChange={handleInputChange}
+                        className="checkout-select"
+                      >
+                        <option value="India">India</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Card 2: Shipping Options */}

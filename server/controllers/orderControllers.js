@@ -543,7 +543,7 @@ const createOrder = async (req, res) => {
   /* Insert one 3D-print cart item into printing_orders and return its id/number/total.
      Used for print-only checkouts (no `orders` row) and to mirror prints
      inside mixed checkouts (the `orders` row still carries products). */
-  const insertPrintingOrderRow = async ({ item, ship, payment_method, payment_status, gstRate, smoothPerGram, notes, paymentScreenshotUrl }) => {
+  const insertPrintingOrderRow = async ({ item, ship, payment_method, payment_status, gstRate, smoothPerGram, notes, paymentScreenshotUrl, company }) => {
     if (!item.material_id) {
       console.error("⛔ Printing order aborted: material_id is missing for print cart item", {
         cart_item_id: item.id,
@@ -616,6 +616,9 @@ const createOrder = async (req, res) => {
       ship.city,
       ship.state,
       ship.pin,
+      company?.name || null,
+      company?.address || null,
+      company?.gstin || null,
       payment_method,
       payment_status,
       paymentScreenshotUrl || null,
@@ -634,13 +637,14 @@ const createOrder = async (req, res) => {
           subtotal, tax_amount, total_amount,
           shipping_name, shipping_phone, shipping_address1,
           shipping_city, shipping_state, shipping_pincode,
+          company_name, company_address, company_gstin,
           payment_method, payment_status, payment_screenshot_url, notes
-        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         printRow
       );
     } catch (e) {
       if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
-        // Legacy DB without the time/screenshot columns.
+        // Legacy DB without the time/screenshot/company columns.
         [insertRes] = await connection.query(
           `INSERT INTO printing_orders (
             user_id, order_number, status,
@@ -718,6 +722,9 @@ const createOrder = async (req, res) => {
       delivery_option = "standard",
       payment_method = "cod",
       payment_screenshot_url,
+      company_name,
+      company_address,
+      company_gstin,
       notes,
     } = req.body;
 
@@ -739,6 +746,17 @@ const createOrder = async (req, res) => {
     if (payment_method === "qr" && !String(payment_screenshot_url || "").trim()) {
       await connection.rollback();
       return res.status(400).json({ success: false, message: "Please attach your payment screenshot to place a QR order" });
+    }
+
+    // Optional company / GST details (B2B) — validated only when provided.
+    const company = {
+      name: String(company_name || "").trim() || null,
+      address: String(company_address || "").trim() || null,
+      gstin: String(company_gstin || "").trim().toUpperCase() || null,
+    };
+    if (company.gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(company.gstin)) {
+      await connection.rollback();
+      return res.status(400).json({ success: false, message: "Please enter a valid 15-character GSTIN" });
     }
 
     let cartItems;
@@ -913,6 +931,7 @@ const createOrder = async (req, res) => {
             smoothPerGram,
             notes: notes || "Placed via store checkout",
             paymentScreenshotUrl: payment_screenshot_url || null,
+            company,
           })
         );
       }
@@ -995,6 +1014,9 @@ const createOrder = async (req, res) => {
       // even if the customer closes the gateway without paying.
       "pending",
       payment_screenshot_url || null,
+      company.name,
+      company.address,
+      company.gstin,
       subtotal.toFixed(2),
       discount.toFixed(2),
       taxAmount.toFixed(2),
@@ -1011,15 +1033,16 @@ const createOrder = async (req, res) => {
           shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
           billing_name, billing_phone, billing_address1, billing_address2, billing_city, billing_state, billing_pincode, billing_country,
           delivery_option, shipping_cost, payment_method, payment_method_label, payment_status, payment_screenshot_url,
+          company_name, company_address, company_gstin,
           subtotal, discount, tax_amount, total_amount, coupon_id, coupon_code, notes)
-         VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         orderRow
       );
     } catch (e) {
       if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
-        // Legacy DB without payment_screenshot_url.
+        // Legacy DB without payment_screenshot_url / company columns.
         const legacyRow = [...orderRow];
-        legacyRow.splice(24, 1);
+        legacyRow.splice(26, 4);
         [orderResult] = await connection.query(
           `INSERT INTO orders
            (user_id, order_number, status, shipping_name, shipping_phone, shipping_email,
@@ -1144,6 +1167,7 @@ const createOrder = async (req, res) => {
             smoothPerGram,
             notes: `Part of e-commerce order ${orderNumber}`,
             paymentScreenshotUrl: payment_screenshot_url || null,
+            company,
           });
         } catch (printMirrorErr) {
           console.error("⛔ Failed to mirror print item to printing_orders:", printMirrorErr.message, {

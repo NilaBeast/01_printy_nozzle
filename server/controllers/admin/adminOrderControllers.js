@@ -35,6 +35,14 @@ const validateManualPayload = (body = {}) => {
   if (!manualStr(customer.name)) return "Customer name is required";
   if (!manualStr(customer.phone)) return "Customer phone is required";
   if (!manualStr(customer.address1)) return "Customer address is required";
+  if (
+    manualStr(customer.company_gstin || customer.gstin) &&
+    !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(
+      manualStr(customer.company_gstin || customer.gstin).toUpperCase()
+    )
+  ) {
+    return "Enter a valid 15-character company GSTIN";
+  }
   if (!manualStr(customer.city)) return "Customer city is required";
   if (!manualStr(customer.state)) return "Customer state is required";
   if (!manualStr(customer.pincode)) return "Customer pincode is required";
@@ -83,6 +91,9 @@ const savedRowToInvoiceInput = (row, items) => ({
     name: row.customer_name,
     email: row.customer_email,
     phone: row.customer_phone,
+    company_name: row.company_name,
+    company_address: row.company_address,
+    company_gstin: row.company_gstin,
     address1: row.billing_address1,
     address2: row.billing_address2,
     city: row.billing_city,
@@ -184,12 +195,13 @@ const createManualInvoice = async (req, res) => {
         `INSERT INTO manual_invoices
           (invoice_number, invoice_date, sale_order, reference,
            customer_name, customer_email, customer_phone,
+           company_name, company_address, company_gstin,
            billing_address1, billing_address2, billing_city, billing_state, billing_pincode, billing_country,
            shipping_same, shipping_name, shipping_email, shipping_phone,
            shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
            gst_rate, subtotal, tax_total, discount, shipping_cost, grand_total,
            delivery_option, payment_method, payment_status, amount_in_words, created_by)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoice.date || new Date().toISOString().slice(0, 10),
           manualStr(invoice.saleOrder) || null,
@@ -197,6 +209,9 @@ const createManualInvoice = async (req, res) => {
           manualStr(customer.name),
           manualStr(customer.email) || null,
           manualStr(customer.phone),
+          manualStr(customer.company_name || customer.company) || null,
+          manualStr(customer.company_address || customer.companyAddress) || null,
+          manualStr(customer.company_gstin || customer.gstin).toUpperCase() || null,
           manualStr(customer.address1),
           manualStr(customer.address2) || null,
           manualStr(customer.city),

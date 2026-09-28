@@ -217,12 +217,18 @@ const createPrintOrder = async (req, res) => {
       shipping_name, shipping_phone, shipping_address1,
       shipping_city, shipping_state, shipping_pincode,
       payment_method = "cod",
+      company_name, company_address, company_gstin,
       notes,
     } = req.body;
 
     /* -------- Validation -------- */
     if (!file_name || !file_url || !material_id || !estimated_weight) {
       return res.status(400).json({ success: false, message: "File, material, and estimated weight are required" });
+    }
+
+    const companyGstin = String(company_gstin || "").trim().toUpperCase() || null;
+    if (companyGstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(companyGstin)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid 15-character GSTIN" });
     }
 
     // Get material
@@ -277,8 +283,9 @@ const createPrintOrder = async (req, res) => {
           subtotal, tax_amount, total_amount,
           shipping_name, shipping_phone, shipping_address1,
           shipping_city, shipping_state, shipping_pincode,
+          company_name, company_address, company_gstin,
           payment_method, payment_status, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.user.id, orderNumber, "confirmed",
           file_name, file_url, file_public_id || null, file_size || null,
@@ -289,6 +296,9 @@ const createPrintOrder = async (req, res) => {
           pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
           shipping_name || null, shipping_phone || null, shipping_address1 || null,
           shipping_city || null, shipping_state || null, shipping_pincode || null,
+          String(company_name || "").trim() || null,
+          String(company_address || "").trim() || null,
+          companyGstin,
           payment_method, payment_method === "cod" ? "pending" : "pending",
           notes || null,
         ]

@@ -81,8 +81,12 @@ const adminService = {
   updateCoupon: (id, payload) => api.put(`/admin/coupons/${id}`, payload),
   deleteCoupon: (id) => api.delete(`/admin/coupons/${id}`),
   getCategories: () => api.get("/categories"),
-  createCategory: (payload) => api.post("/admin/categories", payload),
-  updateCategory: (id, payload) => api.put(`/admin/categories/${id}`, payload),
+  // FormData (category image) needs the browser multipart boundary, so the
+  // default JSON Content-Type must be cleared — same pattern as banners.
+  createCategory: (payload) =>
+    api.post("/admin/categories", payload, { headers: { "Content-Type": undefined } }),
+  updateCategory: (id, payload) =>
+    api.put(`/admin/categories/${id}`, payload, { headers: { "Content-Type": undefined } }),
   deleteCategory: (id) => api.delete(`/admin/categories/${id}`),
   getBrands: () => api.get("/admin/brands"),
   createBrand: (payload) => api.post("/admin/brands", payload),

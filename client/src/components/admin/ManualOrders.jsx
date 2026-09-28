@@ -29,6 +29,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const blankForm = () => ({
   customer: { ...EMPTY_PERSON },
+  company: { name: "", gstin: "", address1: "", address2: "", city: "", state: "", pincode: "", country: "India" },
   sameAsBilling: true,
   shipping: { ...EMPTY_PERSON },
   saleOrder: "",
@@ -75,6 +76,34 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
   const setCustomer = (patch) =>
     setForm((prev) => ({ ...prev, customer: { ...prev.customer, ...patch } }));
+  const setCompany = (patch) =>
+    setForm((prev) => ({
+      ...prev,
+      company: {
+        ...(prev.company || { name: "", gstin: "", address1: "", address2: "", city: "", state: "", pincode: "", country: "India" }),
+        ...patch,
+      },
+    }));
+
+  const copyCustomerToCompany = () =>
+    setForm((prev) => ({
+      ...prev,
+      company: {
+        ...(prev.company || {}),
+        address1: prev.customer.address1 || "",
+        address2: prev.customer.address2 || "",
+        city: prev.customer.city || "",
+        state: prev.customer.state || "",
+        pincode: prev.customer.pincode || "",
+        country: prev.customer.country || "India",
+      },
+    }));
+
+  const composeCompanyAddress = (company = {}) =>
+    [company.address1, company.address2, company.city, company.state, company.pincode, company.country]
+      .map((s) => String(s || "").trim())
+      .filter(Boolean)
+      .join(", ");
   const setShipping = (patch) =>
     setForm((prev) => ({ ...prev, shipping: { ...prev.shipping, ...patch } }));
 
@@ -258,7 +287,12 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     setSaving(true);
     try {
       const filename = await adminService.createManualInvoicePdf({
-        customer: form.customer,
+        customer: {
+          ...form.customer,
+          company_name: form.company?.name || "",
+          company_address: composeCompanyAddress(form.company),
+          company_gstin: form.company?.gstin || "",
+        },
         shipping: form.sameAsBilling ? null : form.shipping,
         shippingSameAsBilling: form.sameAsBilling,
         invoice: { date: form.date, saleOrder: form.saleOrder, reference: form.reference },
@@ -405,6 +439,46 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               </label>
               <label className="pf-field"><span>Pincode <b>*</b></span>
                 <input required value={form.customer.pincode} onChange={(e) => setCustomer({ pincode: e.target.value })} />
+              </label>
+            </div>
+          </div>
+
+          <div className="pf-section">
+            <div className="pf-section-head"><div><h3>Company Details (optional)</h3><p>Filled only when the order is for a company — printed on the GST invoice.</p></div></div>
+            <div className="pf-grid cols-2">
+              <label className="pf-field"><span>Company Name</span>
+                <input value={form.company?.name || ""} onChange={(e) => setCompany({ name: e.target.value })} placeholder="Company name" />
+              </label>
+              <label className="pf-field"><span>Company GSTIN</span>
+                <input value={form.company?.gstin || ""} onChange={(e) => setCompany({ gstin: e.target.value.toUpperCase() })} placeholder="15-character GSTIN" maxLength={15} />
+              </label>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <button
+                  type="button"
+                  className="admin-primary small"
+                  onClick={copyCustomerToCompany}
+                  style={{ marginBottom: 10 }}
+                >
+                  <span>Same as customer address</span>
+                </button>
+              </div>
+              <label className="pf-field"><span>Company Address Line 1</span>
+                <input value={form.company?.address1 || ""} onChange={(e) => setCompany({ address1: e.target.value })} placeholder="House no., Building, Street" />
+              </label>
+              <label className="pf-field"><span>Company Address Line 2</span>
+                <input value={form.company?.address2 || ""} onChange={(e) => setCompany({ address2: e.target.value })} placeholder="Apartment, Landmark, Area" />
+              </label>
+              <label className="pf-field"><span>Company City</span>
+                <input value={form.company?.city || ""} onChange={(e) => setCompany({ city: e.target.value })} placeholder="City" />
+              </label>
+              <label className="pf-field"><span>Company State</span>
+                <input value={form.company?.state || ""} onChange={(e) => setCompany({ state: e.target.value })} placeholder="West Bengal" />
+              </label>
+              <label className="pf-field"><span>Company Pincode</span>
+                <input value={form.company?.pincode || ""} onChange={(e) => setCompany({ pincode: e.target.value })} placeholder="Pincode" />
+              </label>
+              <label className="pf-field"><span>Company Country</span>
+                <input value={form.company?.country || ""} onChange={(e) => setCompany({ country: e.target.value })} placeholder="India" />
               </label>
             </div>
           </div>
@@ -663,7 +737,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                       <div className="manual-detail-grid">
                         <div>
                           <strong>Bill To</strong>
-                          <p>{expandedDetail.customer_name}<br />{expandedDetail.billing_address1}{expandedDetail.billing_address2 ? `, ${expandedDetail.billing_address2}` : ""}<br />{expandedDetail.billing_city}, {expandedDetail.billing_state} {expandedDetail.billing_pincode}<br />{expandedDetail.customer_phone}{expandedDetail.customer_email ? ` • ${expandedDetail.customer_email}` : ""}</p>
+                          <p>{expandedDetail.customer_name}<br />{expandedDetail.billing_address1}{expandedDetail.billing_address2 ? `, ${expandedDetail.billing_address2}` : ""}<br />{expandedDetail.billing_city}, {expandedDetail.billing_state} {expandedDetail.billing_pincode}<br />{expandedDetail.customer_phone}{expandedDetail.customer_email ? ` • ${expandedDetail.customer_email}` : ""}{expandedDetail.company_name ? (<><br /><strong>{expandedDetail.company_name}</strong></>) : null}{expandedDetail.company_address ? (<><br />{expandedDetail.company_address}</>) : null}{expandedDetail.company_gstin ? (<><br />GSTIN: {expandedDetail.company_gstin}</>) : null}</p>
                         </div>
                         <div>
                           <strong>Items</strong>
