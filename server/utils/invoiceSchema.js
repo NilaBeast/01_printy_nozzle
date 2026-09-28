@@ -18,7 +18,7 @@ const INVOICE_SETTING_SEEDS = [
     "string",
     "Company address printed on invoices",
   ],
-  ["company_phone", "8583928948", "string", "Company phone printed on invoices"],
+  ["company_phone", "9836609063", "string", "Company phone printed on invoices"],
   ["company_email", "info.printynozzle@gmail.com", "string", "Company email printed on invoices"],
   ["company_gstin", "19EINPB6126F1Z8", "string", "Company GSTIN printed on invoices (blank = hidden)"],
   ["company_website", "https://printynozzle.in", "string", "Company website printed on invoices"],
@@ -103,6 +103,23 @@ const ensureInvoiceSchema = async () => {
           }
         } catch (e) {
           console.warn(`⚠️ Could not refresh invoice company address: ${e.message}`);
+        }
+        // One-time replacement: older installs carry the previous company /
+        // support phone 8583928948 — swap it for 9836609063. Admin-edited
+        // values already equal to 9836609063 are never touched.
+        try {
+          const [phoneRows] = await conn.query(
+            "SELECT setting_value FROM site_settings WHERE setting_key = 'company_phone'"
+          );
+          const phone = String(phoneRows[0]?.setting_value || "").replace(/\D/g, "");
+          if (phone === "8583928948" || phone === "" ) {
+            await conn.query(
+              "UPDATE site_settings SET setting_value = '9836609063' WHERE setting_key = 'company_phone'"
+            );
+            console.log("🧾 Invoice company phone updated to 9836609063");
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not refresh invoice company phone: ${e.message}`);
         }
       } finally {
         conn.release();
