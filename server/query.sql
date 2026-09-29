@@ -386,6 +386,7 @@ CREATE TABLE IF NOT EXISTS manual_invoices (
   round_total DECIMAL(10,2) DEFAULT NULL,
   shipping_cost DECIMAL(10,2) DEFAULT 0.00,
   grand_total DECIMAL(10,2) DEFAULT 0.00,
+  amount_paid DECIMAL(10,2) DEFAULT 0.00,
   delivery_option VARCHAR(20) DEFAULT 'standard',
   payment_method VARCHAR(100) DEFAULT 'Cash',
   payment_status VARCHAR(20) DEFAULT 'PAID',

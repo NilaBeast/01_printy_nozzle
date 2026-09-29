@@ -5,7 +5,8 @@
 .home-hero {
   position: relative;
 
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
 
   /*
     Hero fills the complete available viewport height
@@ -207,7 +208,7 @@
 
   font-family: "EB Garamond", serif !important;
 
-  font-size: clamp(58px, 5.5vw, 82px);
+  font-size: clamp(40px, 5.5vw, 82px);
 
   font-weight: 700;
 
@@ -729,11 +730,12 @@
 
 
   .home-hero-title {
-    font-size: 48px;
+    font-size: 36px;
 
-    line-height: 0.94;
+    line-height: 1.02;
 
-    letter-spacing: -2px;
+    letter-spacing: -1px;
+    overflow-wrap: break-word;
   }
 
 

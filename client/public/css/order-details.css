@@ -80,6 +80,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 24px 28px 22px;
 }
 
@@ -709,6 +711,16 @@
   .od-table-row {
     grid-template-columns: 1fr;
     gap: 8px;
+    text-align: left;
+  }
+
+  .od-th-price,
+  .od-td-price,
+  .od-th-qty,
+  .od-td-qty,
+  .od-th-total,
+  .od-td-total {
+    text-align: left;
   }
 
   .od-order-info-footer {

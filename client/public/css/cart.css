@@ -824,27 +824,47 @@
       "qty total"
       "remove remove";
     gap: 12px;
-    padding: 16px 0;
+    padding: 16px 40px 16px 0;
     position: relative;
   }
 
+  .cart-thumb-wrapper {
+    grid-area: thumb;
+  }
+
   .cart-product-info {
-    grid-column: 1 / -1;
+    grid-area: details;
+    grid-column: auto;
+    min-width: 0;
+  }
+
+  .cart-product-details {
+    min-width: 0;
+  }
+
+  .cart-product-name {
+    overflow-wrap: break-word;
   }
 
   .cart-item-price {
+    grid-area: price;
     text-align: left;
   }
 
   .cart-qty-controller {
+    grid-area: qty;
     margin: 0;
+    justify-self: start;
   }
 
   .cart-item-total {
+    grid-area: total;
     text-align: right;
+    align-self: center;
   }
 
   .cart-remove-btn {
+    grid-area: remove;
     position: absolute;
     top: 14px;
     right: 0;

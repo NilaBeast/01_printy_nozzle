@@ -82,6 +82,9 @@ const validateManualPayload = (body = {}) => {
 
   const rateNum = Number(gstRate);
   if (!(rateNum >= 0 && rateNum <= 100)) return "GST rate must be between 0 and 100";
+  if (body.amountPaid !== undefined && body.amountPaid !== null && String(body.amountPaid).trim() !== "" && !(Number(body.amountPaid) >= 0)) {
+    return "Amount paid must be zero or more";
+  }
   if (
     body.roundTotal !== undefined &&
     body.roundTotal !== null &&
@@ -142,6 +145,7 @@ const savedRowToInvoiceInput = (row, items) => ({
   shippingCost: Number(row.shipping_cost),
   deliveryOption: row.delivery_option,
   discount: Number(row.discount),
+  amountPaid: Number(row.amount_paid ?? 0),
   payment: { methodLabel: row.payment_method, status: row.payment_status },
 });
 
@@ -160,6 +164,7 @@ const createManualInvoice = async (req, res) => {
       deliveryOption = "standard",
       discount = 0,
       roundTotal = null,
+      amountPaid = 0,
       payment = {},
     } = req.body || {};
 
@@ -194,6 +199,7 @@ const createManualInvoice = async (req, res) => {
       deliveryOption,
       discount,
       roundTotal: roundFigure,
+      amountPaid,
       payment,
       settings,
     });
@@ -215,9 +221,9 @@ const createManualInvoice = async (req, res) => {
            billing_address1, billing_address2, billing_city, billing_state, billing_pincode, billing_country,
            shipping_same, shipping_name, shipping_email, shipping_phone,
            shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
-           gst_rate, subtotal, tax_total, discount, round_total, shipping_cost, grand_total,
+           gst_rate, subtotal, tax_total, discount, round_total, shipping_cost, grand_total, amount_paid,
            delivery_option, payment_method, payment_status, amount_in_words, created_by)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoice.date || new Date().toISOString().slice(0, 10),
           manualStr(invoice.saleOrder) || null,
@@ -251,6 +257,7 @@ const createManualInvoice = async (req, res) => {
           roundFigure,
           Number(shippingCost) || 0,
           preview.grandTotal,
+          preview.amountPaid,
           manualStr(deliveryOption) || "standard",
           manualStr(payment.methodLabel) || manualStr(payment.method) || "Cash",
           (manualStr(payment.status) || "PAID").toUpperCase(),
@@ -367,6 +374,7 @@ const updateManualInvoice = async (req, res) => {
       deliveryOption = "standard",
       discount = 0,
       roundTotal = null,
+      amountPaid = 0,
       payment = {},
     } = req.body || {};
 
@@ -398,6 +406,7 @@ const updateManualInvoice = async (req, res) => {
       deliveryOption,
       discount,
       roundTotal: roundFigure,
+      amountPaid,
       payment,
       settings,
     });
@@ -417,7 +426,7 @@ const updateManualInvoice = async (req, res) => {
           billing_address1 = ?, billing_address2 = ?, billing_city = ?, billing_state = ?, billing_pincode = ?, billing_country = ?,
           shipping_same = ?, shipping_name = ?, shipping_email = ?, shipping_phone = ?,
           shipping_address1 = ?, shipping_address2 = ?, shipping_city = ?, shipping_state = ?, shipping_pincode = ?, shipping_country = ?,
-          gst_rate = ?, subtotal = ?, tax_total = ?, discount = ?, round_total = ?, shipping_cost = ?, grand_total = ?,
+          gst_rate = ?, subtotal = ?, tax_total = ?, discount = ?, round_total = ?, shipping_cost = ?, grand_total = ?, amount_paid = ?,
           delivery_option = ?, payment_method = ?, payment_status = ?, amount_in_words = ?
         WHERE id = ?`,
         [
@@ -453,6 +462,7 @@ const updateManualInvoice = async (req, res) => {
           roundFigure,
           Number(shippingCost) || 0,
           preview.grandTotal,
+          preview.amountPaid,
           manualStr(deliveryOption) || "standard",
           manualStr(payment.methodLabel) || manualStr(payment.method) || "Cash",
           (manualStr(payment.status) || "PAID").toUpperCase(),

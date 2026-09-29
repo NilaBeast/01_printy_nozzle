@@ -260,7 +260,8 @@
   color: #64748b;
   margin: 0;
   line-height: 1.4;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 /* =============================================================
@@ -279,6 +280,7 @@
 .orders-controls-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   flex-shrink: 0;
 }
@@ -286,6 +288,9 @@
 .orders-search-wrapper {
   position: relative;
   width: 250px;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 200px;
 }
 
 .orders-search-input {

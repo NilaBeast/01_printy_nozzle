@@ -43,6 +43,7 @@ const blankForm = () => ({
   shippingCost: "",
   discount: "",
   roundTotal: "",
+  amountPaid: "",
   payMethod: "Cash",
   payStatus: "PAID",
   pickerCategory: "all",
@@ -332,15 +333,21 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     const grand = Math.max(0, Math.round((subtotal + taxTotal + ship - disc) * 100) / 100);
     const figureNum = Number(form.roundTotal);
     const figure = Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
+    const final = figure !== null ? figure : grand;
+    // Advance paid (clamped to the final total) → pending auto-calculates.
+    const paid = Math.min(Math.max(0, Number(form.amountPaid) || 0), final);
+    const pending = Math.round((final - paid) * 100) / 100;
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       taxTotal: Math.round(taxTotal * 100) / 100,
       grand,
       figure,
       roundOff: figure !== null ? Math.round((figure - grand) * 100) / 100 : 0,
-      final: figure !== null ? figure : grand,
+      final,
+      paid,
+      pending,
     };
-  }, [form.items, form.gstRate, form.shippingCost, form.discount, form.roundTotal]);
+  }, [form.items, form.gstRate, form.shippingCost, form.discount, form.roundTotal, form.amountPaid]);
 
   const stats = useMemo(() => {
     const revenue = (invoices || []).reduce((s, inv) => s + Number(inv.grand_total || 0), 0);
@@ -389,6 +396,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     deliveryOption: form.deliveryOption,
     discount: Number(form.discount) || 0,
     roundTotal: form.roundTotal === "" ? null : Number(form.roundTotal),
+    amountPaid: Number(form.amountPaid) || 0,
     payment: { methodLabel: form.payMethod, status: form.payStatus },
   });
 
@@ -493,6 +501,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
         shippingCost: d.shipping_cost ?? "",
         discount: d.discount ?? "",
         roundTotal: d.round_total ?? "",
+        amountPaid: d.amount_paid ?? "",
         payMethod: d.payment_method || "Cash",
         payStatus: d.payment_status || "PAID",
       });
@@ -776,6 +785,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               <label className="pf-field"><span>Payment Status</span>
                 <select value={form.payStatus} onChange={(e) => set({ payStatus: e.target.value })}>
                   <option>PAID</option>
+                  <option>PARTIAL</option>
                   <option>PENDING</option>
                 </select>
               </label>
@@ -869,6 +879,9 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               <label className="pf-field"><span>Order Discount (Rs.)</span>
                 <input type="number" min="0" step="0.01" value={form.discount} onChange={(e) => set({ discount: e.target.value })} placeholder="0.00" />
               </label>
+              <label className="pf-field"><span>Amount Paid (Rs., advance)</span>
+                <input type="number" min="0" step="0.01" value={form.amountPaid} onChange={(e) => set({ amountPaid: e.target.value })} placeholder="0.00" />
+              </label>
               <label className="pf-field" style={{ gridColumn: "1 / -1" }}><span>Round Figure (Rs., optional)</span>
                 <input type="number" min="0" step="0.01" value={form.roundTotal} onChange={(e) => set({ roundTotal: e.target.value })} placeholder={`Computed Rs. ${totals.grand.toFixed(2)} — leave empty to use it`} />
               </label>
@@ -886,6 +899,12 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                 <span>Round Off <strong>Rs. {totals.roundOff.toFixed(2)}</strong></span>
               )}
               <span className="grand">Total <strong>Rs. {totals.final.toFixed(2)}</strong></span>
+              {totals.paid > 0 && (
+                <span>Paid <strong>- Rs. {totals.paid.toFixed(2)}</strong></span>
+              )}
+              {totals.paid > 0 && (
+                <span className="grand">Pending <strong>Rs. {totals.pending.toFixed(2)}</strong></span>
+              )}
             </div>
           </div>
 
@@ -993,6 +1012,12 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                           <p>
                             <strong>Total: {money(expandedDetail.grand_total)}</strong>
                             {expandedDetail.round_total ? <> <span className="admin-print-sub">(round figure applied)</span></> : null}
+                            {Number(expandedDetail.amount_paid || 0) > 0 ? (
+                              <>
+                                <br /><strong>Paid: {money(expandedDetail.amount_paid)}</strong>
+                                <span className="admin-print-sub"> • Pending: {money(Math.max(0, Number(expandedDetail.grand_total || 0) - Number(expandedDetail.amount_paid || 0)))}</span>
+                              </>
+                            ) : null}
                             {` • ${expandedDetail.payment_status || ""}`}
                           </p>
                           <p>

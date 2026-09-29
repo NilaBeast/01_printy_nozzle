@@ -1832,7 +1832,25 @@
   }
 
   .admin-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-print-fields,
+  .manual-item-row {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-totals {
+    justify-content: flex-start;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 }
 
@@ -1850,6 +1868,11 @@
   .admin-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  /* flex-basis on desktop becomes height in column layout — reset it */
+  .admin-actions > * {
+    flex: none;
   }
 
   .admin-actions .admin-search,
@@ -1890,6 +1913,26 @@
   .admin-product-row .admin-source-badge,
   .admin-product-row .admin-icon {
     grid-column: 1 / -1;
+  }
+
+  /* Smooth horizontal scroll for all data tables */
+  .admin-colors-table-wrap,
+  .admin-print-table-wrap,
+  .admin-materials-table-wrap,
+  .admin-coupons-table-wrap,
+  .admin-products-table-wrap,
+  .admin-catalog-table-wrap,
+  .admin-orders-table-wrap,
+  .admin-users-table-wrap,
+  .admin-contacts-table-wrap {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Larger touch targets for row actions */
+  .admin-icon-btn {
+    min-width: 36px;
+    min-height: 36px;
   }
 
   .admin-modal-backdrop {
@@ -2347,17 +2390,27 @@
 @media (max-width: 1100px) {
   .admin-page { grid-template-columns: 1fr; }
   .admin-sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 40;
+    position: static;
+    top: auto;
+    z-index: auto;
     height: auto;
-    border-radius: 0 0 18px 18px;
+    border-radius: 18px;
   }
-  .admin-tabs { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .admin-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-tabs .admin-tab {
+    flex: 0 0 auto;
+    min-width: 132px;
+  }
   .admin-nav-group { display: contents; }
   .admin-nav-label { display: none; }
   .admin-sidebar-foot { display: none; }
-  .admin-header { margin: -18px -12px 18px; padding: 16px 12px 14px; }
+  .admin-header { position: static; margin: 0 0 18px; padding: 16px 12px 14px; }
   .admin-main { padding: 18px 12px 48px; }
 }
 
@@ -2780,11 +2833,69 @@
 
 @media (max-width: 1100px) {
   .admin-products-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-products-tools { width: 100%; }
+  .admin-products-tools { width: 100%; flex-basis: auto; }
   .admin-products-search { max-width: none; }
 }
 @media (max-width: 640px) {
   .admin-products-stats { grid-template-columns: 1fr; }
+
+  .admin-products-panel { padding: 16px 14px; }
+
+  /* Filter tools: tight single column, no voids */
+  .admin-products-tools {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    flex: none;
+    width: 100%;
+  }
+
+  .admin-products-search {
+    max-width: none;
+    width: 100%;
+  }
+
+  .admin-products-tools .admin-filter-select,
+  .admin-products-tools .admin-primary {
+    width: 100%;
+  }
+
+  .admin-products-tools .admin-primary {
+    justify-content: center;
+  }
+
+  /* Products table becomes stacked cards */
+  .admin-products-table-wrap {
+    overflow-x: visible;
+  }
+
+  .admin-products-table-head {
+    display: none;
+  }
+
+  .admin-products-table-head,
+  .admin-products-table-row {
+    min-width: 0;
+  }
+
+  .admin-products-table-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    border: 1px solid #e6edf6;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .admin-product-cell {
+    min-width: 0;
+  }
+
+  .admin-product-name {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
 }
 
 /* ============================================================ */
@@ -2829,9 +2940,73 @@
 
 @media (max-width: 1100px) {
   .admin-catalog-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-colors-tools { width: 100%; flex-basis: auto; }
+  .admin-colors-search { max-width: none; }
 }
 @media (max-width: 640px) {
   .admin-catalog-stats { grid-template-columns: 1fr; }
+
+  .admin-catalog-panel { padding: 16px 14px; }
+
+  /* Filter tools: tight single column, no voids */
+  .admin-colors-tools {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    flex: none;
+    width: 100%;
+  }
+
+  .admin-colors-tools > * {
+    flex: none;
+  }
+
+  .admin-colors-search {
+    max-width: none;
+    width: 100%;
+  }
+
+  .admin-colors-tools .admin-filter-wrap,
+  .admin-colors-tools .admin-primary {
+    width: 100%;
+  }
+
+  .admin-colors-tools .admin-primary {
+    justify-content: center;
+  }
+
+  /* Catalog table becomes stacked cards */
+  .admin-catalog-table-wrap {
+    overflow-x: visible;
+  }
+
+  .admin-catalog-table-head {
+    display: none;
+  }
+
+  .admin-catalog-table-head,
+  .admin-catalog-table-row {
+    min-width: 0;
+  }
+
+  .admin-catalog-table-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    border: 1px solid #e6edf6;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .admin-category-cell {
+    min-width: 0;
+  }
+
+  .admin-catalog-desc {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
 }
 
 /* ============================================================ */
@@ -2945,11 +3120,91 @@
 
 @media (max-width: 1100px) {
   .admin-orders-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-orders-tools { width: 100%; }
+  .admin-orders-tools { width: 100%; flex-basis: auto; }
   .admin-orders-search { max-width: none; }
 }
 @media (max-width: 640px) {
   .admin-orders-stats { grid-template-columns: 1fr; }
+
+  .admin-orders-panel { padding: 16px 14px; }
+
+  /* Filter tools: tight single column, no voids */
+  .admin-orders-tools {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    flex: none;
+    width: 100%;
+  }
+
+  .admin-orders-search {
+    max-width: none;
+    width: 100%;
+  }
+
+  .admin-orders-tools .admin-filter-wrap,
+  .admin-orders-tools .admin-print-date {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .admin-orders-tools .admin-filter-toggle {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .admin-orders-extra-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-orders-extra-filters .admin-filter-select,
+  .admin-orders-extra-filters .admin-secondary {
+    width: 100%;
+  }
+
+  /* Orders table becomes stacked cards */
+  .admin-orders-table-wrap {
+    overflow-x: visible;
+  }
+
+  .admin-orders-table-head {
+    display: none;
+  }
+
+  .admin-orders-table-head,
+  .admin-orders-table-row {
+    min-width: 0;
+  }
+
+  .admin-orders-table-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    border: 1px solid #e6edf6;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
+
+  .admin-customer-cell {
+    min-width: 0;
+  }
+
+  .admin-customer-cell > div {
+    min-width: 0;
+  }
+
+  .admin-customer-cell strong,
+  .admin-customer-cell span {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .admin-order-items-cell {
+    flex-wrap: wrap;
+  }
 }
 
 /* ============================================================ */
@@ -3387,7 +3642,37 @@
 
 @media (max-width: 760px) {
   .pf-grid.cols-2, .pf-grid.cols-3, .pf-gallery-row { grid-template-columns: 1fr; }
-  .pf-footer { flex-wrap: wrap; }
+  .pf-footer { flex-wrap: wrap; flex-direction: column; align-items: stretch; }
+  .pf-footer-actions { flex-direction: column; align-items: stretch; width: 100%; }
+  .pf-footer-actions .admin-primary,
+  .pf-footer-actions .pf-cancel,
+  .pf-delete {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-modal.wide {
+    width: calc(100vw - 24px);
+    padding: 20px 16px 24px;
+  }
+  .admin-modal {
+    width: calc(100vw - 24px);
+    padding: 20px 16px;
+  }
+  .admin-main {
+    padding: 16px 10px 48px;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .admin-header-actions {
+    width: 100%;
+  }
+  .admin-header-actions .admin-refresh {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -3751,6 +4036,20 @@
   .manual-picker-filters {
     grid-template-columns: 1fr;
   }
+  .manual-add-btns {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .manual-add-btns .admin-secondary {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+  .manual-picker-row {
+    align-items: flex-start;
+  }
+  .manual-picker-row > div {
+    min-width: 0;
+  }
   .manual-print-fields {
     grid-template-columns: 1fr 1fr;
   }
@@ -3759,5 +4058,90 @@
   }
   .manual-detail-grid {
     grid-template-columns: 1fr;
+  }
+  .manual-actions {
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .manual-actions .admin-primary,
+  .manual-actions .admin-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .manual-print-fields,
+  .manual-item-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================ */
+/* DASHBOARD MOBILE (must stay last: overrides premium grid)    */
+/* ============================================================ */
+@media (max-width: 1100px) {
+  .admin-grid.two {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-panel {
+    padding: 16px 14px;
+  }
+
+  .admin-panel-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-count-badge {
+    align-self: flex-start;
+  }
+
+  /* Status distribution rows fit narrow screens */
+  .admin-dist-row {
+    grid-template-columns: 104px minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+
+  /* Revenue chart scrolls instead of squeezing 12 months */
+  .admin-chart {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    margin: 0 -4px;
+    padding: 0 4px 6px;
+  }
+
+  .admin-chart-bars {
+    min-width: 520px;
+    gap: 6px;
+  }
+
+  /* Dashboard tables become stacked cards, no sideways scroll */
+  .admin-table {
+    overflow-x: visible;
+  }
+
+  .admin-table-head {
+    display: none;
+  }
+
+  .admin-table-row {
+    grid-template-columns: 1fr !important;
+    min-width: 0;
+    gap: 4px;
+    border: 1px solid #e6edf6;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .admin-table-row span {
+    overflow-wrap: break-word;
+    min-width: 0;
   }
 }

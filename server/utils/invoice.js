@@ -419,6 +419,7 @@ const buildManualInvoiceData = ({
   deliveryOption = "standard",
   discount = 0,
   roundTotal = null,
+  amountPaid = 0,
   payment = {},
   settings,
 }) => {
@@ -512,6 +513,9 @@ const buildManualInvoiceData = ({
   const grandTotal = useFigure ? round2(figure) : computedTotal;
   const roundOff = useFigure ? round2(grandTotal - computedTotal) : 0;
   const qtyTotal = lines.reduce((s, l) => s + Number(l.qty || 0), 0);
+  // Advance paid (clamped to the total) → pending auto-calculates.
+  const amountPaidNum = Math.min(Math.max(0, Number(amountPaid) || 0), grandTotal);
+  const pendingAmount = round2(grandTotal - amountPaidNum);
 
   const invoiceNumber = clean(invoice.number) || `INV-MANUAL-${Date.now().toString(36).toUpperCase()}`;
   const saleOrder = clean(invoice.saleOrder) || invoiceNumber.replace(/^INV-/, "");
@@ -540,6 +544,8 @@ const buildManualInvoiceData = ({
     roundOff,
     taxTotal,
     grandTotal,
+    amountPaid: round2(amountPaidNum),
+    pendingAmount,
     amountWords: amountInWords(grandTotal),
   };
 };
@@ -838,7 +844,7 @@ const generateInvoicePdf = (data) =>
       /* ---------- Summary: tax table (left) + totals (right) ---------- */
       const taxLabel = `${Number(data.gstRate).toFixed(0)}% IGST (Sale)`;
       const leftW = 250;
-      const summH = 62;
+      const summH = 62 + (data.amountPaid > 0 ? 28 : 0);
       if (y + summH > BOTTOM) {
         doc.addPage();
         y = TOP;
@@ -865,6 +871,12 @@ const generateInvoicePdf = (data) =>
           ? [["Round Off", `${data.roundOff < 0 ? "- " : ""}${money(Math.abs(data.roundOff))}`, false]]
           : []),
         ["Total", money(data.grandTotal), true],
+        ...(data.amountPaid > 0
+          ? [
+              ["Paid (Advance)", `- ${money(data.amountPaid)}`, false],
+              ["Balance Due", money(data.pendingAmount), true],
+            ]
+          : []),
       ];
       let ty = sumY + 2;
       totals.forEach(([k, v, bold]) => {
@@ -875,8 +887,12 @@ const generateInvoicePdf = (data) =>
       });
       y = Math.max(sumY + summH, ty) + 8;
 
-      /* ---------- Payment status stamp (PAID / PENDING / ...) ---------- */
-      const payLabel = String(data.payment?.status || "").trim().toUpperCase();
+      /* ---------- Payment status stamp (PAID / PARTIAL / PENDING / ...) ---------- */
+      // Advance payments resolve the stamp automatically: fully paid → PAID,
+      // partially paid → PARTIAL, otherwise the admin-selected status.
+      let payLabel = String(data.payment?.status || "").trim().toUpperCase();
+      if ((data.amountPaid || 0) > 0 && (data.pendingAmount || 0) <= 0) payLabel = "PAID";
+      else if ((data.amountPaid || 0) > 0 && (data.pendingAmount || 0) > 0 && payLabel === "PAID") payLabel = "PARTIAL";
       if (payLabel) {
         const isPaid = payLabel === "PAID";
         const stampH = 24;
@@ -944,6 +960,10 @@ const generateInvoicePdf = (data) =>
       const range = doc.bufferedPageRange();
       for (let i = 0; i < range.count; i++) {
         doc.switchToPage(i);
+        // Footer lives in the bottom margin (y 792..810) below the
+        // content limit — disable the bottom margin so drawing the
+        // page number at y=810 does not trigger an automatic blank page.
+        doc.page.margins.bottom = 0;
         doc.strokeColor("#111827").lineWidth(1);
         doc.moveTo(MARGIN, 792).lineTo(PAGE_W - MARGIN, 792).stroke();
         doc.font("Helvetica").fontSize(7).fillColor(INK);
