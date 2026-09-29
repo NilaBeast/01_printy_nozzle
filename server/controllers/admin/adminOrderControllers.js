@@ -82,6 +82,14 @@ const validateManualPayload = (body = {}) => {
 
   const rateNum = Number(gstRate);
   if (!(rateNum >= 0 && rateNum <= 100)) return "GST rate must be between 0 and 100";
+  if (
+    body.roundTotal !== undefined &&
+    body.roundTotal !== null &&
+    String(body.roundTotal).trim() !== "" &&
+    !(Number(body.roundTotal) > 0)
+  ) {
+    return "Round figure must be a positive amount";
+  }
   return null;
 };
 
@@ -122,6 +130,7 @@ const savedRowToInvoiceInput = (row, items) => ({
     reference: row.reference,
   },
   gstRate: Number(row.gst_rate),
+  roundTotal: row.round_total,
   items: (items || []).map((it) => ({
     item_type: it.item_type,
     description: it.description,
@@ -150,6 +159,7 @@ const createManualInvoice = async (req, res) => {
       shippingCost = 0,
       deliveryOption = "standard",
       discount = 0,
+      roundTotal = null,
       payment = {},
     } = req.body || {};
 
@@ -157,6 +167,11 @@ const createManualInvoice = async (req, res) => {
     if (validationError) {
       return res.status(400).json({ success: false, message: validationError });
     }
+
+    // Optional admin round figure — the invoice total becomes exactly this.
+    const figureNum = Number(roundTotal);
+    const roundFigure =
+      Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
 
     const settings = await getInvoiceSettings();
 
@@ -178,6 +193,7 @@ const createManualInvoice = async (req, res) => {
       shippingCost,
       deliveryOption,
       discount,
+      roundTotal: roundFigure,
       payment,
       settings,
     });
@@ -199,9 +215,9 @@ const createManualInvoice = async (req, res) => {
            billing_address1, billing_address2, billing_city, billing_state, billing_pincode, billing_country,
            shipping_same, shipping_name, shipping_email, shipping_phone,
            shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
-           gst_rate, subtotal, tax_total, discount, shipping_cost, grand_total,
+           gst_rate, subtotal, tax_total, discount, round_total, shipping_cost, grand_total,
            delivery_option, payment_method, payment_status, amount_in_words, created_by)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           invoice.date || new Date().toISOString().slice(0, 10),
           manualStr(invoice.saleOrder) || null,
@@ -232,6 +248,7 @@ const createManualInvoice = async (req, res) => {
           preview.subtotal,
           preview.taxTotal,
           preview.discount,
+          roundFigure,
           Number(shippingCost) || 0,
           preview.grandTotal,
           manualStr(deliveryOption) || "standard",
@@ -322,6 +339,230 @@ const createManualInvoice = async (req, res) => {
   } catch (error) {
     console.error("Admin createManualInvoice error:", error);
     return res.status(500).json({ success: false, message: "Unable to save invoice" });
+  }
+};
+
+/* ===================== UPDATE MANUAL INVOICE =====================
+ * PUT /api/admin/orders/manual-invoices/:id
+ * Re-saves the header + replaces all line items, recomputes totals.
+ * Invoice number never changes. Returns JSON (caller re-downloads the PDF). */
+const updateManualInvoice = async (req, res) => {
+  try {
+    await ensureManualInvoiceSchema().catch(() => {});
+    const { id } = req.params;
+
+    const [existing] = await db.query("SELECT id, invoice_number FROM manual_invoices WHERE id = ?", [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    const {
+      customer = {},
+      shipping = null,
+      shippingSameAsBilling = true,
+      invoice = {},
+      gstRate = 18,
+      items = [],
+      shippingCost = 0,
+      deliveryOption = "standard",
+      discount = 0,
+      roundTotal = null,
+      payment = {},
+    } = req.body || {};
+
+    const validationError = validateManualPayload(req.body || {});
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+
+    const figureNum = Number(roundTotal);
+    const roundFigure =
+      Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
+
+    const settings = await getInvoiceSettings();
+    const preview = buildManualInvoiceData({
+      customer,
+      shipping,
+      shippingSameAsBilling: shippingSameAsBilling !== false,
+      invoice: {},
+      gstRate: Number(gstRate),
+      items: items.map((it) => ({
+        ...it,
+        description:
+          manualStr(it.description) ||
+          (manualStr(it.file_name)
+            ? `3D Print: ${manualStr(it.file_name)}${manualStr(it.material_name) ? ` — ${manualStr(it.material_name)}` : ""}`
+            : `Item`),
+      })),
+      shippingCost,
+      deliveryOption,
+      discount,
+      roundTotal: roundFigure,
+      payment,
+      settings,
+    });
+    if (!preview.lines.length) {
+      return res.status(400).json({ success: false, message: "Add at least one item" });
+    }
+
+    const sameAsBilling = shippingSameAsBilling !== false;
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query(
+        `UPDATE manual_invoices SET
+          invoice_date = ?, sale_order = ?, reference = ?,
+          customer_name = ?, customer_email = ?, customer_phone = ?,
+          company_name = ?, company_address = ?, company_gstin = ?,
+          billing_address1 = ?, billing_address2 = ?, billing_city = ?, billing_state = ?, billing_pincode = ?, billing_country = ?,
+          shipping_same = ?, shipping_name = ?, shipping_email = ?, shipping_phone = ?,
+          shipping_address1 = ?, shipping_address2 = ?, shipping_city = ?, shipping_state = ?, shipping_pincode = ?, shipping_country = ?,
+          gst_rate = ?, subtotal = ?, tax_total = ?, discount = ?, round_total = ?, shipping_cost = ?, grand_total = ?,
+          delivery_option = ?, payment_method = ?, payment_status = ?, amount_in_words = ?
+        WHERE id = ?`,
+        [
+          invoice.date || new Date().toISOString().slice(0, 10),
+          manualStr(invoice.saleOrder) || null,
+          manualStr(invoice.reference) || null,
+          manualStr(customer.name),
+          manualStr(customer.email) || null,
+          manualStr(customer.phone),
+          manualStr(customer.company_name || customer.company) || null,
+          manualStr(customer.company_address || customer.companyAddress) || null,
+          manualStr(customer.company_gstin || customer.gstin).toUpperCase() || null,
+          manualStr(customer.address1),
+          manualStr(customer.address2) || null,
+          manualStr(customer.city),
+          manualStr(customer.state),
+          manualStr(customer.pincode),
+          manualStr(customer.country) || "India",
+          sameAsBilling ? 1 : 0,
+          sameAsBilling ? null : manualStr(shipping?.name) || null,
+          sameAsBilling ? null : manualStr(shipping?.email) || null,
+          sameAsBilling ? null : manualStr(shipping?.phone) || null,
+          sameAsBilling ? null : manualStr(shipping?.address1) || null,
+          sameAsBilling ? null : manualStr(shipping?.address2) || null,
+          sameAsBilling ? null : manualStr(shipping?.city) || null,
+          sameAsBilling ? null : manualStr(shipping?.state) || null,
+          sameAsBilling ? null : manualStr(shipping?.pincode) || null,
+          sameAsBilling ? null : manualStr(shipping?.country) || "India",
+          Number(gstRate),
+          preview.subtotal,
+          preview.taxTotal,
+          preview.discount,
+          roundFigure,
+          Number(shippingCost) || 0,
+          preview.grandTotal,
+          manualStr(deliveryOption) || "standard",
+          manualStr(payment.methodLabel) || manualStr(payment.method) || "Cash",
+          (manualStr(payment.status) || "PAID").toUpperCase(),
+          preview.amountWords,
+          id,
+        ]
+      );
+
+      await connection.query("DELETE FROM manual_invoice_items WHERE invoice_id = ?", [id]);
+      let lineIndex = 0;
+      for (const it of items) {
+        const line = preview.lines[lineIndex];
+        lineIndex += 1;
+        let productId = null;
+        if (it.product_id) {
+          try {
+            const [found] = await connection.query("SELECT id FROM products WHERE id = ?", [it.product_id]);
+            if (found.length) productId = it.product_id;
+          } catch {
+            productId = null;
+          }
+        }
+        await connection.query(
+          `INSERT INTO manual_invoice_items
+            (invoice_id, item_type, product_id, description, hsn, rate, qty, disc,
+             amount, tax, total, file_name, material_name, color_name, infill_density,
+             surface_finish, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            ["product", "print", "custom"].includes(it.item_type) ? it.item_type : "product",
+            productId,
+            line.description,
+            line.hsn,
+            line.rate,
+            line.qty,
+            line.disc,
+            line.amount,
+            line.tax,
+            line.total,
+            manualStr(it.file_name) || null,
+            manualStr(it.material_name) || null,
+            manualStr(it.color_name) || null,
+            it.infill_density ? Number(it.infill_density) : null,
+            manualStr(it.surface_finish) || null,
+            line.sno,
+          ]
+        );
+      }
+      await connection.commit();
+    } catch (e) {
+      try {
+        await connection.rollback();
+      } catch {
+        /* ignore */
+      }
+      connection.release();
+      throw e;
+    }
+    connection.release();
+
+    return res.status(200).json({
+      success: true,
+      message: "Invoice updated",
+      data: { id: Number(id), invoice_number: existing[0].invoice_number },
+    });
+  } catch (error) {
+    console.error("Admin updateManualInvoice error:", error);
+    return res.status(500).json({ success: false, message: "Unable to update invoice" });
+  }
+};
+
+/* ===================== SEARCH SAVED CUSTOMERS =====================
+ * GET /api/admin/orders/manual-invoices/customers?search=
+ * Returns recent distinct billing profiles for name autocomplete — typing
+ * the name refills the rest of the form instantly. */
+const searchManualCustomers = async (req, res) => {
+  try {
+    await ensureManualInvoiceSchema().catch(() => {});
+    const q = String(req.query.search || "").trim();
+    if (q.length < 2) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const term = `%${q}%`;
+    const [rows] = await db.query(
+      `SELECT customer_name, customer_email, customer_phone,
+              company_name, company_address, company_gstin,
+              billing_address1, billing_address2, billing_city, billing_state,
+              billing_pincode, billing_country, shipping_same,
+              shipping_name, shipping_email, shipping_phone,
+              shipping_address1, shipping_address2, shipping_city, shipping_state,
+              shipping_pincode, shipping_country, id
+       FROM manual_invoices
+       WHERE customer_name LIKE ? OR customer_phone LIKE ?
+       ORDER BY id DESC LIMIT 50`,
+      [term, term]
+    );
+    const seen = new Set();
+    const customers = [];
+    for (const r of rows) {
+      const key = `${String(r.customer_name || "").toLowerCase()}|${String(r.customer_phone || "").replace(/\D/g, "")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      customers.push(r);
+      if (customers.length >= 8) break;
+    }
+    return res.status(200).json({ success: true, data: customers });
+  } catch (error) {
+    console.error("Admin searchManualCustomers error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -667,6 +908,8 @@ module.exports = {
   updateOrderStatus,
   verifyQrPayment,
   createManualInvoice,
+  updateManualInvoice,
+  searchManualCustomers,
   listManualInvoices,
   getManualInvoice,
   downloadManualInvoicePdf,

@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Download,
   FileText,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -40,6 +41,7 @@ const blankForm = () => ({
   deliveryOption: "standard",
   shippingCost: "",
   discount: "",
+  roundTotal: "",
   payMethod: "Cash",
   payStatus: "PAID",
   pickerCategory: "all",
@@ -63,6 +65,12 @@ const composePrintDescription = (row) => {
 function ManualOrders({ categories = [], brands = [], products = [], materials = [] }) {
   const [form, setForm] = useState(blankForm);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editingNumber, setEditingNumber] = useState("");
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestTimer = React.useRef(null);
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -76,6 +84,74 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
   const setCustomer = (patch) =>
     setForm((prev) => ({ ...prev, customer: { ...prev.customer, ...patch } }));
+
+  /* Customer autocomplete — typing the name refills saved billing details. */
+  const onCustomerNameChange = (value) => {
+    setCustomer({ name: value });
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (String(value || "").trim().length < 2) {
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    suggestTimer.current = setTimeout(async () => {
+      setSuggestLoading(true);
+      try {
+        const res = await adminService.searchManualCustomers(value.trim());
+        setCustomerSuggestions(res.data?.data || []);
+        setShowSuggestions(true);
+      } catch {
+        setCustomerSuggestions([]);
+      } finally {
+        setSuggestLoading(false);
+      }
+    }, 350);
+  };
+
+  const applySuggestion = (c) => {
+    setShowSuggestions(false);
+    setCustomerSuggestions([]);
+    setForm((prev) => ({
+      ...prev,
+      customer: {
+        ...prev.customer,
+        name: c.customer_name || "",
+        email: c.customer_email || "",
+        phone: c.customer_phone || "",
+        address1: c.billing_address1 || "",
+        address2: c.billing_address2 || "",
+        city: c.billing_city || "",
+        state: c.billing_state || "",
+        pincode: c.billing_pincode || "",
+        country: c.billing_country || "India",
+      },
+      company: {
+        ...(prev.company || {}),
+        name: c.company_name || "",
+        gstin: c.company_gstin || "",
+        address1: c.company_address || "",
+        address2: "",
+        city: "",
+        state: "",
+        pincode: "",
+        country: "India",
+      },
+      sameAsBilling: c.shipping_same !== 0 ? prev.sameAsBilling : false,
+      shipping: {
+        ...prev.shipping,
+        name: c.shipping_name || "",
+        email: c.shipping_email || "",
+        phone: c.shipping_phone || "",
+        address1: c.shipping_address1 || "",
+        address2: c.shipping_address2 || "",
+        city: c.shipping_city || "",
+        state: c.shipping_state || "",
+        pincode: c.shipping_pincode || "",
+        country: c.shipping_country || "India",
+      },
+    }));
+    toast.success("Customer details autofilled");
+  };
   const setCompany = (patch) =>
     setForm((prev) => ({
       ...prev,
@@ -252,12 +328,18 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     });
     const ship = Number(form.shippingCost) || 0;
     const disc = Number(form.discount) || 0;
+    const grand = Math.max(0, Math.round((subtotal + taxTotal + ship - disc) * 100) / 100);
+    const figureNum = Number(form.roundTotal);
+    const figure = Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
     return {
       subtotal: Math.round(subtotal * 100) / 100,
       taxTotal: Math.round(taxTotal * 100) / 100,
-      grand: Math.max(0, Math.round((subtotal + taxTotal + ship - disc) * 100) / 100),
+      grand,
+      figure,
+      roundOff: figure !== null ? Math.round((figure - grand) * 100) / 100 : 0,
+      final: figure !== null ? figure : grand,
     };
-  }, [form.items, form.gstRate, form.shippingCost, form.discount]);
+  }, [form.items, form.gstRate, form.shippingCost, form.discount, form.roundTotal]);
 
   const stats = useMemo(() => {
     const revenue = (invoices || []).reduce((s, inv) => s + Number(inv.grand_total || 0), 0);
@@ -277,6 +359,38 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     return error?.response?.data?.message || "Unable to save invoice";
   };
 
+  const buildPayload = () => ({
+    customer: {
+      ...form.customer,
+      company_name: form.company?.name || "",
+      company_address: composeCompanyAddress(form.company),
+      company_gstin: form.company?.gstin || "",
+    },
+    shipping: form.sameAsBilling ? null : form.shipping,
+    shippingSameAsBilling: form.sameAsBilling,
+    invoice: { date: form.date, saleOrder: form.saleOrder, reference: form.reference },
+    gstRate: Number(form.gstRate) || 0,
+    items: form.items.map((it) => ({
+      item_type: it.item_type,
+      product_id: it.product_id || null,
+      description: it.description,
+      hsn: it.hsn || "",
+      rate: Number(it.rate) || 0,
+      qty: Number(it.qty) || 0,
+      disc: Number(it.disc) || 0,
+      file_name: it.file_name || "",
+      material_name: it.material_name || "",
+      color_name: it.color_name || "",
+      infill_density: it.infill_density ? Number(it.infill_density) : null,
+      surface_finish: it.surface_finish || "",
+    })),
+    shippingCost: Number(form.shippingCost) || 0,
+    deliveryOption: form.deliveryOption,
+    discount: Number(form.discount) || 0,
+    roundTotal: form.roundTotal === "" ? null : Number(form.roundTotal),
+    payment: { methodLabel: form.payMethod, status: form.payStatus },
+  });
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (saving) return;
@@ -286,36 +400,16 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
     }
     setSaving(true);
     try {
-      const filename = await adminService.createManualInvoicePdf({
-        customer: {
-          ...form.customer,
-          company_name: form.company?.name || "",
-          company_address: composeCompanyAddress(form.company),
-          company_gstin: form.company?.gstin || "",
-        },
-        shipping: form.sameAsBilling ? null : form.shipping,
-        shippingSameAsBilling: form.sameAsBilling,
-        invoice: { date: form.date, saleOrder: form.saleOrder, reference: form.reference },
-        gstRate: Number(form.gstRate) || 0,
-        items: form.items.map((it) => ({
-          item_type: it.item_type,
-          product_id: it.product_id || null,
-          description: it.description,
-          hsn: it.hsn || "",
-          rate: Number(it.rate) || 0,
-          qty: Number(it.qty) || 0,
-          disc: Number(it.disc) || 0,
-          file_name: it.file_name || "",
-          material_name: it.material_name || "",
-          color_name: it.color_name || "",
-          infill_density: it.infill_density ? Number(it.infill_density) : null,
-          surface_finish: it.surface_finish || "",
-        })),
-        shippingCost: Number(form.shippingCost) || 0,
-        deliveryOption: form.deliveryOption,
-        discount: Number(form.discount) || 0,
-        payment: { methodLabel: form.payMethod, status: form.payStatus },
-      });
+      if (editingId) {
+        await adminService.updateManualInvoice(editingId, buildPayload());
+        toast.success(`Invoice ${editingNumber} updated.`);
+        await downloadSaved({ id: editingId });
+        cancelEdit();
+        setPage(1);
+        loadInvoices(1, search);
+        return;
+      }
+      const filename = await adminService.createManualInvoicePdf(buildPayload());
       toast.success(`Invoice saved. ${filename} downloaded.`);
       setForm(blankForm());
       setPage(1);
@@ -324,6 +418,91 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
       toast.error(await readBlobError(error));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingNumber("");
+    setForm(blankForm());
+    setCustomerSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  const startEdit = async (inv) => {
+    try {
+      const res = await adminService.getManualInvoice(inv.id);
+      const d = res.data?.data || {};
+      setForm({
+        ...blankForm(),
+        customer: {
+          name: d.customer_name || "",
+          email: d.customer_email || "",
+          phone: d.customer_phone || "",
+          address1: d.billing_address1 || "",
+          address2: d.billing_address2 || "",
+          city: d.billing_city || "",
+          state: d.billing_state || "",
+          pincode: d.billing_pincode || "",
+          country: d.billing_country || "India",
+        },
+        company: {
+          name: d.company_name || "",
+          gstin: d.company_gstin || "",
+          address1: d.company_address || "",
+          address2: "",
+          city: "",
+          state: "",
+          pincode: "",
+          country: "India",
+        },
+        sameAsBilling: d.shipping_same !== 0,
+        shipping: {
+          ...EMPTY_PERSON,
+          name: d.shipping_name || "",
+          email: d.shipping_email || "",
+          phone: d.shipping_phone || "",
+          address1: d.shipping_address1 || "",
+          address2: d.shipping_address2 || "",
+          city: d.shipping_city || "",
+          state: d.shipping_state || "",
+          pincode: d.shipping_pincode || "",
+          country: d.shipping_country || "India",
+        },
+        saleOrder: d.sale_order || "",
+        reference: d.reference || "",
+        date: d.invoice_date ? String(d.invoice_date).slice(0, 10) : todayISO(),
+        gstRate: String(d.gst_rate ?? 18),
+        items: (d.items || []).map((it) => ({
+          key: newKey(),
+          item_type: it.item_type || "custom",
+          product_id: it.product_id || null,
+          description: it.description || "",
+          hsn: it.hsn || "",
+          rate: it.rate ?? "",
+          qty: it.qty ?? 1,
+          disc: it.disc ?? "",
+          file_name: it.file_name || "",
+          material_name: it.material_name || "",
+          color_name: it.color_name || "",
+          infill_density: it.infill_density ?? "",
+          surface_finish: it.surface_finish || "standard",
+        })),
+        deliveryOption: d.delivery_option || "standard",
+        shippingCost: d.shipping_cost ?? "",
+        discount: d.discount ?? "",
+        roundTotal: d.round_total ?? "",
+        payMethod: d.payment_method || "Cash",
+        payStatus: d.payment_status || "PAID",
+      });
+      setEditingId(d.id);
+      setEditingNumber(d.invoice_number || "");
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toast.info(`Editing ${d.invoice_number} — save to update`);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || "Unable to load invoice for editing");
     }
   };
 
@@ -410,11 +589,48 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
         </div>
 
         <form className="pf-form" onSubmit={handleSubmit}>
+          {editingId && (
+            <div className="pf-section" style={{ border: "1.5px solid #2563eb" }}>
+              <div className="pf-section-head">
+                <div>
+                  <h3>Editing {editingNumber}</h3>
+                  <p>Changes overwrite the saved invoice. The invoice number stays the same.</p>
+                </div>
+                <button type="button" className="admin-secondary" onClick={cancelEdit} disabled={saving}>
+                  <X size={14} /> Cancel Edit
+                </button>
+              </div>
+            </div>
+          )}
           <div className="pf-section">
             <div className="pf-section-head"><div><h3>Customer (Billing)</h3></div></div>
             <div className="pf-grid cols-2">
-              <label className="pf-field"><span>Name <b>*</b></span>
-                <input required value={form.customer.name} onChange={(e) => setCustomer({ name: e.target.value })} placeholder="Customer full name" />
+              <label className="pf-field" style={{ position: "relative" }}><span>Name <b>*</b></span>
+                <input
+                  required
+                  value={form.customer.name}
+                  onChange={(e) => onCustomerNameChange(e.target.value)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  onFocus={() => { if (customerSuggestions.length) setShowSuggestions(true); }}
+                  placeholder="Customer full name — type to autofill"
+                  autoComplete="off"
+                />
+                {showSuggestions && customerSuggestions.length > 0 && (
+                  <div className="manual-suggest-list">
+                    {customerSuggestions.map((c) => (
+                      <button
+                        key={`${c.customer_name}-${c.customer_phone}-${c.id}`}
+                        type="button"
+                        className="manual-suggest-item"
+                        onMouseDown={() => applySuggestion(c)}
+                      >
+                        <strong>{c.customer_name}</strong>
+                        <span>{c.customer_phone}{c.billing_city ? ` • ${c.billing_city}` : ""}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {suggestLoading && <span className="admin-print-sub">Searching...</span>}
               </label>
               <label className="pf-field"><span>Phone <b>*</b></span>
                 <input required value={form.customer.phone} onChange={(e) => setCustomer({ phone: e.target.value })} placeholder="10-digit mobile" />
@@ -652,20 +868,39 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               <label className="pf-field"><span>Order Discount (Rs.)</span>
                 <input type="number" min="0" step="0.01" value={form.discount} onChange={(e) => set({ discount: e.target.value })} placeholder="0.00" />
               </label>
+              <label className="pf-field" style={{ gridColumn: "1 / -1" }}><span>Round Figure (Rs., optional)</span>
+                <input type="number" min="0" step="0.01" value={form.roundTotal} onChange={(e) => set({ roundTotal: e.target.value })} placeholder={`Computed Rs. ${totals.grand.toFixed(2)} — leave empty to use it`} />
+              </label>
             </div>
             <div className="manual-totals">
               <span>Subtotal <strong>Rs. {totals.subtotal.toFixed(2)}</strong></span>
               <span>Taxes ({Number(form.gstRate) || 0}%) <strong>Rs. {totals.taxTotal.toFixed(2)}</strong></span>
-              <span className="grand">Total <strong>Rs. {totals.grand.toFixed(2)}</strong></span>
+              {totals.figure !== null && (
+                <span>Round Off <strong>Rs. {totals.roundOff.toFixed(2)}</strong></span>
+              )}
+              <span className="grand">Total <strong>Rs. {totals.final.toFixed(2)}</strong></span>
             </div>
           </div>
 
           <div className="manual-actions">
-            <button type="button" className="admin-secondary" onClick={() => setForm(blankForm())} disabled={saving}>Reset</button>
-            <button type="submit" className="admin-primary" disabled={saving || !form.items.length}>
-              <Download size={16} />
-              <span>{saving ? "Saving..." : "Save & Generate PDF"}</span>
-            </button>
+            {editingId ? (
+              <>
+                <span className="admin-print-sub">Editing <strong>{editingNumber}</strong></span>
+                <button type="button" className="admin-secondary" onClick={cancelEdit} disabled={saving}>Cancel</button>
+                <button type="submit" className="admin-primary" disabled={saving || !form.items.length}>
+                  <Download size={16} />
+                  <span>{saving ? "Updating..." : "Update & Download PDF"}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="admin-secondary" onClick={() => setForm(blankForm())} disabled={saving}>Reset</button>
+                <button type="submit" className="admin-primary" disabled={saving || !form.items.length}>
+                  <Download size={16} />
+                  <span>{saving ? "Saving..." : "Save & Generate PDF"}</span>
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>
@@ -722,10 +957,11 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                   </span>
                   <span><strong className="admin-print-file-name">{inv.item_count} item{Number(inv.item_count) === 1 ? "" : "s"}</strong></span>
                   <strong className="admin-print-price">{money(inv.grand_total)}</strong>
-                  <span><span className="admin-pay-pill done">{inv.payment_status}</span></span>
+                  <span><span className={`admin-pay-pill ${String(inv.payment_status || "").toUpperCase() === "PAID" ? "done" : "pending"}`}>{inv.payment_status}</span></span>
                   <span><strong className="admin-print-date-text">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</strong></span>
                   <span className="admin-print-actions">
                     <button type="button" className="admin-icon-btn view" onClick={() => downloadSaved(inv)} title="Download PDF"><Download size={16} /></button>
+                    <button type="button" className="admin-icon-btn view" onClick={() => startEdit(inv)} title="View & edit invoice"><Pencil size={16} /></button>
                     <button type="button" className="admin-icon-btn menu" onClick={() => deleteSaved(inv)} title="Delete invoice"><Trash2 size={16} /></button>
                   </span>
                 </div>
@@ -746,6 +982,16 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                               <em className={`manual-type-pill ${it.item_type}`}>{it.item_type}</em> {it.description} — {it.qty} × Rs. {it.rate} = {money(it.total)}
                             </p>
                           ))}
+                          <p>
+                            <strong>Total: {money(expandedDetail.grand_total)}</strong>
+                            {expandedDetail.round_total ? <> <span className="admin-print-sub">(round figure applied)</span></> : null}
+                            {` • ${expandedDetail.payment_status || ""}`}
+                          </p>
+                          <p>
+                            <button type="button" className="admin-secondary" onClick={() => startEdit(expandedDetail)}><Pencil size={14} /> Edit Invoice</button>
+                            {" "}
+                            <button type="button" className="admin-secondary" onClick={() => downloadSaved(expandedDetail)}><Download size={14} /> PDF</button>
+                          </p>
                         </div>
                       </div>
                     )}

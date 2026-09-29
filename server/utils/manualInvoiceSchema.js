@@ -50,6 +50,7 @@ const ensureManualInvoiceSchema = async () => {
             subtotal DECIMAL(10,2) DEFAULT 0.00,
             tax_total DECIMAL(10,2) DEFAULT 0.00,
             discount DECIMAL(10,2) DEFAULT 0.00,
+            round_total DECIMAL(10,2) DEFAULT NULL,
             shipping_cost DECIMAL(10,2) DEFAULT 0.00,
             grand_total DECIMAL(10,2) DEFAULT 0.00,
             delivery_option VARCHAR(20) DEFAULT 'standard',
@@ -92,6 +93,19 @@ const ensureManualInvoiceSchema = async () => {
         `);
 
         console.log("🧾 Manual invoice tables ready");
+
+        // Newer columns for installs created before they existed.
+        try {
+          const [roundCol] = await conn.query(
+            `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'manual_invoices' AND COLUMN_NAME = 'round_total' LIMIT 1`
+          );
+          if (!roundCol.length) {
+            await conn.query("ALTER TABLE `manual_invoices` ADD COLUMN `round_total` DECIMAL(10,2) DEFAULT NULL AFTER `discount`");
+            console.log("🧾 manual_invoices.round_total column added");
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not add manual_invoices.round_total: ${e.message}`);
+        }
       } finally {
         conn.release();
       }
