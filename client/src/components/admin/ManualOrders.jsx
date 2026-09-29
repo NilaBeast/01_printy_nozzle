@@ -874,6 +874,12 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
             </div>
             <div className="manual-totals">
               <span>Subtotal <strong>Rs. {totals.subtotal.toFixed(2)}</strong></span>
+              {(Number(form.shippingCost) || 0) > 0 && (
+                <span>Shipping <strong>+ Rs. {(Number(form.shippingCost) || 0).toFixed(2)}</strong></span>
+              )}
+              {(Number(form.discount) || 0) > 0 && (
+                <span>Discount <strong>- Rs. {(Number(form.discount) || 0).toFixed(2)}</strong></span>
+              )}
               <span>Taxes ({Number(form.gstRate) || 0}%) <strong>Rs. {totals.taxTotal.toFixed(2)}</strong></span>
               {totals.figure !== null && (
                 <span>Round Off <strong>Rs. {totals.roundOff.toFixed(2)}</strong></span>
