@@ -2488,10 +2488,10 @@ function AdminPanel() {
               <>
                 <section className="admin-stat-grid">
                   {[
-                    ["Revenue", money(stats.totalRevenue), BarChart3, "Paid orders", "linear-gradient(135deg,#FF7508,#FFA94D)", "rgba(255,117,8,.28)"],
-                    ["Orders", stats.totalOrders || 0, ClipboardList, "All product orders", "linear-gradient(135deg,#7c3aed,#a78bfa)", "rgba(124,58,237,.28)"],
-                    ["3D Print Orders", stats.totalPrintOrders || 0, Cuboid, "Custom print jobs", "linear-gradient(135deg,#ea580c,#ffb21f)", "rgba(234,88,12,.28)"],
-                    ["Customers", stats.totalUsers || 0, Users, "Registered users", "linear-gradient(135deg,#059669,#34d399)", "rgba(5,150,105,.28)"],
+                    ["Revenue", money(stats.totalRevenue), BarChart3, "Paid orders + invoices", "linear-gradient(135deg,#FF7508,#FFA94D)", "rgba(255,117,8,.28)"],
+                    ["Orders", stats.totalOrders || 0, ClipboardList, "Orders + manual invoices", "linear-gradient(135deg,#7c3aed,#a78bfa)", "rgba(124,58,237,.28)"],
+                    ["3D Print Orders", stats.totalPrintOrders || 0, Cuboid, "Prints + manual jobs", "linear-gradient(135deg,#ea580c,#ffb21f)", "rgba(234,88,12,.28)"],
+                    ["Customers", stats.totalUsers || 0, Users, "Registered + manual", "linear-gradient(135deg,#059669,#34d399)", "rgba(5,150,105,.28)"],
                     ["Products", stats.totalProducts || 0, Box, "Live catalog", "linear-gradient(135deg,#E05E00,#FF7508)", "rgba(224,94,0,.28)"],
                     ["Low Stock", stats.lowStockCount || 0, ShieldCheck, "Needs restock", "linear-gradient(135deg,#dc2626,#f87171)", "rgba(220,38,38,.28)"],
                   ].map(([label, value, Icon, hint, ico, glow]) => (
@@ -2515,7 +2515,7 @@ function AdminPanel() {
                     <div className="admin-panel-title-row">
                       <div>
                         <h2>Revenue this year</h2>
-                        <p className="admin-panel-subtitle">Paid & delivered orders per month.</p>
+                        <p className="admin-panel-subtitle">Paid & delivered orders + manual invoices per month.</p>
                       </div>
                       <span className="admin-count-badge">
                         {money((salesChart.monthlySales || []).reduce((sum, m) => sum + Number(m.total_sales || 0), 0))} total
@@ -2531,7 +2531,7 @@ function AdminPanel() {
                     <div className="admin-panel-title-row">
                       <div>
                         <h2>Orders by status</h2>
-                        <p className="admin-panel-subtitle">Live distribution across all product orders.</p>
+                        <p className="admin-panel-subtitle">Live distribution across orders + manual invoices.</p>
                       </div>
                     </div>
                     {(salesChart.statusDistribution || []).length ? (
