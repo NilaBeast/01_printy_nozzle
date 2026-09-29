@@ -418,6 +418,7 @@ const buildManualInvoiceData = ({
   shippingCost = 0,
   deliveryOption = "standard",
   discount = 0,
+  roundTotal = null,
   payment = {},
   settings,
 }) => {
@@ -504,7 +505,12 @@ const buildManualInvoiceData = ({
   const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
   const taxTotal = round2(lines.reduce((s, l) => s + l.tax, 0));
   const orderDiscount = Math.max(0, Number(discount) || 0);
-  const grandTotal = Math.max(0, round2(subtotal + taxTotal - orderDiscount));
+  const computedTotal = Math.max(0, round2(subtotal + taxTotal - orderDiscount));
+  // Optional admin round figure — the invoice total becomes exactly this.
+  const figure = Number(roundTotal);
+  const useFigure = Number.isFinite(figure) && figure > 0;
+  const grandTotal = useFigure ? round2(figure) : computedTotal;
+  const roundOff = useFigure ? round2(grandTotal - computedTotal) : 0;
   const qtyTotal = lines.reduce((s, l) => s + Number(l.qty || 0), 0);
 
   const invoiceNumber = clean(invoice.number) || `INV-MANUAL-${Date.now().toString(36).toUpperCase()}`;
@@ -531,6 +537,7 @@ const buildManualInvoiceData = ({
     qtyTotal,
     subtotal,
     discount: round2(orderDiscount),
+    roundOff,
     taxTotal,
     grandTotal,
     amountWords: amountInWords(grandTotal),
@@ -854,6 +861,9 @@ const generateInvoicePdf = (data) =>
         ["Subtotal", money(data.subtotal), false],
         ...(data.discount > 0 ? [["Discount", `- ${money(data.discount)}`, false]] : []),
         ["Taxes", money(data.taxTotal), false],
+        ...(data.roundOff
+          ? [["Round Off", `${data.roundOff < 0 ? "- " : ""}${money(Math.abs(data.roundOff))}`, false]]
+          : []),
         ["Total", money(data.grandTotal), true],
       ];
       let ty = sumY + 2;
@@ -864,6 +874,24 @@ const generateInvoicePdf = (data) =>
         ty += bold ? 16 : 14;
       });
       y = Math.max(sumY + summH, ty) + 8;
+
+      /* ---------- Payment status stamp (PAID / PENDING / ...) ---------- */
+      const payLabel = String(data.payment?.status || "").trim().toUpperCase();
+      if (payLabel) {
+        const isPaid = payLabel === "PAID";
+        const stampH = 24;
+        if (y + stampH > BOTTOM) {
+          doc.addPage();
+          y = TOP;
+        }
+        const stampW = 220;
+        const stampX = MARGIN + (CONTENT_W - stampW) / 2;
+        const stampColor = isPaid ? "#15803d" : "#EA580C";
+        doc.rect(stampX, y, stampW, stampH).strokeColor(stampColor).lineWidth(1.2).stroke();
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(stampColor);
+        doc.text(isPaid ? "PAID" : payLabel, stampX, y + 7, { width: stampW, align: "center" });
+        y += stampH + 8;
+      }
 
       /* ---------- Amount in words ---------- */
       if (y + 24 > BOTTOM) {
