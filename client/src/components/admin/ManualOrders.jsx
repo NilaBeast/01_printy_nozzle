@@ -5,6 +5,7 @@ import {
   ChevronRight,
   ClipboardList,
   Download,
+  Eye,
   FileText,
   Pencil,
   Plus,
@@ -966,6 +967,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                   <span><span className={`admin-pay-pill ${String(inv.payment_status || "").toUpperCase() === "PAID" ? "done" : "pending"}`}>{inv.payment_status}</span></span>
                   <span><strong className="admin-print-date-text">{inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</strong></span>
                   <span className="admin-print-actions">
+                    <button type="button" className="admin-icon-btn view" onClick={() => toggleExpand(inv)} title="View invoice details"><Eye size={16} /></button>
                     <button type="button" className="admin-icon-btn view" onClick={() => downloadSaved(inv)} title="Download PDF"><Download size={16} /></button>
                     <button type="button" className="admin-icon-btn view" onClick={() => startEdit(inv)} title="View & edit invoice"><Pencil size={16} /></button>
                     <button type="button" className="admin-icon-btn menu" onClick={() => deleteSaved(inv)} title="Delete invoice"><Trash2 size={16} /></button>
