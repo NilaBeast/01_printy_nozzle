@@ -95,11 +95,7 @@ app.use(express.json());
 
 const allowedOrigins = [
   process.env.FRONTEND_URL_1,
-  process.env.FRONTEND_URL_2,
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5174",
-  "http://localhost:8000",
+  process.env.FRONTEND_URL_2
 ].filter(Boolean);
 
 app.use(

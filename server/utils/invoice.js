@@ -24,7 +24,7 @@ const COMPANY_DEFAULTS = {
   company_name: "Printynozzle",
   company_address:
     "145 Indira Nagar Block 3, Panihati, Sodepur, Opposite Shree Krishna Sweets, North 24 Parganas, 700110, West Bengal, India",
-  company_phone: "8583928948",
+  company_phone: "9836609063",
   company_email: "info.printynozzle@gmail.com",
   company_gstin: "",
   company_website: "https://printynozzle.in",

@@ -620,6 +620,7 @@ INSERT INTO site_settings (setting_key, setting_value, setting_type, description
 ('support_email', 'info.printynozzle@gmail.com', 'string', 'Support email address'),
 ('support_phone', '9836609063', 'string', 'Support phone number'),
 ('whatsapp_number', '+919836609063', 'string', 'WhatsApp Support Number'),
+('company_phone', '9836609063', 'string', 'Company phone printed on invoices'),
 ('company_address', '145 Indira Nagar Block 3, Panihati, Sodepur, Opposite Shree Krishna Sweets, North 24 Parganas, 700110, West Bengal, India', 'string', 'Office Address'),
 ('business_hours', 'Mon - Sat: 10:00 AM - 7:00 PM | Sunday: Closed', 'string', 'Working Hours'),
 ('smooth_finish_per_gram', '3', 'number', 'Extra cost per gram for smooth finish'),

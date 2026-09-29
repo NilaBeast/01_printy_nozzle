@@ -26,15 +26,13 @@ import printingService from "../services/printing.service";
 import catalogService from "../services/catalog.service";
 import cartService from "../services/cart.service";
 import { syncCartBadge } from "../utils/cartSync";
+import {
+  MAX_PRINT_WIDTH_MM,
+  MAX_PRINT_DEPTH_MM,
+  MAX_PRINT_HEIGHT_MM,
+  MAX_FILE_SIZE_MB,
+} from "../config";
 import "../../public/css/printing.css";
-
-// Maximum Printable Dimensions from .env (-1 means no limit)
-const MAX_PRINT_WIDTH_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_WIDTH_MM ?? 250);
-const MAX_PRINT_DEPTH_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_DEPTH_MM ?? 250);
-const MAX_PRINT_HEIGHT_MM = parseFloat(import.meta.env.VITE_MAX_PRINT_HEIGHT_MM ?? 250);
-
-// Maximum File Size in MB from .env (-1 means no limit)
-const MAX_FILE_SIZE_MB = parseFloat(import.meta.env.VITE_MAX_FILE_SIZE_MB ?? 100);
 
 export default function Printing() {
   const navigate = useNavigate();
