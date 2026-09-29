@@ -115,6 +115,20 @@
   font-weight: 600;
   color: #94a3b8;
   white-space: nowrap;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .step-item {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .step-circle {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
 }
 
 .step-item.completed {
@@ -781,6 +795,12 @@
 .coupon-input-group {
   display: flex;
   gap: 8px;
+  min-width: 0;
+}
+
+.coupon-input-group input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .btn-apply-coupon {

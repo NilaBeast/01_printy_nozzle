@@ -1404,4 +1404,13 @@
   .guide-cards-grid {
     grid-template-columns: 1fr;
   }
+
+  .qty-finish-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .finish-cards-grid {
+    grid-template-columns: 1fr;
+  }
 }

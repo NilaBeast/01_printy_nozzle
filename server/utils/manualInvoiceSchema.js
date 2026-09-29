@@ -53,6 +53,7 @@ const ensureManualInvoiceSchema = async () => {
             round_total DECIMAL(10,2) DEFAULT NULL,
             shipping_cost DECIMAL(10,2) DEFAULT 0.00,
             grand_total DECIMAL(10,2) DEFAULT 0.00,
+            amount_paid DECIMAL(10,2) DEFAULT 0.00,
             delivery_option VARCHAR(20) DEFAULT 'standard',
             payment_method VARCHAR(100) DEFAULT 'Cash',
             payment_status VARCHAR(20) DEFAULT 'PAID',
@@ -105,6 +106,17 @@ const ensureManualInvoiceSchema = async () => {
           }
         } catch (e) {
           console.warn(`⚠️ Could not add manual_invoices.round_total: ${e.message}`);
+        }
+        try {
+          const [paidCol] = await conn.query(
+            `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'manual_invoices' AND COLUMN_NAME = 'amount_paid' LIMIT 1`
+          );
+          if (!paidCol.length) {
+            await conn.query("ALTER TABLE `manual_invoices` ADD COLUMN `amount_paid` DECIMAL(10,2) DEFAULT 0.00 AFTER `grand_total`");
+            console.log("🧾 manual_invoices.amount_paid column added");
+          }
+        } catch (e) {
+          console.warn(`⚠️ Could not add manual_invoices.amount_paid: ${e.message}`);
         }
       } finally {
         conn.release();

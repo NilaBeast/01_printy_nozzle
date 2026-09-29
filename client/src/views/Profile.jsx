@@ -581,7 +581,7 @@ function Profile() {
 
                   {/* Form Fields */}
 
-                  <div className="profile-form-grid">
+                  <div className="profile-form-grid w-100">
                     <div className="profile-form-group">
                       <label>First Name</label>
                       <input

@@ -40,16 +40,17 @@
 }
 
 .contact-main-title {
-  font-size: 38px;
+  font-size: clamp(28px, 6vw, 38px);
   font-weight: 800;
   color: #0f172a;
   margin: 0 0 6px 0;
   letter-spacing: -0.5px;
   line-height: 1.2;
+  overflow-wrap: break-word;
 }
 
 .contact-hero-subtitle {
-  font-size: 24px;
+  font-size: clamp(18px, 4.5vw, 24px);
   font-weight: 700;
   color: #FF7508;
   margin: 0 0 16px 0;
@@ -728,6 +729,10 @@
 }
 
 @media (max-width: 768px) {
+  .contact-badges-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .contact-faq-grid {
     grid-template-columns: 1fr;
   }

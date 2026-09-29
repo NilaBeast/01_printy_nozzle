@@ -394,7 +394,7 @@ export default function Cart() {
               Looks like you haven't added any maker tools, development boards, or 3D printing filaments to your cart yet.
             </p>
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "center" }}>
-              <Link to="/products" className="btn-proceed-checkout" style={{ width: "auto", padding: "12px 28px" }}>
+              <Link to="/products" className="btn-proceed-checkout" style={{ width: "!00%", padding: "12px 28px" }}>
                 <ShoppingBag size={18} />
                 <span>Explore Products</span>
               </Link>

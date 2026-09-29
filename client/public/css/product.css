@@ -1408,4 +1408,20 @@
   .related-products-grid {
     grid-template-columns: 1fr;
   }
+
+  .product-card-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .product-card-list .product-image-box {
+    width: 100%;
+    height: 180px;
+  }
+
+  .product-card-list .product-card-side {
+    align-items: stretch;
+    min-width: 0;
+  }
 }

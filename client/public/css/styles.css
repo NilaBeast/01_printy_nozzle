@@ -159,6 +159,14 @@ select:disabled {
   select {
     width: 100%;
   }
+
+  section {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 20px 16px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
 }
 
 /* ================= ERROR STATE ================= */

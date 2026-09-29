@@ -102,7 +102,7 @@ export default function Checkout() {
 
   // Payment method: "razorpay" (UPI / cards / netbanking / wallets via
   // Razorpay popup) or "qr" (pay to merchant QR, attach screenshot proof).
-  const [paymentMethod, setPaymentMethod] = useState("razorpay");
+  const [paymentMethod, setPaymentMethod] = useState("qr");
 
   // Merchant QR config (Admin → Settings) + customer screenshot proof.
   const [qrConfig, setQrConfig] = useState({ upi_id: "", payee_name: "Printynozzle", image_url: "" });
@@ -1314,7 +1314,7 @@ export default function Checkout() {
 
                 <div className="shipping-options-list">
                   {/* Option 1: Razorpay */}
-                  <div
+                  {/* <div
                     className={`shipping-option-item ${paymentMethod === "razorpay" ? "selected" : ""}`}
                     onClick={() => setPaymentMethod("razorpay")}
                   >
@@ -1330,7 +1330,7 @@ export default function Checkout() {
                         <span className="shipping-opt-time">UPI, cards, net banking &amp; wallets via Razorpay</span>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Option 2: Pay with QR */}
                   <div
