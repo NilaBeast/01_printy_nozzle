@@ -6,6 +6,8 @@ const {
   updateOrderStatus,
   verifyQrPayment,
   createManualInvoice,
+  updateManualInvoice,
+  searchManualCustomers,
   listManualInvoices,
   getManualInvoice,
   downloadManualInvoicePdf,
@@ -21,8 +23,10 @@ router.use(protect, authorizeRoles("admin"));
 router.get("/", getAllOrders);
 router.post("/manual-invoices", createManualInvoice);
 router.get("/manual-invoices", listManualInvoices);
+router.get("/manual-invoices/customers", searchManualCustomers);
 router.get("/manual-invoices/:id/pdf", downloadManualInvoicePdf);
 router.get("/manual-invoices/:id", getManualInvoice);
+router.put("/manual-invoices/:id", updateManualInvoice);
 router.delete("/manual-invoices/:id", deleteManualInvoice);
 router.get("/:id/invoice", getOrderInvoice);
 router.get("/:id", getOrderDetails);

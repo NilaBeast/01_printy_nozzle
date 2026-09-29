@@ -383,6 +383,7 @@ CREATE TABLE IF NOT EXISTS manual_invoices (
   subtotal DECIMAL(10,2) DEFAULT 0.00,
   tax_total DECIMAL(10,2) DEFAULT 0.00,
   discount DECIMAL(10,2) DEFAULT 0.00,
+  round_total DECIMAL(10,2) DEFAULT NULL,
   shipping_cost DECIMAL(10,2) DEFAULT 0.00,
   grand_total DECIMAL(10,2) DEFAULT 0.00,
   delivery_option VARCHAR(20) DEFAULT 'standard',

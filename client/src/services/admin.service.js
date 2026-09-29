@@ -39,6 +39,9 @@ const adminService = {
     });
     return downloadPdf(response, "Invoice-Manual.pdf");
   },
+  updateManualInvoice: (id, payload) => api.put(`/admin/orders/manual-invoices/${id}`, payload),
+  searchManualCustomers: (search) =>
+    api.get("/admin/orders/manual-invoices/customers", { params: { search } }),
   listManualInvoices: (params = {}) => api.get("/admin/orders/manual-invoices", { params }),
   getManualInvoice: (id) => api.get(`/admin/orders/manual-invoices/${id}`),
   downloadManualInvoicePdf: async (id) => {
