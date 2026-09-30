@@ -21,6 +21,7 @@ const ensureManualInvoiceSchema = async () => {
           CREATE TABLE IF NOT EXISTS manual_invoices (
             id INT AUTO_INCREMENT PRIMARY KEY,
             invoice_number VARCHAR(50) DEFAULT NULL UNIQUE,
+            file_name VARCHAR(300) DEFAULT NULL,
             invoice_date DATE DEFAULT NULL,
             sale_order VARCHAR(100) DEFAULT NULL,
             reference VARCHAR(100) DEFAULT NULL,
@@ -96,16 +97,22 @@ const ensureManualInvoiceSchema = async () => {
         console.log("🧾 Manual invoice tables ready");
 
         // Newer columns for installs created before they existed.
-        try {
-          const [roundCol] = await conn.query(
-            `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'manual_invoices' AND COLUMN_NAME = 'round_total' LIMIT 1`
-          );
-          if (!roundCol.length) {
-            await conn.query("ALTER TABLE `manual_invoices` ADD COLUMN `round_total` DECIMAL(10,2) DEFAULT NULL AFTER `discount`");
-            console.log("🧾 manual_invoices.round_total column added");
+        for (const [col, def, after] of [
+          ["round_total", "DECIMAL(10,2) DEFAULT NULL", "discount"],
+          ["file_name", "VARCHAR(300) DEFAULT NULL", "invoice_number"],
+        ]) {
+          try {
+            const [exists] = await conn.query(
+              `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'manual_invoices' AND COLUMN_NAME = ? LIMIT 1`,
+              [col]
+            );
+            if (!exists.length) {
+              await conn.query(`ALTER TABLE \`manual_invoices\` ADD COLUMN \`${col}\` ${def} AFTER \`${after}\``);
+              console.log(`🧾 manual_invoices.${col} column added`);
+            }
+          } catch (e) {
+            console.warn(`⚠️ Could not add manual_invoices.${col}: ${e.message}`);
           }
-        } catch (e) {
-          console.warn(`⚠️ Could not add manual_invoices.round_total: ${e.message}`);
         }
         try {
           const [paidCol] = await conn.query(

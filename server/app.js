@@ -54,6 +54,20 @@ try {
   console.warn("⚠️ companyDetailsSchema preload skipped:", e.message);
 }
 
+// Self-healing DB migration for footer social-media link settings
+try {
+  require("./utils/socialSchema");
+} catch (e) {
+  console.warn("⚠️ socialSchema preload skipped:", e.message);
+}
+
+// Self-healing DB migration for product variations (families)
+try {
+  require("./utils/variationSchema");
+} catch (e) {
+  console.warn("⚠️ variationSchema preload skipped:", e.message);
+}
+
 // Client Routers
 const authRoutes = require("./routers/authRoutes");
 const profileRoutes = require("./routers/profileRoutes");
@@ -76,6 +90,7 @@ const couponRoutes = require("./routers/couponRoutes");
 const adminDashboardRoutes = require("./routers/admin/adminDashboardRoutes");
 const adminProductRoutes = require("./routers/admin/adminProductRoutes");
 const adminCategoryRoutes = require("./routers/admin/adminCategoryRoutes");
+const adminVariationRoutes = require("./routers/admin/adminVariationRoutes");
 const adminBrandRoutes = require("./routers/admin/adminBrandRoutes");
 const adminOrderRoutes = require("./routers/admin/adminOrderRoutes");
 const adminPrintingRoutes = require("./routers/admin/adminPrintingRoutes");
@@ -112,6 +127,8 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Razorpay-Signature"],
+    // Lets browser JS read download filenames (Content-Disposition header).
+    exposedHeaders: ["Content-Disposition"],
   })
 );
 
@@ -144,6 +161,7 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/admin/categories", adminCategoryRoutes);
+app.use("/api/admin/variations", adminVariationRoutes);
 app.use("/api/admin/brands", adminBrandRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/printing", adminPrintingRoutes);

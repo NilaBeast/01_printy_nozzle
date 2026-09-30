@@ -151,6 +151,7 @@ const calculatePrice = async (req, res) => {
       infill_density = 50,
       surface_finish = "standard",
       quantity = 1,
+      surface_area_cm2,
     } = req.body;
 
     if (!estimated_weight || !material_id) {
@@ -189,6 +190,8 @@ const calculatePrice = async (req, res) => {
       hoursPerGram: pricingSettings.print_hours_per_gram || 0.15,
       timeSlabs: pricingSettings.print_time_slabs || undefined,
       timeRates: toTimeRates(pricingSettings),
+      density: parseFloat(materials[0].density_g_cm3) || 1.24,
+      surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
     });
 
     return res.status(200).json({
@@ -214,6 +217,7 @@ const createPrintOrder = async (req, res) => {
       material_id, color_id, custom_color_hex,
       infill_density = 50, surface_finish = "standard", quantity = 1,
       estimated_weight,
+      surface_area_cm2,
       shipping_name, shipping_phone, shipping_address1,
       shipping_city, shipping_state, shipping_pincode,
       payment_method = "cod",
@@ -264,6 +268,8 @@ const createPrintOrder = async (req, res) => {
       hoursPerGram: pricingSettings.print_hours_per_gram || 0.15,
       timeSlabs: pricingSettings.print_time_slabs || undefined,
       timeRates: toTimeRates(pricingSettings),
+      density: parseFloat(materials[0].density_g_cm3) || 1.24,
+      surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
     });
 
     // Generate order number

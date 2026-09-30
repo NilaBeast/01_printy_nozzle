@@ -75,6 +75,17 @@ CREATE TABLE IF NOT EXISTS brands (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
+-- ===================== VARIATIONS (product families, e.g. ESP32) =====================
+CREATE TABLE IF NOT EXISTS variations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  slug VARCHAR(200) NOT NULL UNIQUE,
+  is_active TINYINT(1) DEFAULT 1,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 -- ===================== PRODUCTS =====================
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -90,6 +101,7 @@ CREATE TABLE IF NOT EXISTS products (
   cost_price DECIMAL(10,2) DEFAULT NULL,
   category_id INT DEFAULT NULL,
   brand_id INT DEFAULT NULL,
+  variation_id INT DEFAULT NULL,
   stock INT DEFAULT 0,
   low_stock_threshold INT DEFAULT 5,
   weight DECIMAL(8,2) DEFAULT NULL,
@@ -120,6 +132,7 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
   FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL,
+  FOREIGN KEY (variation_id) REFERENCES variations(id) ON DELETE SET NULL,
   INDEX idx_category (category_id),
   INDEX idx_brand (brand_id),
   INDEX idx_price (price),
@@ -216,6 +229,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
   infill_density INT DEFAULT 50,
   surface_finish VARCHAR(20) DEFAULT 'standard',
   estimated_weight DECIMAL(10,2) DEFAULT NULL,
+  surface_area_cm2 DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
@@ -345,6 +359,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   infill_density INT DEFAULT 50,
   surface_finish VARCHAR(20) DEFAULT 'standard',
   estimated_weight DECIMAL(10,2) DEFAULT NULL,
+  surface_area_cm2 DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
@@ -354,6 +369,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE TABLE IF NOT EXISTS manual_invoices (
   id INT AUTO_INCREMENT PRIMARY KEY,
   invoice_number VARCHAR(50) DEFAULT NULL UNIQUE,
+  file_name VARCHAR(300) DEFAULT NULL,
   invoice_date DATE DEFAULT NULL,
   sale_order VARCHAR(100) DEFAULT NULL,
   reference VARCHAR(100) DEFAULT NULL,
@@ -621,6 +637,18 @@ INSERT INTO site_settings (setting_key, setting_value, setting_type, description
 ('support_email', 'info.printynozzle@gmail.com', 'string', 'Support email address'),
 ('support_phone', '9836609063', 'string', 'Support phone number'),
 ('whatsapp_number', '+919836609063', 'string', 'WhatsApp Support Number'),
+('social_facebook_url', '', 'string', 'facebook profile URL shown in the footer'),
+('social_facebook_enabled', '0', 'boolean', 'Show facebook in the footer (1 = on)'),
+('social_instagram_url', '', 'string', 'instagram profile URL shown in the footer'),
+('social_instagram_enabled', '0', 'boolean', 'Show instagram in the footer (1 = on)'),
+('social_youtube_url', '', 'string', 'youtube profile URL shown in the footer'),
+('social_youtube_enabled', '0', 'boolean', 'Show youtube in the footer (1 = on)'),
+('social_x_url', '', 'string', 'x profile URL shown in the footer'),
+('social_x_enabled', '0', 'boolean', 'Show x in the footer (1 = on)'),
+('social_linkedin_url', '', 'string', 'linkedin profile URL shown in the footer'),
+('social_linkedin_enabled', '0', 'boolean', 'Show linkedin in the footer (1 = on)'),
+('social_whatsapp_url', '', 'string', 'whatsapp profile URL shown in the footer'),
+('social_whatsapp_enabled', '0', 'boolean', 'Show whatsapp in the footer (1 = on)'),
 ('company_phone', '9836609063', 'string', 'Company phone printed on invoices'),
 ('company_address', '145 Indira Nagar Block 3, Panihati, Sodepur, Opposite Shree Krishna Sweets, North 24 Parganas, 700110, West Bengal, India', 'string', 'Office Address'),
 ('business_hours', 'Mon - Sat: 10:00 AM - 7:00 PM | Sunday: Closed', 'string', 'Working Hours'),

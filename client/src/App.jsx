@@ -23,6 +23,7 @@ import Profile from "./views/Profile";
 import Orders from "./views/Orders";
 import OrderDetails from "./views/OrderDetails";
 import Printing from "./views/Printing";
+import Policy from "./views/Policy";
 import AdminPanel from "./views/AdminPanel";
 
 function App() {
@@ -49,6 +50,10 @@ function App() {
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/privacy" element={<Policy page="privacy" />} />
+              <Route path="/terms" element={<Policy page="terms" />} />
+              <Route path="/shipping" element={<Policy page="shipping" />} />
+              <Route path="/returns" element={<Policy page="returns" />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/my-orders" element={<Orders />} />

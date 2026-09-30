@@ -402,6 +402,29 @@ const buildPrintInvoiceData = ({ prints = [], settings, shippingCost = 0, delive
 const invoiceFileName = (data) =>
   `Invoice-${String(data.invoiceNumber || "invoice").replace(/[^A-Za-z0-9-_]+/g, "-")}.pdf`;
 
+/* Manual invoices download as:
+ * Invoice_<InvoiceNumber>_Printynozzle_<CustomerName>_<CustomerPhone>.pdf
+ * so the admin never has to rename the file. */
+const safeFilePart = (value, fallback) => {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9._-]+/g, "")
+    .replace(/^_+|_+$/g, "");
+  return cleaned || fallback;
+};
+
+const manualInvoiceFileName = (data) => {
+  const parts = [
+    "Invoice",
+    safeFilePart(data.invoiceNumber, "INV"),
+    "Printynozzle",
+    safeFilePart(data.customer?.name, "Customer"),
+    safeFilePart(data.customer?.phone, "NA"),
+  ];
+  return `${parts.join("_")}.pdf`;
+};
+
 /* ===================== MANUAL INVOICE (ADMIN — NO ORDER ROW) =====================
  * Admin types every invoice field (customer, shipping, line items with HSN /
  * rate / qty / discount) and we render it with the same Robu-style template.
@@ -989,5 +1012,6 @@ module.exports = {
   buildManualInvoiceData,
   generateInvoicePdf,
   invoiceFileName,
+  manualInvoiceFileName,
   amountInWords,
 };

@@ -447,7 +447,7 @@ useEffect(() => {
 
           <NavLink to="/" className="brand-logo" onClick={closeNavbar}>
             <img
-              src="/images/logo-shade.png"
+              src="/images/logo-final.png?v=2"
               alt="Printy Nozzles"
               className="brand-logo-image"
             />

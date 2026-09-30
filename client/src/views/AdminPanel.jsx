@@ -242,6 +242,7 @@ function AdminPanel() {
     tagline: "",
     category_id: "",
     brand_id: "",
+    variation_id: "",
     price: "",
     compare_price: "",
     stock: "",
@@ -314,6 +315,10 @@ function AdminPanel() {
     logoFile: null,
     is_active: true,
   });
+  const [catalogSubTab, setCatalogSubTab] = useState("categories");
+  const [variations, setVariations] = useState([]);
+  const [variationSearch, setVariationSearch] = useState("");
+  const [variationForm, setVariationForm] = useState({ name: "", is_active: true });
   const [bannerForm, setBannerForm] = useState({
     title: "",
     subtitle: "",
@@ -406,6 +411,7 @@ function AdminPanel() {
         materialsRes,
         colorsRes,
         brandsRes,
+        variationsRes,
         reviewsRes,
         subscribersRes,
         contactsRes,
@@ -423,6 +429,7 @@ function AdminPanel() {
         adminService.getMaterials(),
         adminService.getColors(),
         adminService.getBrands(),
+        adminService.getVariations().catch(() => ({ data: { data: [] } })),
         adminService.getReviews({ limit: 50 }),
         adminService.getSubscribers({ limit: 50 }),
         adminService.getContacts({ limit: 50 }),
@@ -441,6 +448,7 @@ function AdminPanel() {
       setMaterials(materialsRes.data.data || []);
       setColors(colorsRes.data.data || []);
       setBrands(brandsRes.data.data || []);
+      setVariations(variationsRes.data.data || []);
       setReviews(reviewsRes.data.data?.reviews || []);
       setSubscribers(subscribersRes.data.data?.subscribers || []);
       setContacts(contactsRes.data.data?.messages || []);
@@ -566,6 +574,7 @@ function AdminPanel() {
         tagline: p.tagline || "",
         category_id: p.category_id || "",
         brand_id: p.brand_id || "",
+        variation_id: p.variation_id || "",
         price: p.price || "",
         compare_price: p.compare_price || "",
         stock: p.stock ?? "",
@@ -829,6 +838,7 @@ function AdminPanel() {
       tagline: "",
       category_id: "",
       brand_id: "",
+      variation_id: "",
       price: "",
       compare_price: "",
       stock: "",
@@ -866,6 +876,8 @@ function AdminPanel() {
     append("tagline", productForm.tagline);
     append("category_id", productForm.category_id);
     append("brand_id", productForm.brand_id);
+    // Always sent (even empty) so clearing a variation works on edit.
+    form.append("variation_id", productForm.variation_id || "");
     append("price", productForm.price);
     append("compare_price", productForm.compare_price);
     append("stock", productForm.stock);
@@ -941,6 +953,7 @@ function AdminPanel() {
         tagline: p.tagline || "",
         category_id: p.category_id || "",
         brand_id: p.brand_id || "",
+        variation_id: p.variation_id || "",
         price: p.price || "",
         compare_price: p.compare_price || "",
         stock: p.stock ?? "",
@@ -1498,6 +1511,69 @@ function AdminPanel() {
       loadAdminData();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Brand delete failed");
+    }
+  };
+
+  /* ===================== VARIATIONS ===================== */
+  const filteredVariations = useMemo(() => {
+    const q = variationSearch.trim().toLowerCase();
+    return (variations || []).filter((v) =>
+      !q || String(v.name || "").toLowerCase().includes(q)
+    );
+  }, [variations, variationSearch]);
+
+  const resetVariationForm = () => {
+    setVariationForm({ name: "", is_active: true });
+  };
+
+  const submitVariation = async (event) => {
+    event.preventDefault();
+    if (!variationForm.name?.trim()) {
+      toast.error("Variation name is required");
+      return;
+    }
+    try {
+      if (editing?.id) {
+        await adminService.updateVariation(editing.id, variationForm);
+        toast.success("Variation updated");
+      } else {
+        await adminService.createVariation(variationForm);
+        toast.success("Variation created");
+      }
+      closeModal();
+      resetVariationForm();
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Variation save failed");
+    }
+  };
+
+  const openEditVariation = (variation) => {
+    setVariationForm({
+      name: variation.name || "",
+      is_active: variation.is_active !== undefined ? Boolean(variation.is_active) : true,
+    });
+    setEditing({ type: "variation", id: variation.id });
+    setActiveModal("variation");
+  };
+
+  const toggleVariation = async (variation) => {
+    try {
+      await adminService.updateVariation(variation.id, { is_active: !variation.is_active });
+      toast.success("Variation updated");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Variation update failed");
+    }
+  };
+
+  const deleteVariation = async (id) => {
+    try {
+      await adminService.deleteVariation(id);
+      toast.success("Variation deleted");
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Variation delete failed");
     }
   };
 
@@ -4635,6 +4711,29 @@ function AdminPanel() {
                   </article>
                 </div>
 
+                <div className="admin-subtabs" role="tablist" aria-label="Catalog sections">
+                  {[
+                    { id: "categories", label: "Categories", count: categories.length, Icon: Layers },
+                    { id: "variations", label: "Variations", count: variations.length, Icon: Boxes },
+                  ].map((tab) => (
+                    <button
+                      type="button"
+                      key={tab.id}
+                      className={`admin-subtab ${catalogSubTab === tab.id ? "active" : ""}`}
+                      onClick={() => setCatalogSubTab(tab.id)}
+                      role="tab"
+                      aria-selected={catalogSubTab === tab.id}
+                    >
+                      <span className="admin-subtab-label">
+                        {tab.Icon && <tab.Icon size={20} />}
+                        <span>{tab.label}</span>
+                      </span>
+                      <strong>{tab.count}</strong>
+                    </button>
+                  ))}
+                </div>
+
+                {catalogSubTab === "categories" && (
                 <div className="admin-panel admin-catalog-panel">
                   <div className="admin-panel-title-row admin-colors-head">
                     <div className="admin-colors-title">
@@ -4811,6 +4910,78 @@ function AdminPanel() {
                     </div>
                   </div>
                 </div>
+                )}
+
+                {catalogSubTab === "variations" && (
+                <div className="admin-panel admin-section-panel">
+                  <div className="admin-panel-title-row admin-colors-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-print-orders-ico">
+                        <Boxes size={22} />
+                      </span>
+                      <div>
+                        <h2>Variations</h2>
+                        <p className="admin-panel-subtitle">Product families (e.g. ESP32). Products under one variation get name-only switcher pills on their details page.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact admin-colors-tools">
+                      <label className="admin-search admin-colors-search">
+                        <Search size={15} />
+                        <input
+                          value={variationSearch}
+                          onChange={(e) => setVariationSearch(e.target.value)}
+                          placeholder="Search variations..."
+                        />
+                      </label>
+                      <button type="button" className="admin-primary" onClick={() => { setEditing(null); resetVariationForm(); setActiveModal("variation"); }}>
+                        <Plus size={16} />
+                        <span>Add Variation</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="admin-list">
+                    {filteredVariations.length ? (
+                      filteredVariations.map((variation) => (
+                        <article className="admin-user-row" key={variation.id} style={{ gridTemplateColumns: "minmax(0, 1fr) 110px 44px 44px" }}>
+                          <div>
+                            <strong>{variation.name}</strong>
+                            <span>{variation.product_count || 0} product(s){variation.is_active ? "" : " • inactive"}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className={`admin-toggle ${variation.is_active ? "active" : ""}`}
+                            onClick={() => toggleVariation(variation)}
+                          >
+                            {variation.is_active ? "Active" : "Inactive"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-icon"
+                            onClick={() => openEditVariation(variation)}
+                            title="Edit variation"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-icon danger"
+                            onClick={() => {
+                              if (window.confirm(`Delete variation "${variation.name}"? Products keep working without it.`)) {
+                                deleteVariation(variation.id);
+                              }
+                            }}
+                            title="Delete variation"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="admin-empty small">No variations yet — add one (e.g. ESP32), then assign it while creating products.</div>
+                    )}
+                  </div>
+                </div>
+                )}
               </section>
             )}
 
@@ -5500,6 +5671,54 @@ function AdminPanel() {
                 <div className="admin-panel">
                   <div className="admin-panel-title-row">
                     <div>
+                      <h2>Social Media Links</h2>
+                      <p className="admin-panel-subtitle">Footer icons. Only toggled-on platforms with a URL are shown.</p>
+                    </div>
+                  </div>
+                  <form className="admin-form" onSubmit={submitSettings}>
+                    <div className="admin-list">
+                      {[
+                        { key: "facebook", label: "Facebook" },
+                        { key: "instagram", label: "Instagram" },
+                        { key: "youtube", label: "YouTube" },
+                        { key: "x", label: "X (Twitter)" },
+                        { key: "linkedin", label: "LinkedIn" },
+                        { key: "whatsapp", label: "WhatsApp" },
+                      ].map((s) => (
+                        <div key={s.key} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className={`admin-toggle ${settingsForm?.[`social_${s.key}_enabled`] === "1" ? "active" : ""}`}
+                            onClick={() =>
+                              updateSettingField(
+                                `social_${s.key}_enabled`,
+                                settingsForm?.[`social_${s.key}_enabled`] === "1" ? "0" : "1"
+                              )
+                            }
+                            title={`Show ${s.label} in footer`}
+                            style={{ minWidth: 110 }}
+                          >
+                            {settingsForm?.[`social_${s.key}_enabled`] === "1" ? "Shown" : "Hidden"} · {s.label}
+                          </button>
+                          <input
+                            style={{ flex: "1 1 220px" }}
+                            placeholder={`${s.label} profile URL (https://…)`}
+                            value={settingsForm?.[`social_${s.key}_url`] || ""}
+                            onChange={(e) => updateSettingField(`social_${s.key}_url`, e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button className="admin-primary small" type="submit" disabled={settingsSaving}>
+                      <Save size={15} />
+                      <span>{settingsSaving ? "Saving..." : "Save Social Links"}</span>
+                    </button>
+                  </form>
+                </div>
+
+                <div className="admin-panel">
+                  <div className="admin-panel-title-row">
+                    <div>
                       <h2>Delhivery Shipping</h2>
                       <p className="admin-panel-subtitle">
                         {shipStatus
@@ -5712,6 +5931,17 @@ function AdminPanel() {
                   {brands.map((brand) => (
                     <option key={brand.id} value={brand.id}>
                       {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pf-field">
+                <span>Variation (family)</span>
+                <select value={productForm.variation_id} onChange={(e) => setProductForm({ ...productForm, variation_id: e.target.value })}>
+                  <option value="">No variation</option>
+                  {(variations || []).filter((v) => v.is_active).map((variation) => (
+                    <option key={variation.id} value={variation.id}>
+                      {variation.name}
                     </option>
                   ))}
                 </select>
@@ -6167,6 +6397,25 @@ function AdminPanel() {
           <button className="admin-primary" type="submit">
             <Save size={16} />
             <span>{editing?.id ? "Update Brand" : "Create Brand"}</span>
+          </button>
+        </form>
+      </AdminModal>
+
+      <AdminModal
+        open={activeModal === "variation"}
+        title={editing?.id ? "Edit Variation" : "Add Variation"}
+        subtitle="A variation is a product family (e.g. ESP32). Assign it while creating products."
+        onClose={closeModal}
+      >
+        <form className="admin-form" onSubmit={submitVariation}>
+          <input required placeholder="Variation name (e.g. ESP32)" value={variationForm.name} onChange={(e) => setVariationForm({ ...variationForm, name: e.target.value })} />
+          <label className="admin-check">
+            <input type="checkbox" checked={variationForm.is_active} onChange={(e) => setVariationForm({ ...variationForm, is_active: e.target.checked })} />
+            Active variation
+          </label>
+          <button className="admin-primary" type="submit">
+            <Save size={16} />
+            <span>{editing?.id ? "Update Variation" : "Create Variation"}</span>
           </button>
         </form>
       </AdminModal>

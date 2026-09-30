@@ -345,6 +345,48 @@
   font-size: 1rem;
 }
 
+/* Variation family switcher (name-only pills) */
+.pd-variation-block {
+  margin: 0 0 1.5rem 0;
+}
+
+.pd-variation-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.6rem;
+}
+
+.pd-variation-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.pd-variation-pill {
+  padding: 0.55rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.pd-variation-pill:hover {
+  border-color: #0f172a;
+}
+
+.pd-variation-pill.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #ffffff;
+  cursor: default;
+}
+
 /* Quantity & CTA Buttons */
 .pd-actions-wrapper {
   margin-bottom: 1.5rem;

@@ -278,6 +278,7 @@ const addPrintToCart = async (req, res) => {
       surface_finish = "standard",
       quantity = 1,
       estimated_weight,
+      surface_area_cm2,
     } = req.body;
 
     if (!file_name || !material_id || !estimated_weight) {
@@ -336,6 +337,8 @@ const addPrintToCart = async (req, res) => {
       hoursPerGram: settingsMap.print_hours_per_gram || 0.15,
       timeSlabs: settingsMap.print_time_slabs || undefined,
       timeRates,
+      density: parseFloat(materials[0].density_g_cm3) || 1.24,
+      surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
     });
 
     const unitPrice = round2(pricing.perUnitCost);
@@ -355,12 +358,12 @@ const addPrintToCart = async (req, res) => {
            file_name, file_url, file_public_id, file_size,
            dimension_x, dimension_y, dimension_z,
            material_id, color_id, custom_color_hex,
-           infill_density, surface_finish, estimated_weight, print_time_hours, time_cost)
+           infill_density, surface_finish, estimated_weight, surface_area_cm2, print_time_hours, time_cost)
          VALUES (?, NULL, NULL, ?, 'print', ?,
            ?, ?, ?, ?,
            ?, ?, ?,
            ?, ?, ?,
-           ?, ?, ?, ?, ?)`,
+           ?, ?, ?, ?, ?, ?)`,
         [
           cartId,
           qty,
@@ -378,6 +381,7 @@ const addPrintToCart = async (req, res) => {
           parseInt(infill_density) || 50,
           surface_finish === "smooth" ? "smooth" : "standard",
           parseFloat(estimated_weight),
+          surface_area_cm2 != null ? Number(surface_area_cm2) : null,
           pricing.printTimeHours,
           pricing.timeCost,
         ]

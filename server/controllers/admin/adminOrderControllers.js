@@ -4,6 +4,7 @@ const {
   buildManualInvoiceData,
   generateInvoicePdf,
   invoiceFileName,
+  manualInvoiceFileName,
 } = require("../../utils/invoice");
 const { triggerAutoShipment } = require("../../utils/shippingSync");
 const { mailOrderInvoiceById } = require("../../utils/mailer");
@@ -272,9 +273,14 @@ const createManualInvoice = async (req, res) => {
       const invoiceNumber = `INV-${year}-${String(invoiceId).padStart(4, "0")}`;
       const saleOrder = manualStr(invoice.saleOrder) || invoiceNumber.replace(/^INV-/, "");
       const reference = manualStr(invoice.reference) || invoiceNumber;
+      // Stored download name: Invoice_<No>_Printynozzle_<Customer>_<Phone>.pdf
+      const storedFileName = manualInvoiceFileName({
+        invoiceNumber,
+        customer: { name: manualStr(customer.name), phone: manualStr(customer.phone) },
+      });
       await connection.query(
-        "UPDATE manual_invoices SET invoice_number = ?, sale_order = ?, reference = ? WHERE id = ?",
-        [invoiceNumber, saleOrder, reference, invoiceId]
+        "UPDATE manual_invoices SET invoice_number = ?, sale_order = ?, reference = ?, file_name = ? WHERE id = ?",
+        [invoiceNumber, saleOrder, reference, storedFileName, invoiceId]
       );
 
       // Resolve product ids (ignore unknown ids instead of failing the invoice).
@@ -340,7 +346,7 @@ const createManualInvoice = async (req, res) => {
     const data = buildManualInvoiceData({ ...savedRowToInvoiceInput(rows[0], savedItems), settings });
     const pdf = await generateInvoicePdf(data);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${invoiceFileName(data)}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${rows[0].file_name || manualInvoiceFileName(data)}"`);
     res.setHeader("Content-Length", pdf.length);
     return res.send(pdf);
   } catch (error) {
@@ -386,6 +392,10 @@ const updateManualInvoice = async (req, res) => {
     const figureNum = Number(roundTotal);
     const roundFigure =
       Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
+    const storedFileName = manualInvoiceFileName({
+      invoiceNumber: existing[0].invoice_number,
+      customer: { name: manualStr(customer.name), phone: manualStr(customer.phone) },
+    });
 
     const settings = await getInvoiceSettings();
     const preview = buildManualInvoiceData({
@@ -420,7 +430,7 @@ const updateManualInvoice = async (req, res) => {
       await connection.beginTransaction();
       await connection.query(
         `UPDATE manual_invoices SET
-          invoice_date = ?, sale_order = ?, reference = ?,
+          invoice_date = ?, sale_order = ?, reference = ?, file_name = ?,
           customer_name = ?, customer_email = ?, customer_phone = ?,
           company_name = ?, company_address = ?, company_gstin = ?,
           billing_address1 = ?, billing_address2 = ?, billing_city = ?, billing_state = ?, billing_pincode = ?, billing_country = ?,
@@ -433,6 +443,7 @@ const updateManualInvoice = async (req, res) => {
           invoice.date || new Date().toISOString().slice(0, 10),
           manualStr(invoice.saleOrder) || null,
           manualStr(invoice.reference) || null,
+          storedFileName,
           manualStr(customer.name),
           manualStr(customer.email) || null,
           manualStr(customer.phone),
@@ -654,7 +665,7 @@ const downloadManualInvoicePdf = async (req, res) => {
     const data = buildManualInvoiceData({ ...savedRowToInvoiceInput(rows[0], items), settings });
     const pdf = await generateInvoicePdf(data);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${invoiceFileName(data)}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${rows[0].file_name || manualInvoiceFileName(data)}"`);
     res.setHeader("Content-Length", pdf.length);
     return res.send(pdf);
   } catch (error) {

@@ -13,6 +13,7 @@ ALTER TABLE `manual_invoices` ADD COLUMN IF NOT EXISTS `company_name` VARCHAR(20
 ALTER TABLE `manual_invoices` ADD COLUMN IF NOT EXISTS `company_address` VARCHAR(500) NULL AFTER `company_name`;
 ALTER TABLE `manual_invoices` ADD COLUMN IF NOT EXISTS `company_gstin` VARCHAR(20) NULL AFTER `company_address`;
 ALTER TABLE `manual_invoices` ADD COLUMN IF NOT EXISTS `round_total` DECIMAL(10,2) NULL AFTER `discount`;
+ALTER TABLE `manual_invoices` ADD COLUMN IF NOT EXISTS `file_name` VARCHAR(300) NULL AFTER `invoice_number`;
 
 -- Company GSTIN printed on invoices (fills only empty slots)
 INSERT INTO site_settings (setting_key, setting_value, setting_type, description) VALUES
