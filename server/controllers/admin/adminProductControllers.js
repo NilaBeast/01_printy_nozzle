@@ -162,6 +162,7 @@ const createProduct = async (req, res) => {
       name,
       category_id,
       brand_id,
+      variation_id,
       sku,
       tagline,
       price,
@@ -196,8 +197,8 @@ const createProduct = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO products 
-       (name, slug, sku, tagline, category_id, brand_id, price, compare_price, stock, short_description, description, highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, is_featured, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (name, slug, sku, tagline, category_id, brand_id, variation_id, price, compare_price, stock, short_description, description, highlights, key_features, specifications, pinout_image, pinout_description, resources, faqs, applications, is_featured, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         slug,
@@ -205,6 +206,7 @@ const createProduct = async (req, res) => {
         tagline || null,
         category_id,
         brand_id || null,
+        variation_id || null,
         price,
         compare_price || null,
         stock || 0,
@@ -262,6 +264,7 @@ const updateProduct = async (req, res) => {
       name,
       category_id,
       brand_id,
+      variation_id,
       sku,
       tagline,
       price,
@@ -303,6 +306,7 @@ const updateProduct = async (req, res) => {
          tagline = COALESCE(?, tagline),
          category_id = COALESCE(?, category_id),
          brand_id = COALESCE(?, brand_id),
+         variation_id = CASE WHEN ? THEN NULL ELSE COALESCE(?, variation_id) END,
          price = COALESCE(?, price),
          compare_price = COALESCE(?, compare_price),
          stock = COALESCE(?, stock),
@@ -326,6 +330,8 @@ const updateProduct = async (req, res) => {
         tagline !== undefined ? tagline : null,
         category_id || null,
         brand_id !== undefined ? brand_id : null,
+        variation_id === "" ? 1 : 0,
+        variation_id !== undefined && variation_id !== "" ? variation_id : null,
         price || null,
         compare_price !== undefined ? compare_price : null,
         stock !== undefined ? stock : null,

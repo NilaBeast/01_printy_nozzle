@@ -43,6 +43,48 @@ function calculateMeshVolume(geometry) {
 }
 
 /**
+ * Calculates the exact surface area of a 3D BufferGeometry in mm^2.
+ * Slicers use this (with the volume) to derive the solid shell.
+ */
+function calculateMeshArea(geometry) {
+  if (!geometry || !geometry.attributes || !geometry.attributes.position) {
+    return 0;
+  }
+  const pos = geometry.attributes.position;
+  const index = geometry.index;
+  let totalArea = 0;
+
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const cross = new THREE.Vector3();
+
+  const addTri = (i1, i2, i3) => {
+    a.fromBufferAttribute(pos, i1);
+    b.fromBufferAttribute(pos, i2);
+    c.fromBufferAttribute(pos, i3);
+    ab.subVectors(b, a);
+    ac.subVectors(c, a);
+    cross.crossVectors(ab, ac);
+    totalArea += cross.length() / 2.0;
+  };
+
+  if (index) {
+    for (let i = 0; i < index.count; i += 3) {
+      addTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    }
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      addTri(i, i + 1, i + 2);
+    }
+  }
+
+  return Number.isFinite(totalArea) ? totalArea : 0;
+}
+
+/**
  * Procedurally generates a clean 3D Rocket model matching the reference design.
  * Scaled to approx 80 x 80 x 150 mm.
  */
@@ -139,7 +181,6 @@ export default function ModelViewer3D({
   color = "#1E88E5",
   materialType = "pla",
   density = 1.24,
-  infillFactor = 1.0,
   useSample = true,
   onAnalysis = () => {},
   className = "",
@@ -163,9 +204,6 @@ export default function ModelViewer3D({
 
   const densityRef = useRef(density);
   densityRef.current = density;
-
-  const infillFactorRef = useRef(infillFactor);
-  infillFactorRef.current = infillFactor;
 
   // Stores geometry analysis base data (independent of material or infill density)
   const baseModelDataRef = useRef(null);
@@ -335,7 +373,7 @@ export default function ModelViewer3D({
      ========================================================= */
   useEffect(() => {
     if (!baseModelDataRef.current) return;
-    const { fileName, fileSizeMB, dimensions, volumeCm3, isSample } = baseModelDataRef.current;
+    const { fileName, fileSizeMB, dimensions, volumeCm3, surfaceAreaCm2, isSample } = baseModelDataRef.current;
 
     const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * density));
 
@@ -344,6 +382,7 @@ export default function ModelViewer3D({
       fileSizeMB,
       dimensions,
       volumeCm3,
+      surfaceAreaCm2,
       weightGrams: calculatedWeight,
     };
 
@@ -403,12 +442,17 @@ export default function ModelViewer3D({
         z: Math.round(size.y), // height
       };
 
-      // Exact Volume in mm^3
+      // Exact Volume in mm^3 (post-scale, so it matches displayed dimensions)
       let rawVolumeMm3 = calculateMeshVolume(geometry);
       if (rawVolumeMm3 <= 0 || !Number.isFinite(rawVolumeMm3)) {
         rawVolumeMm3 = size.x * size.y * size.z * 0.35;
       }
       const volumeCm3 = +(rawVolumeMm3 / 1000).toFixed(1);
+
+      // Exact surface area in cm^2 (post-scale) — slicers derive the solid
+      // shell (walls + top/bottom skins) from this + the volume.
+      const rawAreaMm2 = calculateMeshArea(geometry);
+      const surfaceAreaCm2 = +(rawAreaMm2 / 100).toFixed(1);
 
       // Solid weight = volume × density (infill applied later by pricing engine)
       const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * densityRef.current));
@@ -438,6 +482,7 @@ export default function ModelViewer3D({
         fileSizeMB,
         dimensions: finalDim,
         volumeCm3,
+        surfaceAreaCm2,
         isSample,
       };
 
@@ -446,6 +491,7 @@ export default function ModelViewer3D({
         fileSizeMB,
         dimensions: finalDim,
         volumeCm3,
+        surfaceAreaCm2,
         weightGrams: calculatedWeight,
       };
 

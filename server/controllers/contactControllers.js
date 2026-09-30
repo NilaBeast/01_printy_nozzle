@@ -13,6 +13,31 @@ const getContactPageData = async (req, res) => {
       contactInfo[s.setting_key] = s.setting_value;
     });
 
+    // Footer social-media links (only toggled-on platforms with a URL).
+    const SOCIAL_META = [
+      { key: "facebook", name: "Facebook", icon: "bi bi-facebook" },
+      { key: "instagram", name: "Instagram", icon: "bi bi-instagram" },
+      { key: "youtube", name: "YouTube", icon: "bi bi-youtube" },
+      { key: "x", name: "X", icon: "bi bi-twitter-x" },
+      { key: "linkedin", name: "LinkedIn", icon: "bi bi-linkedin" },
+      { key: "whatsapp", name: "WhatsApp", icon: "bi bi-whatsapp" },
+    ];
+    let socials = [];
+    try {
+      const [socialRows] = await db.query(
+        "SELECT setting_key, setting_value FROM site_settings WHERE setting_key LIKE 'social\\_%'"
+      );
+      const socialMap = {};
+      socialRows.forEach((s) => {
+        socialMap[s.setting_key] = s.setting_value;
+      });
+      socials = SOCIAL_META.filter(
+        (m) => socialMap[`social_${m.key}_enabled`] === "1" && (socialMap[`social_${m.key}_url`] || "").trim()
+      ).map((m) => ({ name: m.name, icon: m.icon, url: socialMap[`social_${m.key}_url`].trim() }));
+    } catch {
+      socials = [];
+    }
+
     // Contact FAQs
     const [faqs] = await db.query(
       "SELECT id, question, answer, category FROM faqs WHERE category IN ('contact', 'general') AND is_active = 1 ORDER BY sort_order ASC"
@@ -81,6 +106,7 @@ const getContactPageData = async (req, res) => {
         supportPillars,
         helpCapabilities,
         subjectOptions,
+        socials,
         faqs,
       },
     });

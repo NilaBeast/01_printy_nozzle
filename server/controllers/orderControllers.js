@@ -553,10 +553,11 @@ const createOrder = async (req, res) => {
       throw new Error("A 3D print item is missing its material. Please re-add it from 3D Printing.");
     }
     const [matRows] = await connection.query(
-      "SELECT price_per_gram FROM printing_materials WHERE id = ?",
+      "SELECT price_per_gram, density_g_cm3 FROM printing_materials WHERE id = ?",
       [item.material_id]
     );
     const pricePerGram = matRows.length ? parseFloat(matRows[0].price_per_gram) : 12;
+    const density = matRows.length && matRows[0].density_g_cm3 ? parseFloat(matRows[0].density_g_cm3) : 1.24;
     let colorAdj = 0;
     if (item.color_id) {
       const [cRows] = await connection.query(
@@ -582,6 +583,10 @@ const createOrder = async (req, res) => {
         rate_10_20: parseFloat(configMap.print_rate_10_20) || 40,
         rate_20_plus: parseFloat(configMap.print_rate_20_plus) || 35,
       },
+      density,
+      surfaceAreaCm2: item.surface_area_cm2 !== undefined && item.surface_area_cm2 !== null
+        ? parseFloat(item.surface_area_cm2)
+        : undefined,
     });
     const printOrderNumber =
       "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
@@ -769,7 +774,7 @@ const createOrder = async (req, res) => {
                 ci.file_name, ci.file_url, ci.file_public_id, ci.file_size,
                 ci.dimension_x, ci.dimension_y, ci.dimension_z,
                 ci.material_id, ci.color_id, ci.custom_color_hex,
-                ci.infill_density, ci.surface_finish, ci.estimated_weight,
+                ci.infill_density, ci.surface_finish, ci.estimated_weight, ci.surface_area_cm2,
                 pm.name as material_name, pc.name as color_name, pc.hex_code as color_hex,
                 (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as product_image
          FROM cart_items ci
@@ -1105,13 +1110,13 @@ const createOrder = async (req, res) => {
                file_name, file_url, file_public_id, file_size,
                dimension_x, dimension_y, dimension_z,
                material_id, color_id, custom_color_hex,
-               infill_density, surface_finish, estimated_weight)
+               infill_density, surface_finish, estimated_weight, surface_area_cm2)
              VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?,
                'print', ?,
                ?, ?, ?, ?,
                ?, ?, ?,
                ?, ?, ?,
-               ?, ?, ?)`,
+               ?, ?, ?, ?)`,
             [
               orderId,
               printName,
@@ -1136,6 +1141,7 @@ const createOrder = async (req, res) => {
               item.infill_density || 50,
               item.surface_finish || "standard",
               item.estimated_weight != null ? Number(item.estimated_weight) : null,
+              item.surface_area_cm2 != null ? Number(item.surface_area_cm2) : null,
             ]
           );
         } else {

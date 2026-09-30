@@ -274,9 +274,28 @@ export default function Printing() {
     return surfaceFinishes.find((f) => f.id === selectedFinishId) || surfaceFinishes[0];
   }, [surfaceFinishes, selectedFinishId]);
 
-  // Infill multipliers mirror the server price calculator so the on-screen
-  // quote matches what is actually charged (server scales base weight).
-  const INFILL_MULTIPLIERS = { 10: 0.4, 20: 0.55, 30: 0.7, 50: 1.0, 100: 1.5 };
+  // Slicer-style weight model (must match server/utils/priceCalculator.js):
+  // solid shells (walls + top/bottom, ~1mm) print at 100% density, only the
+  // interior scales with infill %. Falls back to legacy whole-volume
+  // multipliers when surface-area data is unavailable (old carts).
+  const SHELL_MM = 1.0;
+  const WASTE_FACTOR = 1.03;
+  const LEGACY_INFILL_MULTIPLIERS = { 10: 0.4, 20: 0.55, 30: 0.7, 50: 1.0, 100: 1.5 };
+
+  const estimateFilamentWeight = (solidWeight, density, surfaceAreaCm2, infillPct) => {
+    const solid = Number(solidWeight);
+    const rho = Number(density);
+    const area = Number(surfaceAreaCm2);
+    const infill = Number(infillPct);
+    if (!Number.isFinite(solid) || solid <= 0) return null;
+    if (!Number.isFinite(rho) || rho <= 0) return null;
+    if (!Number.isFinite(area) || area <= 0) return null;
+    if (!Number.isFinite(infill) || infill < 0 || infill > 100) return null;
+    const solidVol = solid / rho;
+    const shellVol = Math.min(solidVol, area * (SHELL_MM / 10));
+    const interiorVol = Math.max(0, solidVol - shellVol);
+    return Math.round((shellVol + interiorVol * (infill / 100)) * WASTE_FACTOR * rho * 100) / 100;
+  };
 
   const getTimeSlabForHours = (hours) => {
     const h = Number(hours || 0);
@@ -290,10 +309,17 @@ export default function Printing() {
   const getBaseWeight = () =>
     Math.max(2, Math.round(modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : modelAnalysis?.weightGrams || 20));
 
-  const getInfillMultiplier = (inf) => {
+  const getEffectiveWeight = (baseWeight, inf) => {
+    const est = estimateFilamentWeight(
+      baseWeight,
+      selectedMaterial?.density || 1.24,
+      modelAnalysis?.surfaceAreaCm2,
+      Number(inf?.id)
+    );
+    if (est !== null) return Math.max(2, Math.round(est));
     const key = Number(inf?.id);
-    if (INFILL_MULTIPLIERS[key] !== undefined) return INFILL_MULTIPLIERS[key];
-    return inf?.factor || 1.0;
+    const mult = LEGACY_INFILL_MULTIPLIERS[key] !== undefined ? LEGACY_INFILL_MULTIPLIERS[key] : inf?.factor || 1.0;
+    return Math.max(2, Math.round(baseWeight * mult));
   };
 
   const quoteForWeight = (effectiveWeight) => {
@@ -307,7 +333,7 @@ export default function Printing() {
 
   const getInfillCardPrice = (inf) => {
     const baseWeight = getBaseWeight();
-    const weight = Math.max(2, Math.round(baseWeight * getInfillMultiplier(inf)));
+    const weight = getEffectiveWeight(baseWeight, inf);
     const { materialCost, timeCost, finishCost } = quoteForWeight(weight);
     return materialCost + timeCost + finishCost + (inf.priceAdjustment || 0);
   };
@@ -320,9 +346,9 @@ export default function Printing() {
   const calculations = useMemo(() => {
     const rawBase = modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : (modelAnalysis?.weightGrams || 20);
     const safeBase = Math.max(2, Math.round(rawBase));
-    const key = Number(selectedInfill?.id);
-    const multiplier = INFILL_MULTIPLIERS[key] !== undefined ? INFILL_MULTIPLIERS[key] : selectedInfill?.factor || 1.0;
-    const weight = Math.max(2, Math.round(safeBase * multiplier));
+    // Slicer-accurate effective weight: solid shell + infill-scaled interior
+    // (falls back to legacy multipliers without surface-area data).
+    const weight = getEffectiveWeight(safeBase, selectedInfill);
 
     // Material charge = weight × selling rate (₹/g)
     const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
@@ -494,8 +520,9 @@ export default function Printing() {
     infill_density: Number(selectedInfill.id || 50),
     surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
     quantity,
-    // Base (unscaled) weight — the server applies its infill multiplier
+    // Base (unscaled) weight — the server applies its slicer shell model
     estimated_weight: calculations.baseWeight,
+    surface_area_cm2: modelAnalysis.surfaceAreaCm2 || null,
   });
 
   const validatePrintSelection = () => {
@@ -736,7 +763,6 @@ export default function Printing() {
                           color={selectedColorHex}
                           materialType={selectedMaterial.id}
                           density={selectedMaterial.density}
-                          infillFactor={selectedInfill.factor}
                           useSample={useSample}
                           onAnalysis={handleModelAnalysis}
                         />

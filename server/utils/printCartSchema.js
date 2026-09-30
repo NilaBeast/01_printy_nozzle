@@ -29,6 +29,7 @@ const CART_PRINT_COLUMNS = [
   ["infill_density", "INT DEFAULT 50"],
   ["surface_finish", "VARCHAR(20) DEFAULT 'standard'"],
   ["estimated_weight", "DECIMAL(10,2) NULL"],
+  ["surface_area_cm2", "DECIMAL(10,2) NULL"],
   ["print_time_hours", "DECIMAL(10,2) NULL"],
   ["time_cost", "DECIMAL(10,2) DEFAULT 0.00"],
 ];

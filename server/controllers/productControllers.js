@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { ensureVariationSchema } = require("../utils/variationSchema");
 
 /* ===================== HELPER: PARSE JSON SAFELY ===================== */
 const safeJsonParse = (val, fallback = null) => {
@@ -132,6 +133,7 @@ const getAllProducts = async (req, res) => {
 /* ===================== GET PRODUCT BY ID OR SLUG (DETAIL PAGE) ===================== */
 const getProductById = async (req, res) => {
   try {
+    await ensureVariationSchema().catch(() => {});
     const { id } = req.params;
 
     // Support lookup by either numeric ID or slug (e.g. esp32-devkit-v1)
@@ -142,6 +144,7 @@ const getProductById = async (req, res) => {
       `SELECT p.*,
               c.id as category_id, c.name as category_name, c.slug as category_slug,
               b.id as brand_id, b.name as brand_name, b.logo_url as brand_logo,
+              v.name as variation_name, v.slug as variation_slug,
               CASE 
                 WHEN p.compare_price > p.price 
                 THEN ROUND(((p.compare_price - p.price) / p.compare_price) * 100)
@@ -151,6 +154,7 @@ const getProductById = async (req, res) => {
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN brands b ON p.brand_id = b.id
+       LEFT JOIN variations v ON p.variation_id = v.id
        WHERE ${queryField} AND p.is_active = 1`,
       [id]
     );
@@ -257,6 +261,27 @@ const getProductById = async (req, res) => {
       [product.category_id || 1, product.id]
     );
     product.related_products = relatedProducts;
+
+    // Same-variation products (family pills: name-only switching on the page)
+    let variationProducts = [];
+    if (product.variation_id) {
+      try {
+        const [siblings] = await db.query(
+          `SELECT p.id, p.name, p.slug
+           FROM products p
+           WHERE p.variation_id = ? AND p.id != ? AND p.is_active = 1
+           ORDER BY p.name ASC, p.id ASC`,
+          [product.variation_id, product.id]
+        );
+        variationProducts = siblings || [];
+      } catch {
+        variationProducts = [];
+      }
+    }
+    product.variation = product.variation_id
+      ? { id: product.variation_id, name: product.variation_name || "", slug: product.variation_slug || "" }
+      : null;
+    product.variation_products = variationProducts;
 
     return res.status(200).json({
       success: true,

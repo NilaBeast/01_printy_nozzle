@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import catalogService from "../services/catalog.service";
@@ -136,6 +136,24 @@ let footerData = {
 function Footer() {
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [subscribing, setSubscribing] = useState(false);
+  const [socials, setSocials] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    catalogService
+      .getContactInfo()
+      .then((res) => {
+        if (active && Array.isArray(res.data?.data?.socials)) {
+          setSocials(res.data.data.socials);
+        }
+      })
+      .catch(() => {
+        /* offline fallback below */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSubscribe = async (e) => {
     e.preventDefault();
@@ -171,11 +189,24 @@ function Footer() {
           <p>{footerData.brand.description}</p>
 
           <div className="pn-socials">
-            {footerData.socials.map((social) => (
-              <a key={social.name} href={social.url} aria-label={social.name}>
-                {social.icon}
-              </a>
-            ))}
+            {(socials && socials.length > 0
+              ? socials.map((social) => (
+                  <a
+                    key={social.name}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.name}
+                    title={social.name}
+                  >
+                    <i className={social.icon || "bi bi-link-45deg"}></i>
+                  </a>
+                ))
+              : footerData.socials.map((social) => (
+                  <a key={social.name} href={social.url} aria-label={social.name}>
+                    {social.icon}
+                  </a>
+                )))}
           </div>
         </div>
 

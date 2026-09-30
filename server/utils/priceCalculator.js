@@ -3,11 +3,21 @@
  *
  * Final price = Material charge + Printing-time charge (+ color/finish, then GST)
  *
+ * Weight model mirrors slicer software (Cura / PrusaSlicer / Bambu Studio):
+ * every print has a 100%-dense SHELL (walls + top/bottom skins, ~1mm) and
+ * only the interior is scaled by the infill percentage:
+ *
+ *   shellVol    = min(solidVol, surfaceArea × SHELL_MM)
+ *   filamentVol = (shellVol + (solidVol − shellVol) × infill/100) × WASTE_FACTOR
+ *   effectiveWeight = filamentVol × density
+ *
  * - Material charge = effective_weight (grams) × price_per_gram (₹/g, admin editable per material)
- * - Effective weight = estimated_weight (solid, from STL volume × density) × infill multiplier
+ * - solidVol comes from the exact STL mesh volume × density (before infill)
  * - Print time (hours) = effective_weight × hours_per_gram (admin editable, default 0.15)
- * - Printing-time charge = print_time_hours × slab rate (admin editable):
- *     0–5h → ₹50/h, 5–10h → ₹45/h, 10–20h → ₹40/h, 20+h → ₹35/h
+ * - Printing-time charge = print_time_hours × slab rate (admin editable)
+ *
+ * Legacy callers without surface-area data fall back to the old whole-volume
+ * infill multipliers so old carts/orders keep pricing identically.
  */
 
 const DEFAULT_TIME_RATES = {
@@ -18,6 +28,39 @@ const DEFAULT_TIME_RATES = {
 };
 
 const DEFAULT_HOURS_PER_GRAM = 0.15;
+
+/* Slicer-profile constants (must match the storefront estimator):
+ * 1.0mm solid shell ≈ 0.2mm layers × 2 walls + top/bottom skins,
+ * 3% extra for skirt/purge/flow losses. */
+const SHELL_MM = 1.0;
+const WASTE_FACTOR = 1.03;
+
+// Whole-volume infill multipliers (legacy fallback only)
+const LEGACY_INFILL_MULTIPLIERS = {
+  10: 0.4,
+  20: 0.55,
+  30: 0.7,
+  50: 1.0,
+  100: 1.5,
+};
+
+/* Slicer-style effective (filament) weight in grams. Returns null when the
+ * inputs are unusable so callers can fall back to the legacy multipliers. */
+const estimateFilamentWeight = ({ solidWeight, density, surfaceAreaCm2, infillDensity }) => {
+  const solid = Number(solidWeight);
+  const rho = Number(density);
+  const area = Number(surfaceAreaCm2);
+  const infill = Number(infillDensity);
+  if (!Number.isFinite(solid) || solid <= 0) return null;
+  if (!Number.isFinite(rho) || rho <= 0) return null;
+  if (!Number.isFinite(area) || area <= 0) return null;
+  if (!Number.isFinite(infill) || infill < 0 || infill > 100) return null;
+  const solidVol = solid / rho; // cm³
+  const shellVol = Math.min(solidVol, area * (SHELL_MM / 10)); // cm³
+  const interiorVol = Math.max(0, solidVol - shellVol);
+  const filamentVol = (shellVol + interiorVol * (infill / 100)) * WASTE_FACTOR;
+  return Math.round(filamentVol * rho * 100) / 100;
+};
 
 /* Default hourly slabs (admin editable via the Hourly Rates tab).
  * Shape: [{ min: 0, max: 5, rate: 50 }, ..., { min: 20, max: null, rate: 35 }]
@@ -121,18 +164,19 @@ const calculatePrintPrice = ({
   hoursPerGram,       // hours of print time per gram (default 0.15)
   timeRates,          // legacy { rate_0_5, rate_5_10, rate_10_20, rate_20_plus }
   timeSlabs,          // dynamic slabs [{ min, max (null = no limit), rate }] — wins over timeRates
+  density,            // material density g/cm³ (enables slicer shell model)
+  surfaceAreaCm2,     // mesh surface area cm² (enables slicer shell model)
 }) => {
-  // Infill multiplier — affects effective weight
-  const infillMultipliers = {
-    10: 0.4,
-    20: 0.55,
-    30: 0.7,
-    50: 1.0,
-    100: 1.5,
-  };
-
-  const infillMultiplier = infillMultipliers[infillDensity] || 1.0;
-  const effectiveWeight = estimatedWeight * infillMultiplier;
+  // Slicer-style effective weight when geometry data is present,
+  // otherwise the legacy whole-volume infill multiplier.
+  const infillMultiplier = LEGACY_INFILL_MULTIPLIERS[infillDensity] || 1.0;
+  const slicerWeight = estimateFilamentWeight({
+    solidWeight: estimatedWeight,
+    density,
+    surfaceAreaCm2,
+    infillDensity,
+  });
+  const effectiveWeight = slicerWeight !== null ? slicerWeight : estimatedWeight * infillMultiplier;
 
   // Material charge = effective weight × selling rate (₹/g)
   const materialCost = Math.round(effectiveWeight * pricePerGram * 100) / 100;
@@ -188,4 +232,4 @@ const calculatePrintPrice = ({
   };
 };
 
-module.exports = { calculatePrintPrice, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };
+module.exports = { calculatePrintPrice, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, estimateFilamentWeight, SHELL_MM, WASTE_FACTOR, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };

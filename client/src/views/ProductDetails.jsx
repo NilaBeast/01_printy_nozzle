@@ -397,6 +397,34 @@ export default function ProductDetails() {
                 )}
               </div>
 
+              {/* Variation family switcher (name-only pills) */}
+              {product.variation && (product.variation_products || []).length > 0 && (
+                <div className="pd-variation-block">
+                  <span className="pd-variation-label">{product.variation.name}</span>
+                  <div className="pd-variation-pills">
+                    <button
+                      type="button"
+                      className="pd-variation-pill active"
+                      title={product.name}
+                      aria-current="true"
+                    >
+                      {product.name}
+                    </button>
+                    {product.variation_products.map((sibling) => (
+                      <button
+                        key={sibling.id}
+                        type="button"
+                        className="pd-variation-pill"
+                        title={sibling.name}
+                        onClick={() => navigate(`/product/${sibling.slug || sibling.id}`)}
+                      >
+                        {sibling.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Value checklist */}
               <ul className="pd-value-checklist">
                 <li className="pd-value-item">

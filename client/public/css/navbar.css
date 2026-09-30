@@ -248,6 +248,18 @@
     translateY(-1px);
 }
 
+.brand-logo-image {
+  height: 44px;
+  width: auto;
+  max-width: 220px;
+
+  display: block;
+
+  object-fit: contain;
+
+  background: transparent;
+}
+
 
 /* Logo icon */
 
@@ -2498,12 +2510,13 @@ and (min-width: 992px) {
 
 
 /* =========================================================
-   FINAL LOGO — DARK ORANGE GRADIENT BACKGROUND
-   (logo.png artwork is transparent, gradient shows through)
+   FINAL LOGO — raw image only, no background or gradient
    ========================================================= */
 
 .brand-logo {
-  width: 150px;
+  width: auto;
+
+  max-width: 220px;
 
   height: 64px;
 
@@ -2515,24 +2528,17 @@ and (min-width: 992px) {
 
   flex-shrink: 0;
 
-  padding:
-    5px 9px;
+  padding: 0;
 
   margin: 0;
 
-  background:
-    linear-gradient(
-      135deg,
-      #8A4200 0%,
-      #5C2D00 55%,
-      #381B00 100%
-    );
+  background: transparent;
 
   border: none;
 
-  border-radius: 9px;
+  border-radius: 0;
 
-  overflow: hidden;
+  overflow: visible;
 
   color: #ffffff;
 
