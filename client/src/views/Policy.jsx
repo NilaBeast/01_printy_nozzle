@@ -151,6 +151,7 @@ export default function Policy({ page = "privacy" }) {
     { id: "shipping", label: "Shipping Policy", to: "/shipping" },
     { id: "terms", label: "Terms & Conditions", to: "/terms" },
     { id: "returns", label: "Return Policy", to: "/returns" },
+    { id: "faqs", label: "FAQs", to: "/faqs" },
   ];
 
   return (

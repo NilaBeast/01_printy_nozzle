@@ -727,7 +727,7 @@ export default function Home() {
             </div>
 
             <p className="home-printing-step-subtitle">
-              Upload your .STL or .OBJ file
+              Upload your .STL, .OBJ or .3MF file
             </p>
 
             <div

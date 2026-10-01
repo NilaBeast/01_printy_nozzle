@@ -10,6 +10,8 @@ const {
   createMaterial,
   updateMaterial,
   deleteMaterial,
+  getMaterialColors,
+  setMaterialColors,
   getAllColors,
   createColor,
   updateColor,
@@ -31,6 +33,8 @@ router.get("/materials", getAllMaterials);
 router.post("/materials", createMaterial);
 router.put("/materials/:id", updateMaterial);
 router.delete("/materials/:id", deleteMaterial);
+router.get("/materials/:id/colors", getMaterialColors);
+router.put("/materials/:id/colors", setMaterialColors);
 
 // Colors management
 router.get("/colors", getAllColors);

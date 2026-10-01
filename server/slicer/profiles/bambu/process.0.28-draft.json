@@ -1,0 +1,15 @@
+{
+  "preset_name": "0.28mm Draft @BBL P1S (Printynozzle)",
+  "preset_type": "process",
+  "layer_height": 0.28,
+  "first_layer_height": 0.3,
+  "wall_loops": 2,
+  "top_shell_layers": 4,
+  "bottom_shell_layers": 3,
+  "sparse_infill_density": "QUOTE_INFILL",
+  "sparse_infill_pattern": "grid",
+  "enable_support": "QUOTE_SUPPORTS",
+  "support_type": "tree(auto)",
+  "support_threshold_angle": 30,
+  "seam_position": "aligned"
+}

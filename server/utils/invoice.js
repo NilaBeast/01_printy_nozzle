@@ -643,17 +643,30 @@ const generateInvoicePdf = (data) =>
         align: "center",
       });
 
-      /* ---------- Header: brand (left) + company (right) ---------- */
+      /* ---------- Header: brand logo (left half) + company (right half) ---------- */
+      // The invoice header shows the legal entity on the right side, while
+      // the brand logo stays on the left. Both halves share the width equally.
+      const HEADER_LEGAL_NAME = "DB ACCESSORIES LIMITED";
       const brandY = y;
+      const halfW = CONTENT_W / 2;
+      const brandLeftX = MARGIN;
+      const brandLeftW = halfW;
+      const compX = MARGIN + halfW;
+      const compW = CONTENT_W - halfW;
       const LOGO_PATH = path.join(__dirname, "..", "assets", "logo.png");
       let brandBottom = brandY;
       let logoDrawn = false;
       try {
         if (fs.existsSync(LOGO_PATH)) {
           const logoImg = doc.openImage(LOGO_PATH);
-          const logoW = 150;
-          const logoH = Math.round((logoImg.height / logoImg.width) * logoW);
-          doc.image(logoImg, MARGIN, brandY, { width: logoW });
+          // Fit the logo inside the left half (side padding + max height),
+          // preserving its aspect ratio.
+          const maxLogoW = brandLeftW - 24;
+          const maxLogoH = 100;
+          const scale = Math.min(maxLogoW / logoImg.width, maxLogoH / logoImg.height, 1);
+          const logoW = Math.max(1, Math.round(logoImg.width * scale));
+          const logoH = Math.max(1, Math.round(logoImg.height * scale));
+          doc.image(logoImg, brandLeftX, brandY, { width: logoW, height: logoH });
           brandBottom = brandY + logoH + 6;
           logoDrawn = true;
         }
@@ -662,21 +675,19 @@ const generateInvoicePdf = (data) =>
       }
       if (!logoDrawn) {
         doc.font("Helvetica-Bold").fontSize(21).fillColor(ORANGE);
-        doc.text(data.company.name.toUpperCase(), MARGIN, brandY, { width: 250 });
+        doc.text(data.company.name.toUpperCase(), brandLeftX, brandY, { width: brandLeftW });
         brandBottom = doc.y;
       }
       doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY);
-      doc.text("Your Ideas, Our Prints", MARGIN, brandBottom, { width: 250 });
+      doc.text("PRINT. BUILD. INNOVATE.", brandLeftX, brandBottom, { width: brandLeftW });
       if (data.company.website) {
         doc.font("Helvetica").fontSize(7.5).fillColor(MUTED);
-        doc.text(data.company.website, MARGIN, doc.y + 2, { width: 250 });
+        doc.text(data.company.website, brandLeftX, doc.y + 2, { width: brandLeftW });
       }
       brandBottom = doc.y;
 
-      const compX = MARGIN + 320;
-      const compW = CONTENT_W - 320;
       doc.font("Helvetica-Bold").fontSize(11).fillColor(INK);
-      doc.text(data.company.name.toUpperCase(), compX, brandY, { width: compW });
+      doc.text(HEADER_LEGAL_NAME, compX, brandY, { width: compW });
       doc.font("Helvetica").fontSize(7.5).fillColor(INK);
       const compLines = [data.company.address];
       if (data.company.phone) compLines.push(`Phone: ${data.company.phone}`);

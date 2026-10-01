@@ -8,6 +8,7 @@ import {
   Box,
   Boxes,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -174,8 +175,7 @@ function AdminPanel() {
   const [printSubTab, setPrintSubTab] = useState("orders");
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [printStatusFilter, setPrintStatusFilter] = useState("all");
-  const [colorSearch, setColorSearch] = useState("");
-  const [colorStatusFilter, setColorStatusFilter] = useState("all");
+  const [colorSearch, setColorSearch] = useState("");  const [colorStatusFilter, setColorStatusFilter] = useState("all");
   const [colorPage, setColorPage] = useState(1);
   const [colorPerPage, setColorPerPage] = useState(10);
   const [printSearch, setPrintSearch] = useState("");
@@ -285,6 +285,9 @@ function AdminPanel() {
     density_g_cm3: "1.24",
     is_active: true,
   });
+  const [materialColorsTarget, setMaterialColorsTarget] = useState(null);
+  const [materialColorIds, setMaterialColorIds] = useState([]);
+  const [materialColorsSaving, setMaterialColorsSaving] = useState(false);
   const [colorForm, setColorForm] = useState({
     name: "",
     hex_code: "#0b6bdc",
@@ -1238,6 +1241,50 @@ function AdminPanel() {
       loadAdminData();
     } catch (error) {
       toast.error(error?.response?.data?.message || "Material delete failed");
+    }
+  };
+
+  const openMaterialColors = async (material) => {
+    setMaterialColorsTarget(material);
+    setMaterialColorIds((material.color_ids || []).map(Number));
+    setActiveModal("material-colors");
+    try {
+      const res = await adminService.getMaterialColors(material.id);
+      setMaterialColorIds((res.data?.data || []).map(Number));
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load material colors");
+    }
+  };
+
+  const toggleMaterialColorId = (colorId) => {
+    setMaterialColorIds((prev) =>
+      prev.includes(Number(colorId))
+        ? prev.filter((n) => n !== Number(colorId))
+        : [...prev, Number(colorId)]
+    );
+  };
+
+  const saveMaterialColors = async (event) => {
+    event.preventDefault();
+    if (!materialColorsTarget) return;
+    setMaterialColorsSaving(true);
+    try {
+      await adminService.setMaterialColors(materialColorsTarget.id, {
+        color_ids: materialColorIds,
+      });
+      toast.success(
+        materialColorIds.length
+          ? `Colors assigned to ${materialColorsTarget.name}`
+          : `${materialColorsTarget.name} now offers all colors`
+      );
+      closeModal();
+      setMaterialColorsTarget(null);
+      setMaterialColorIds([]);
+      loadAdminData();
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Material colors save failed");
+    } finally {
+      setMaterialColorsSaving(false);
     }
   };
 
@@ -3669,6 +3716,7 @@ function AdminPanel() {
                       <span>Type</span>
                       <span>Density (g/cm³)</span>
                       <span>Price / g (Rs.)</span>
+                      <span>Colors</span>
                       <span>Status</span>
                       <span>Created At</span>
                       <span className="actions">Actions</span>
@@ -3704,6 +3752,35 @@ function AdminPanel() {
                             <span>
                               <button
                                 type="button"
+                                className="admin-material-colors-btn"
+                                onClick={() => openMaterialColors(material)}
+                                title="Click to assign colors to this material"
+                              >
+                                {(material.color_ids || []).length ? (
+                                  <span className="admin-material-colors">
+                                    {(material.color_ids || []).slice(0, 6).map((cid) => {
+                                      const c = (colors || []).find((x) => Number(x.id) === Number(cid));
+                                      return (
+                                        <span
+                                          key={cid}
+                                          className="admin-material-color-dot"
+                                          style={{ backgroundColor: c?.hex_code || "#cbd5e1" }}
+                                          title={c?.name || `Color ${cid}`}
+                                        />
+                                      );
+                                    })}
+                                    {material.color_ids.length > 6 && (
+                                      <span className="admin-print-sub">+{material.color_ids.length - 6}</span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="admin-print-sub" title="No restriction — offers every active color">All colors</span>
+                                )}
+                              </button>
+                            </span>
+                            <span>
+                              <button
+                                type="button"
                                 className={`admin-status-pill-btn ${material.is_active ? "active" : "inactive"}`}
                                 onClick={() => updateMaterial(material.id, { is_active: !material.is_active })}
                                 title={material.is_active ? "Deactivate material" : "Activate material"}
@@ -3717,6 +3794,14 @@ function AdminPanel() {
                               <span className="admin-print-sub">{created.time}</span>
                             </span>
                             <span className="admin-print-actions">
+                              <button
+                                type="button"
+                                className="admin-icon-btn edit"
+                                onClick={() => openMaterialColors(material)}
+                                title="Assign colors to this material"
+                              >
+                                <Palette size={16} />
+                              </button>
                               <button
                                 type="button"
                                 className="admin-icon-btn edit"
@@ -3894,7 +3979,7 @@ function AdminPanel() {
                       </span>
                       <div>
                         <h2>Colors</h2>
-                        <p className="admin-panel-subtitle">Manage visible colors for 3D print orders. These colors will be available for customers to choose.</p>
+                        <p className="admin-panel-subtitle">Manage visible colors for 3D print orders. Assign colors to each material from the Materials tab — materials without assigned colors offer all colors.</p>
                       </div>
                     </div>
                     <div className="admin-actions compact admin-colors-tools">
@@ -6232,6 +6317,49 @@ function AdminPanel() {
           <button className="admin-primary" type="submit">
             <Save size={16} />
             <span>{editing?.id ? "Update Material" : "Create Material"}</span>
+          </button>
+        </form>
+      </AdminModal>
+
+      <AdminModal
+        open={activeModal === "material-colors"}
+        title={materialColorsTarget ? `Colors for ${materialColorsTarget.name}` : "Material Colors"}
+        subtitle="Tick the colors this material offers. Untick all to offer every active color."
+        onClose={() => {
+          closeModal();
+          setMaterialColorsTarget(null);
+          setMaterialColorIds([]);
+        }}
+      >
+        <form className="admin-form" onSubmit={saveMaterialColors}>
+          <div className="admin-material-color-pick">
+            {(colors || []).length ? (
+              colors.map((color) => {
+                const selected = materialColorIds.includes(Number(color.id));
+                return (
+                  <button
+                    key={color.id}
+                    type="button"
+                    className={`admin-material-color-opt ${selected ? "active" : ""}`}
+                    onClick={() => toggleMaterialColorId(color.id)}
+                    title={color.name}
+                  >
+                    <span
+                      className="admin-material-color-dot"
+                      style={{ backgroundColor: color.hex_code || "#cbd5e1" }}
+                    />
+                    <span>{color.name}</span>
+                    {selected && <Check size={14} />}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="admin-empty small">No colors yet — add colors first under 3D Printing → Colors.</div>
+            )}
+          </div>
+          <button className="admin-primary" type="submit" disabled={materialColorsSaving}>
+            <Save size={16} />
+            <span>{materialColorsSaving ? "Saving..." : "Save Material Colors"}</span>
           </button>
         </form>
       </AdminModal>

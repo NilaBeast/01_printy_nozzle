@@ -21,6 +21,19 @@ const printingService = {
   getMaterials: () => api.get("/printing/materials"),
   getColors: () => api.get("/printing/colors"),
   calculatePrice: (payload) => api.post("/printing/calculate-price", payload),
+  getSlicerStatus: () => api.get("/printing/slicer-status"),
+  // Exact Bambu Studio slice for this file+settings (free CLI, temp copy).
+  sliceQuote: (file, params = {}) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) formData.append(key, String(value));
+    }
+    return api.post("/printing/slice-quote", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 300000,
+    });
+  },
   uploadFile: (file) => {
     const formData = new FormData();
     formData.append("file", file);

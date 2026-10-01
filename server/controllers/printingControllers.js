@@ -1,7 +1,9 @@
 const db = require("../config/db");
 const crypto = require("crypto");
+const fs = require("fs");
 const { uploadFile } = require("../utils/cloudinaryUploader");
-const { calculatePrintPrice } = require("../utils/priceCalculator");
+const { calculatePrintPrice, calculatePrintPriceFromSlicer } = require("../utils/priceCalculator");
+const { getSlicerStatus, sliceModel, BAMBU_PRINTER_LABEL, DEFAULT_PROCESS_LABEL } = require("../utils/bambuSlicer");
 const { triggerAutoShipment } = require("../utils/shippingSync");
 const { mailPrintInvoiceByIds } = require("../utils/mailer");
 
@@ -47,7 +49,7 @@ const buildPrintTimeline = (order) => {
 const uploadPrintFile = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "Please upload a 3D model file (.STL, .OBJ, or .3MF)" });
+      return res.status(400).json({ success: false, message: "Please upload a 3D model file (.STL, .OBJ, .3MF, .GLB)" });
     }
 
     // Upload to Cloudinary as raw file
@@ -71,6 +73,154 @@ const uploadPrintFile = async (req, res) => {
   } catch (error) {
     console.error("Upload print file error:", error);
     return res.status(500).json({ success: false, message: "File upload failed" });
+  }
+};
+
+/* ===================== SLICER STATUS (free Bambu CLI) ===================== */
+const getSlicerStatusController = async (req, res) => {
+  try {
+    const status = await getSlicerStatus();
+    return res.status(200).json({ success: true, slicer: status });
+  } catch (error) {
+    console.error("Slicer status error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* Resolve a storefront material (numeric id or slug) to slicer inputs. */
+const resolveSlicerMaterial = async (materialRef) => {
+  const fallback = { key: "pla", density: 1.24, name: "PLA", pricePerGram: 4.5 };
+  if (materialRef === undefined || materialRef === null || materialRef === "") return fallback;
+  // Numeric DB id → authoritative density/price/slug.
+  if (/^\d+$/.test(String(materialRef).trim())) {
+    try {
+      const [rows] = await db.query("SELECT * FROM printing_materials WHERE id = ? AND is_active = 1", [materialRef]);
+      if (rows.length > 0) {
+        const m = rows[0];
+        return {
+          key: String(m.slug || m.name || "pla").toLowerCase(),
+          density: Number(m.density_g_cm3) || 1.24,
+          name: m.name,
+          pricePerGram: Number(m.price_per_gram) || 0,
+          id: m.id,
+        };
+      }
+    } catch { /* DB unavailable → slug fallback below */ }
+    return fallback;
+  }
+  return { key: String(materialRef).toLowerCase(), density: 1.24, name: String(materialRef), pricePerGram: 0 };
+};
+
+/* ===================== SLICE QUOTE (exact Bambu Studio numbers) ===================== */
+const sliceQuote = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Please attach a 3D model file." });
+    }
+    const tmpPath = req.file.path;
+    const cleanup = () => {
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch { /* best-effort */ }
+    };
+
+    const {
+      material_id,
+      material: materialSlug,
+      density,
+      infill_density = 50,
+      supports = "true",
+      layer_height = 0.2,
+      surface_finish = "standard",
+      quantity = 1,
+      color_id = null,
+    } = req.body;
+
+    const matRef = material_id ?? materialSlug ?? "pla";
+    const mat = await resolveSlicerMaterial(matRef);
+    // Client-known density (fallback JSON materials) beats the 1.24 default.
+    if (Number(density) > 0) mat.density = Number(density);
+    const supportsOn = !(supports === false || supports === "false" || supports === 0 || supports === "0");
+
+    const sliced = await sliceModel({
+      inputPath: tmpPath,
+      material: mat.key,
+      density: mat.density,
+      infillDensity: parseInt(infill_density, 10) || 50,
+      supports: supportsOn,
+      layerHeight: Number(layer_height) || 0.2,
+    });
+    cleanup();
+
+    if (!sliced.ok || !sliced.available) {
+      return res.status(sliced.available === false ? 503 : 422).json({
+        success: false,
+        available: !!sliced.available,
+        engine: sliced.engine || null,
+        message: sliced.error || "Slicer unavailable — use the built-in estimate.",
+      });
+    }
+
+    // Price the EXACT Bambu numbers with the store's rates.
+    const pricingSettings = await getPrintPricingSettings();
+    const settingsMap = {
+      smooth_finish_per_gram: parseFloat(pricingSettings.smooth_finish_per_gram),
+      gst_rate: parseFloat(pricingSettings.gst_rate),
+    };
+    let colorAdjustment = 0;
+    if (color_id) {
+      try {
+        const [colors] = await db.query("SELECT price_adjustment FROM printing_colors WHERE id = ?", [color_id]);
+        if (colors.length > 0) colorAdjustment = Number(colors[0].price_adjustment) || 0;
+      } catch { /* ignore */ }
+    }
+    // Prefer DB price when the material resolved to a row.
+    let pricePerGram = mat.pricePerGram;
+    if (!pricePerGram) {
+      try {
+        const [rows] = await db.query("SELECT price_per_gram FROM printing_materials WHERE slug = ? AND is_active = 1", [mat.key]);
+        if (rows.length > 0) pricePerGram = Number(rows[0].price_per_gram) || 4.5;
+      } catch { pricePerGram = 4.5; }
+    }
+
+    const pricing = calculatePrintPriceFromSlicer({
+      filamentGrams: sliced.filamentGrams,
+      printTimeHours: sliced.printTimeHours,
+      supportGrams: supportsOn ? sliced.supportGrams : 0,
+      pricePerGram: pricePerGram || 4.5,
+      surfaceFinish: surface_finish,
+      smoothFinishPerGram: settingsMap.smooth_finish_per_gram || 3,
+      colorAdjustment,
+      quantity: parseInt(quantity, 10) || 1,
+      gstRate: settingsMap.gst_rate || 18,
+      timeSlabs: pricingSettings.print_time_slabs || undefined,
+      timeRates: toTimeRates(pricingSettings),
+      infillDensity: parseInt(infill_density, 10) || 50,
+    });
+
+    return res.status(200).json({
+      success: true,
+      slicer: {
+        source: "bambu",
+        engine: sliced.engine,
+        printer: sliced.printer || BAMBU_PRINTER_LABEL,
+        profile: sliced.profile || DEFAULT_PROCESS_LABEL,
+        filamentGrams: sliced.filamentGrams,
+        printTimeHours: sliced.printTimeHours,
+        supportGrams: supportsOn ? sliced.supportGrams : 0,
+        material: mat.key,
+        infillDensity: parseInt(infill_density, 10) || 50,
+        supports: supportsOn,
+        cached: !!sliced.cached,
+      },
+      pricing,
+    });
+  } catch (error) {
+    console.error("Slice quote error:", error);
+    try {
+      if (req.file?.path) fs.unlinkSync(req.file.path);
+    } catch { /* ignore */ }
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -119,8 +269,23 @@ const getMaterials = async (req, res) => {
     const [materials] = await db.query(
       "SELECT * FROM printing_materials WHERE is_active = 1 ORDER BY sort_order ASC"
     );
+    // Linked colors per material (empty = all active colors).
+    let links = [];
+    try {
+      [links] = await db.query("SELECT material_id, color_id FROM material_colors");
+    } catch {
+      links = [];
+    }
+    const byMaterial = {};
+    links.forEach((l) => {
+      (byMaterial[l.material_id] = byMaterial[l.material_id] || []).push(l.color_id);
+    });
+    const withColors = materials.map((m) => ({
+      ...m,
+      color_ids: byMaterial[m.id] || [],
+    }));
 
-    return res.status(200).json({ success: true, materials });
+    return res.status(200).json({ success: true, materials: withColors });
   } catch (error) {
     console.error("Get materials error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -152,6 +317,12 @@ const calculatePrice = async (req, res) => {
       surface_finish = "standard",
       quantity = 1,
       surface_area_cm2,
+      support_volume_cm3,
+      // Exact Bambu CLI numbers (from POST /printing/slice-quote) win over
+      // the heuristic whenever the client sends them.
+      slicer_filament_grams,
+      slicer_time_hours,
+      slicer_support_grams,
     } = req.body;
 
     if (!estimated_weight || !material_id) {
@@ -192,6 +363,10 @@ const calculatePrice = async (req, res) => {
       timeRates: toTimeRates(pricingSettings),
       density: parseFloat(materials[0].density_g_cm3) || 1.24,
       surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
+      supportVolumeCm3: support_volume_cm3 !== undefined ? Math.max(0, parseFloat(support_volume_cm3) || 0) : undefined,
+      slicerFilamentGrams: slicer_filament_grams !== undefined ? parseFloat(slicer_filament_grams) : undefined,
+      slicerTimeHours: slicer_time_hours !== undefined ? parseFloat(slicer_time_hours) : undefined,
+      slicerSupportGrams: slicer_support_grams !== undefined ? parseFloat(slicer_support_grams) : undefined,
     });
 
     return res.status(200).json({
@@ -218,6 +393,13 @@ const createPrintOrder = async (req, res) => {
       infill_density = 50, surface_finish = "standard", quantity = 1,
       estimated_weight,
       surface_area_cm2,
+      support_volume_cm3,
+      // Exact Bambu CLI numbers (from POST /printing/slice-quote). When the
+      // storefront sliced this exact file+settings, the order is priced from
+      // those Bambu Studio numbers — not the heuristic.
+      slicer_filament_grams,
+      slicer_time_hours,
+      slicer_support_grams,
       shipping_name, shipping_phone, shipping_address1,
       shipping_city, shipping_state, shipping_pincode,
       payment_method = "cod",
@@ -255,7 +437,8 @@ const createPrintOrder = async (req, res) => {
       gst_rate: parseFloat(pricingSettings.gst_rate),
     };
 
-    // Calculate price — Final = material charge + printing-time charge
+    // Calculate price — Final = material charge + printing-time charge.
+    // Exact Bambu CLI numbers win when the client sliced this file+settings.
     const pricing = calculatePrintPrice({
       estimatedWeight: parseFloat(estimated_weight),
       pricePerGram: parseFloat(materials[0].price_per_gram),
@@ -270,6 +453,10 @@ const createPrintOrder = async (req, res) => {
       timeRates: toTimeRates(pricingSettings),
       density: parseFloat(materials[0].density_g_cm3) || 1.24,
       surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
+      supportVolumeCm3: support_volume_cm3 !== undefined ? Math.max(0, parseFloat(support_volume_cm3) || 0) : undefined,
+      slicerFilamentGrams: slicer_filament_grams !== undefined ? parseFloat(slicer_filament_grams) : undefined,
+      slicerTimeHours: slicer_time_hours !== undefined ? parseFloat(slicer_time_hours) : undefined,
+      slicerSupportGrams: slicer_support_grams !== undefined ? parseFloat(slicer_support_grams) : undefined,
     });
 
     // Generate order number
@@ -541,4 +728,6 @@ module.exports = {
   getUserPrintOrders,
   getPrintOrderById,
   getPrintOrderInvoice,
+  getSlicerStatus: getSlicerStatusController,
+  sliceQuote,
 };

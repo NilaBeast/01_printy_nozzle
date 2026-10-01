@@ -4,7 +4,64 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
+import { AMFLoader } from "three/examples/jsm/loaders/AMFLoader.js";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Box } from "lucide-react";
+
+/* Every 3D-print file type we preview exactly as-uploaded. */
+export const SUPPORTED_MODEL_EXTS = ["stl", "obj", "3mf", "amf", "ply", "glb", "gltf"];
+export const SUPPORTED_MODEL_ACCEPT = ".stl,.obj,.3mf,.amf,.ply,.glb,.gltf";
+
+/**
+ * Pull every mesh geometry out of a parsed object (OBJ/3MF/AMF/GLTF…),
+ * baking each mesh's world transform so the merged result matches the
+ * file exactly — position, rotation and scale included.
+ */
+function extractGeometriesFromObject(obj) {
+  const list = [];
+  if (!obj) return list;
+  obj.updateWorldMatrix(true, true);
+  obj.traverse((child) => {
+    if (child.isMesh && child.geometry && child.geometry.attributes?.position) {
+      const g = child.geometry.clone();
+      g.applyMatrix4(child.matrixWorld);
+      // Drop empty shells (some exporters emit zero-triangle groups).
+      if (g.attributes.position.count > 0) list.push(g.toNonIndexed ? g.toNonIndexed() : g);
+      else g.dispose?.();
+    }
+  });
+  return list;
+}
+
+/**
+ * Merge a list of (non-indexed) BufferGeometries into one, so volume /
+ * area / support analysis and the preview all describe the WHOLE model —
+ * not just the first solid. Returns null when there is nothing to merge.
+ */
+function mergeGeometries(geometries) {
+  const valid = (geometries || []).filter(
+    (g) => g && g.attributes && g.attributes.position && g.attributes.position.count > 0
+  );
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0].index ? valid[0].toNonIndexed() : valid[0];
+  let total = 0;
+  const nonIndexed = valid.map((g) => (g.index ? g.toNonIndexed() : g));
+  nonIndexed.forEach((g) => {
+    total += g.attributes.position.count;
+  });
+  const mergedPos = new Float32Array(total * 3);
+  let offset = 0;
+  nonIndexed.forEach((g) => {
+    const arr = g.attributes.position.array;
+    mergedPos.set(arr, offset);
+    offset += arr.length;
+  });
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.BufferAttribute(mergedPos, 3));
+  merged.computeVertexNormals();
+  return merged;
+}
 
 /**
  * Calculates the exact signed volume of a 3D BufferGeometry in mm^3.
@@ -82,6 +139,122 @@ function calculateMeshArea(geometry) {
   }
 
   return Number.isFinite(totalArea) ? totalArea : 0;
+}
+
+/* Support constants (Bambu Studio-style auto-support profile).
+ * Faces steeper than SUPPORT_ANGLE_DEG from horizontal need supports;
+ * sparse support columns print at SUPPORT_DENSITY with a dense interface. */
+const SUPPORT_ANGLE_DEG = 30;
+const SUPPORT_DENSITY = 0.2;
+const SUPPORT_INTERFACE_MM = 0.6;
+const SUPPORT_GRID_MM = 2.0;
+
+/**
+ * Estimates support-filament volume (mm^3) the way Bambu Studio does:
+ * detect downward overhang faces, project them onto a coarse build-plate
+ * grid (unioning overlaps), grow sparse columns up to each cell's highest
+ * overhang, and add a dense interface skin under the overhang area.
+ *
+ * Runs on the ORIGINAL (unscaled, real-mm) geometry with Y-up heights
+ * measured from the model's lowest point (the build plate).
+ * Returns { overhangAreaCm2, supportVolumeCm3 }.
+ */
+function calculateSupportVolume(geometry, minY) {
+  const fallback = { overhangAreaCm2: 0, supportVolumeCm3: 0 };
+  if (!geometry || !geometry.attributes || !geometry.attributes.position) {
+    return fallback;
+  }
+  const pos = geometry.attributes.position;
+  const index = geometry.index;
+  const triCount = index ? index.count / 3 : pos.count / 3;
+  if (!Number.isFinite(triCount) || triCount <= 0) return fallback;
+
+  const threshold = -Math.cos((SUPPORT_ANGLE_DEG * Math.PI) / 180); // nz below this = overhang
+  const grid = SUPPORT_GRID_MM;
+
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const ab = new THREE.Vector3();
+  const ac = new THREE.Vector3();
+  const normal = new THREE.Vector3();
+
+  // Bounding box in XZ for grid sizing
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  if (!Number.isFinite(minX) || maxX <= minX || maxZ <= minZ) return fallback;
+  const cols = Math.max(1, Math.ceil((maxX - minX) / grid));
+  const rows = Math.max(1, Math.ceil((maxZ - minZ) / grid));
+  if (cols * rows > 40000) return fallback; // absurdly large — skip, don't hang
+  const cellTop = new Float32Array(cols * rows); // highest overhang Y per cell
+
+  let overhangAreaMm2 = 0;
+
+  const getVerts = (i1, i2, i3) => {
+    a.fromBufferAttribute(pos, i1);
+    b.fromBufferAttribute(pos, i2);
+    c.fromBufferAttribute(pos, i3);
+  };
+
+  const processTri = (i1, i2, i3) => {
+    getVerts(i1, i2, i3);
+    ab.subVectors(b, a);
+    ac.subVectors(c, a);
+    normal.crossVectors(ab, ac);
+    const len = normal.length();
+    if (len <= 0) return;
+    const area = len / 2.0;
+    normal.divideScalar(len);
+    // Downward face steeper than the threshold, floating above the plate
+    const topY = Math.max(a.y, b.y, c.y);
+    const heightAbovePlate = topY - minY;
+    if (normal.y >= threshold || heightAbovePlate <= 0.5) return;
+    overhangAreaMm2 += area;
+    // Rasterize the triangle footprint into grid cells (union by max height)
+    const tx0 = Math.max(0, Math.floor((Math.min(a.x, b.x, c.x) - minX) / grid));
+    const tx1 = Math.min(cols - 1, Math.floor((Math.max(a.x, b.x, c.x) - minX) / grid));
+    const tz0 = Math.max(0, Math.floor((Math.min(a.z, b.z, c.z) - minZ) / grid));
+    const tz1 = Math.min(rows - 1, Math.floor((Math.max(a.z, b.z, c.z) - minZ) / grid));
+    for (let cx = tx0; cx <= tx1; cx++) {
+      for (let cz = tz0; cz <= tz1; cz++) {
+        const k = cz * cols + cx;
+        if (heightAbovePlate > cellTop[k]) cellTop[k] = heightAbovePlate;
+      }
+    }
+  };
+
+  if (index) {
+    for (let i = 0; i < index.count; i += 3) {
+      processTri(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    }
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      processTri(i, i + 1, i + 2);
+    }
+  }
+
+  if (overhangAreaMm2 <= 0) return fallback;
+
+  const cellAreaMm2 = grid * grid;
+  let columnVolMm3 = 0;
+  for (let k = 0; k < cellTop.length; k++) {
+    if (cellTop[k] > 0) columnVolMm3 += cellTop[k] * cellAreaMm2;
+  }
+  // Sparse columns + dense interface skin under the overhang
+  const supportVolMm3 =
+    columnVolMm3 * SUPPORT_DENSITY + overhangAreaMm2 * SUPPORT_INTERFACE_MM;
+
+  if (!Number.isFinite(supportVolMm3) || supportVolMm3 <= 0) return fallback;
+  return {
+    overhangAreaCm2: +(overhangAreaMm2 / 100).toFixed(1),
+    supportVolumeCm3: +(supportVolMm3 / 1000).toFixed(2),
+  };
 }
 
 /**
@@ -183,6 +356,8 @@ export default function ModelViewer3D({
   density = 1.24,
   useSample = true,
   onAnalysis = () => {},
+  onThumbnail = () => {},
+  onError = () => {},
   className = "",
 }) {
   const mountRef = useRef(null);
@@ -207,8 +382,38 @@ export default function ModelViewer3D({
 
   // Stores geometry analysis base data (independent of material or infill density)
   const baseModelDataRef = useRef(null);
+  // Monotonic load id — stale async parses (previous file) can never
+  // overwrite the newest upload. This is what guarantees every file shows
+  // its OWN exact geometry instead of the previous ("same") model.
+  const loadIdRef = useRef(0);
 
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+
+  // Live thumbnail of whatever is actually loaded (shown in Order Summary).
+  const onThumbnailRef = useRef(null);
+  useEffect(() => {
+    onThumbnailRef.current = onThumbnail;
+  }, [onThumbnail]);
+
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  const captureThumbnail = useCallback(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || !currentMeshRef.current) return;
+    // Rendered continuously, so the next frame already shows the new mesh.
+    requestAnimationFrame(() => {
+      try {
+        const url = renderer.domElement.toDataURL("image/png");
+        onThumbnailRef.current?.(url);
+      } catch {
+        /* canvas unavailable — summary keeps the fallback image */
+      }
+    });
+  }, []);
 
   /* =========================================================
      INIT THREE.JS SCENE (Runs only once on mount)
@@ -230,8 +435,8 @@ export default function ModelViewer3D({
     camera.position.set(150, 130, 180);
     cameraRef.current = camera;
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    // 3. Renderer (preserveDrawingBuffer so the summary thumbnail can snap it)
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -344,17 +549,42 @@ export default function ModelViewer3D({
   }, []);
 
   /* =========================================================
+     FIT CAMERA TO CURRENT MODEL (every file frames exactly)
+     ========================================================= */
+  const fitCameraToSize = useCallback((sizeY, maxDim) => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const span = Math.max(60, maxDim || 120);
+    const dist = span * 1.55 + 90;
+    const h = span * 0.75 + 60;
+    camera.position.set(dist * 0.62, h, dist * 0.75);
+    camera.near = Math.max(0.5, span / 500);
+    camera.far = Math.max(2000, span * 12);
+    camera.updateProjectionMatrix();
+    controls.target.set(0, (sizeY || span) / 2, 0);
+    controls.minDistance = Math.max(15, span * 0.35);
+    controls.maxDistance = Math.max(600, span * 5);
+    controls.update();
+  }, []);
+
+  /* =========================================================
      RESET CAMERA ORIENTATION
      ========================================================= */
   const handleResetCamera = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
+    const base = baseModelDataRef.current;
+    if (base?.displayMaxDim) {
+      fitCameraToSize(base.displayHeight, base.displayMaxDim);
+      return;
+    }
     const camera = cameraRef.current;
     const controls = controlsRef.current;
 
     camera.position.set(150, 130, 180);
     controls.target.set(0, 50, 0);
     controls.update();
-  }, []);
+  }, [fitCameraToSize]);
 
   /* =========================================================
      UPDATE MESH COLOR IN REALTIME (Does not reload geometry)
@@ -363,8 +593,9 @@ export default function ModelViewer3D({
     if (currentMeshRef.current?.material) {
       currentMeshRef.current.material.color.set(color);
       currentMeshRef.current.material.needsUpdate = true;
+      captureThumbnail();
     }
-  }, [color]);
+  }, [color, captureThumbnail]);
 
   /* =========================================================
      UPDATE WEIGHT WHEN DENSITY CHANGES (solid weight only)
@@ -373,7 +604,7 @@ export default function ModelViewer3D({
      ========================================================= */
   useEffect(() => {
     if (!baseModelDataRef.current) return;
-    const { fileName, fileSizeMB, dimensions, volumeCm3, surfaceAreaCm2, isSample } = baseModelDataRef.current;
+    const { fileName, fileSizeMB, dimensions, volumeCm3, surfaceAreaCm2, supportVolumeCm3, overhangAreaCm2, isSample } = baseModelDataRef.current;
 
     const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * density));
 
@@ -383,6 +614,8 @@ export default function ModelViewer3D({
       dimensions,
       volumeCm3,
       surfaceAreaCm2,
+      supportVolumeCm3,
+      overhangAreaCm2,
       weightGrams: calculatedWeight,
     };
 
@@ -391,14 +624,32 @@ export default function ModelViewer3D({
 
   /* =========================================================
      LOAD FILE OR SAMPLE ROCKET (Only runs when file/useSample changes)
+     Every attached file renders its OWN exact geometry: all solids are
+     merged with their transforms baked, stale async parses are ignored
+     via loadId, and the camera reframes per model.
      ========================================================= */
   useEffect(() => {
     if (!sceneRef.current) return;
 
-    let isCancelled = false;
+    const myLoadId = ++loadIdRef.current;
+    let cancelled = false;
+    const isStale = () => cancelled || loadIdRef.current !== myLoadId;
+
+    const failLoad = (message, err) => {
+      if (isStale()) return;
+      if (err) console.error(message, err);
+      else console.error(message);
+      setLoading(false);
+      setLoadError(message);
+      onErrorRef.current?.(message);
+    };
 
     const processGeometry = (geometry, fileName, fileSizeMB, isSample = false) => {
-      if (isCancelled || !sceneRef.current) return;
+      if (isStale() || !sceneRef.current) return;
+      if (!geometry || !geometry.attributes?.position || geometry.attributes.position.count === 0) {
+        failLoad(`Could not read any mesh from ${fileName}. The file may be empty or corrupt.`);
+        return;
+      }
 
       // Remove existing model mesh
       if (currentMeshRef.current) {
@@ -411,48 +662,57 @@ export default function ModelViewer3D({
       geometry.computeVertexNormals();
       geometry.computeBoundingBox();
 
-      let bb = geometry.boundingBox;
-      const size = new THREE.Vector3();
-      bb.getSize(size);
+      // Measure FIRST on the original geometry (real millimetres, like a
+      // slicer) — display auto-fit below must never change the weight.
+      const rawSize = new THREE.Vector3();
+      geometry.boundingBox.getSize(rawSize);
 
-      // Auto-fit if mesh is abnormally small (e.g. in meters) or oversized (> 250mm)
-      let scale = 1;
-      const maxDim = Math.max(size.x, size.y, size.z);
+      // Exact Volume in mm^3 of the unscaled model
+      let rawVolumeMm3 = calculateMeshVolume(geometry);
+      if (rawVolumeMm3 <= 0 || !Number.isFinite(rawVolumeMm3)) {
+        rawVolumeMm3 = rawSize.x * rawSize.y * rawSize.z * 0.35;
+      }
+      const volumeCm3 = +(rawVolumeMm3 / 1000).toFixed(1);
+
+      // Exact surface area in cm^2 of the unscaled model — slicers derive
+      // the solid shell (walls + top/bottom skins) from this + the volume.
+      const rawAreaMm2 = calculateMeshArea(geometry);
+      const surfaceAreaCm2 = +(rawAreaMm2 / 100).toFixed(1);
+
+      // Bambu-style support analysis on the unscaled model: overhang faces
+      // get sparse support columns from the build plate + dense interface.
+      const support = calculateSupportVolume(geometry, geometry.boundingBox.min.y);
+      const overhangAreaCm2 = support.overhangAreaCm2;
+      const supportVolumeCm3 = support.supportVolumeCm3;
+
+      const finalDim = {
+        x: Math.round(rawSize.x),
+        y: Math.round(rawSize.z), // bed depth
+        z: Math.round(rawSize.y), // height
+      };
+
+      // Display-only auto-fit (tiny models scaled up, huge models scaled
+      // down so they frame nicely — measurement above is unaffected).
+      const displaySize = rawSize.clone();
+      const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
       if (maxDim < 5) {
-        scale = 1000;
-        geometry.scale(scale, scale, scale);
+        geometry.scale(1000, 1000, 1000);
+        displaySize.multiplyScalar(1000);
       } else if (maxDim > 200) {
-        scale = 180 / maxDim;
-        geometry.scale(scale, scale, scale);
+        const s = 180 / maxDim;
+        geometry.scale(s, s, s);
+        displaySize.multiplyScalar(s);
       }
 
       geometry.computeBoundingBox();
-      bb = geometry.boundingBox;
-      bb.getSize(size);
+      const bb = geometry.boundingBox;
+      bb.getSize(displaySize);
 
       // Center geometry on X and Z, and place base on build plate (y = 0)
       const center = new THREE.Vector3();
       bb.getCenter(center);
       geometry.translate(-center.x, -bb.min.y, -center.z);
       geometry.computeBoundingBox();
-
-      const finalDim = {
-        x: Math.round(size.x),
-        y: Math.round(size.z), // bed depth
-        z: Math.round(size.y), // height
-      };
-
-      // Exact Volume in mm^3 (post-scale, so it matches displayed dimensions)
-      let rawVolumeMm3 = calculateMeshVolume(geometry);
-      if (rawVolumeMm3 <= 0 || !Number.isFinite(rawVolumeMm3)) {
-        rawVolumeMm3 = size.x * size.y * size.z * 0.35;
-      }
-      const volumeCm3 = +(rawVolumeMm3 / 1000).toFixed(1);
-
-      // Exact surface area in cm^2 (post-scale) — slicers derive the solid
-      // shell (walls + top/bottom skins) from this + the volume.
-      const rawAreaMm2 = calculateMeshArea(geometry);
-      const surfaceAreaCm2 = +(rawAreaMm2 / 100).toFixed(1);
 
       // Solid weight = volume × density (infill applied later by pricing engine)
       const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * densityRef.current));
@@ -470,11 +730,10 @@ export default function ModelViewer3D({
       sceneRef.current.add(mesh);
       currentMeshRef.current = mesh;
 
-      // Adjust camera target to center of mesh
-      if (controlsRef.current) {
-        controlsRef.current.target.set(0, size.y / 2, 0);
-        controlsRef.current.update();
-      }
+      // Reframe so THIS file fills the viewport — different files can no
+      // longer look like the "same" model stuck at a fixed distance.
+      const displayMaxDim = Math.max(displaySize.x, displaySize.y, displaySize.z);
+      fitCameraToSize(displaySize.y, displayMaxDim);
 
       // Cache base analysis data
       baseModelDataRef.current = {
@@ -483,7 +742,11 @@ export default function ModelViewer3D({
         dimensions: finalDim,
         volumeCm3,
         surfaceAreaCm2,
+        overhangAreaCm2,
+        supportVolumeCm3,
         isSample,
+        displayHeight: displaySize.y,
+        displayMaxDim,
       };
 
       const stats = {
@@ -492,99 +755,114 @@ export default function ModelViewer3D({
         dimensions: finalDim,
         volumeCm3,
         surfaceAreaCm2,
+        overhangAreaCm2,
+        supportVolumeCm3,
         weightGrams: calculatedWeight,
       };
 
       onAnalysisRef.current?.(stats);
       setLoading(false);
+      setLoadError(null);
+      captureThumbnail();
+    };
+
+    const parseAndShow = async (buffer, ext, fileName, fileSizeMB) => {
+      try {
+        if (ext === "stl") {
+          const geometry = new STLLoader().parse(buffer.slice(0));
+          processGeometry(geometry, fileName, fileSizeMB, false);
+        } else if (ext === "obj") {
+          const text = new TextDecoder().decode(buffer);
+          const obj = new OBJLoader().parse(text);
+          const merged = mergeGeometries(extractGeometriesFromObject(obj));
+          if (!merged) throw new Error("empty OBJ");
+          processGeometry(merged, fileName, fileSizeMB, false);
+        } else if (ext === "3mf") {
+          const group = new ThreeMFLoader().parse(buffer.slice(0));
+          const merged = mergeGeometries(extractGeometriesFromObject(group));
+          if (!merged) throw new Error("empty 3MF");
+          processGeometry(merged, fileName, fileSizeMB, false);
+        } else if (ext === "amf") {
+          const group = new AMFLoader().parse(buffer.slice(0));
+          const merged = mergeGeometries(extractGeometriesFromObject(group));
+          if (!merged) throw new Error("empty AMF");
+          processGeometry(merged, fileName, fileSizeMB, false);
+        } else if (ext === "ply") {
+          const geometry = new PLYLoader().parse(buffer.slice(0));
+          processGeometry(geometry.index ? geometry.toNonIndexed() : geometry, fileName, fileSizeMB, false);
+        } else if (ext === "glb" || ext === "gltf") {
+          const loader = new GLTFLoader();
+          const gltf = await loader.parseAsync(buffer.slice(0), "");
+          const merged = mergeGeometries(extractGeometriesFromObject(gltf.scene));
+          if (!merged) throw new Error("empty GLTF");
+          processGeometry(merged, fileName, fileSizeMB, false);
+        } else {
+          failLoad(`Unsupported file type ".${ext}". Please upload ${SUPPORTED_MODEL_EXTS.map((e) => "." + e.toUpperCase()).join(", ")}.`);
+        }
+      } catch (err) {
+        failLoad(`Could not parse ${fileName}. The file may be corrupt or use an unsupported variant.`, err);
+      }
     };
 
     if (file) {
       setLoading(true);
-      const reader = new FileReader();
-      const ext = file.name.split(".").pop().toLowerCase();
+      setLoadError(null);
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
       const fileSizeMB = +(file.size / (1024 * 1024)).toFixed(2);
+      const fileName = file.name;
 
-      if (ext === "stl") {
-        reader.readAsArrayBuffer(file);
-        reader.onload = (e) => {
-          try {
-            const loader = new STLLoader();
-            const geometry = loader.parse(e.target.result);
-            processGeometry(geometry, file.name, fileSizeMB, false);
-          } catch (err) {
-            console.error("Error parsing STL:", err);
-            setLoading(false);
-          }
+      if (!SUPPORTED_MODEL_EXTS.includes(ext)) {
+        failLoad(`Unsupported file type ".${ext}". Please upload ${SUPPORTED_MODEL_EXTS.map((e) => "." + e.toUpperCase()).join(", ")}.`);
+        return () => {
+          cancelled = true;
         };
-      } else if (ext === "obj") {
-        reader.readAsText(file);
-        reader.onload = (e) => {
-          try {
-            const loader = new OBJLoader();
-            const obj = loader.parse(e.target.result);
-            let foundGeo = null;
-            obj.traverse((child) => {
-              if (child.isMesh && child.geometry && !foundGeo) {
-                foundGeo = child.geometry.clone();
-              }
-            });
-            if (foundGeo) {
-              processGeometry(foundGeo, file.name, fileSizeMB, false);
-            } else {
-              setLoading(false);
-            }
-          } catch (err) {
-            console.error("Error parsing OBJ:", err);
-            setLoading(false);
-          }
-        };
-      } else if (ext === "3mf") {
-        reader.readAsArrayBuffer(file);
-        reader.onload = (e) => {
-          try {
-            const loader = new ThreeMFLoader();
-            const group = loader.parse(e.target.result);
-            let foundGeo = null;
-            group.traverse((child) => {
-              if (child.isMesh && child.geometry && !foundGeo) {
-                foundGeo = child.geometry.clone();
-              }
-            });
-            if (foundGeo) {
-              processGeometry(foundGeo, file.name, fileSizeMB, false);
-            } else {
-              setLoading(false);
-            }
-          } catch (err) {
-            console.error("Error parsing 3MF:", err);
-            setLoading(false);
-          }
-        };
-      } else {
-        setLoading(false);
       }
+
+      // Assign handlers BEFORE reading (correct FileReader order) and guard
+      // every async hop with the load id so rapid re-uploads can't mix up.
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (isStale()) return;
+        parseAndShow(e.target.result, ext, fileName, fileSizeMB);
+      };
+      reader.onerror = () => {
+        failLoad(`Could not read ${fileName}. Please try again.`);
+      };
+      reader.readAsArrayBuffer(file);
     } else if (useSample) {
       setLoading(true);
+      setLoadError(null);
       const timer = setTimeout(() => {
+        if (isStale()) return;
         try {
           const rocketGeo = createRocketGeometry();
           processGeometry(rocketGeo, "rocket.stl", 2.45, true);
         } catch (err) {
-          console.error("Error generating sample rocket:", err);
-          setLoading(false);
+          failLoad("Could not generate the sample model.", err);
         }
       }, 50);
       return () => {
-        isCancelled = true;
+        cancelled = true;
         clearTimeout(timer);
       };
+    } else {
+      // No file and no sample (user pressed Remove): clear the viewport so a
+      // stale model is never mistaken for the next upload.
+      if (currentMeshRef.current && sceneRef.current) {
+        sceneRef.current.remove(currentMeshRef.current);
+        currentMeshRef.current.geometry?.dispose();
+        currentMeshRef.current.material?.dispose();
+        currentMeshRef.current = null;
+      }
+      baseModelDataRef.current = null;
+      setLoading(false);
+      setLoadError(null);
     }
 
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
-  }, [file, useSample]);
+  }, [file, useSample, fitCameraToSize]);
 
   return (
     <div className={`model-viewer-wrapper ${className}`}>
@@ -596,6 +874,16 @@ export default function ModelViewer3D({
         <div className="model-viewer-loading">
           <div className="spinner-border spinner-border-sm" role="status" style={{ color: "#FF7508" }} />
           <span>Processing 3D Geometry...</span>
+        </div>
+      )}
+
+      {/* Parse error — never silently keep the previous ("same") model */}
+      {!loading && loadError && (
+        <div
+          className="model-viewer-loading"
+          style={{ background: "rgba(254,242,242,0.95)", color: "#b91c1c" }}
+        >
+          <span>{loadError}</span>
         </div>
       )}
 

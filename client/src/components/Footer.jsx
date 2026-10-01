@@ -68,10 +68,10 @@ let footerData = {
           label: "Return Policy",
           url: "/returns",
         },
-        // {
-        //   label: "FAQs",
-        //   url: "/faqs",
-        // },
+        {
+          label: "FAQs",
+          url: "/faqs",
+        },
       ],
     },
     {

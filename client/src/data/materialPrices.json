@@ -82,18 +82,6 @@
       "infillWeightMultiplier": 1.05
     },
     {
-      "id": "asa",
-      "name": "ASA",
-      "pricePerGram": 8,
-      "density": 1.07,
-      "badge": "Outdoor",
-      "description": "UV-stable and heat resistant for outdoor parts.",
-      "bestFor": "Outdoor parts, Automotive",
-      "image": "/images/products/abs_filament.jpg",
-      "spoolColor": "#37474F",
-      "infillWeightMultiplier": 0.95
-    },
-    {
       "id": "tpu-95a",
       "name": "TPU 95A",
       "pricePerGram": 10,
@@ -115,6 +103,18 @@
       "bestFor": "Mechanical parts, Tools",
       "image": "/images/products/abs_filament.jpg",
       "spoolColor": "#212121",
+      "infillWeightMultiplier": 0.95
+    },
+    {
+      "id": "asa",
+      "name": "ASA",
+      "pricePerGram": 8,
+      "density": 1.07,
+      "badge": "Outdoor",
+      "description": "UV-stable and heat resistant for outdoor parts.",
+      "bestFor": "Outdoor parts, Automotive",
+      "image": "/images/products/abs_filament.jpg",
+      "spoolColor": "#37474F",
       "infillWeightMultiplier": 0.95
     }
   ],

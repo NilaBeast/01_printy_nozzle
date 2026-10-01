@@ -30,8 +30,13 @@ const CART_PRINT_COLUMNS = [
   ["surface_finish", "VARCHAR(20) DEFAULT 'standard'"],
   ["estimated_weight", "DECIMAL(10,2) NULL"],
   ["surface_area_cm2", "DECIMAL(10,2) NULL"],
+  ["support_volume_cm3", "DECIMAL(10,2) NULL"],
   ["print_time_hours", "DECIMAL(10,2) NULL"],
   ["time_cost", "DECIMAL(10,2) DEFAULT 0.00"],
+  // Exact Bambu CLI numbers for this file+settings (NULL = heuristic path).
+  ["slicer_filament_grams", "DECIMAL(10,2) NULL"],
+  ["slicer_time_hours", "DECIMAL(10,2) NULL"],
+  ["slicer_support_grams", "DECIMAL(10,2) NULL"],
 ];
 
 /* Printynozzle selling rate chart (admin editable via site_settings + printing_materials) */
@@ -41,9 +46,9 @@ const PRINT_RATE_SEED = [
   ["PLA Matte", "pla-matte", "PLA-MATTE", "Matte surface finish, hides layer lines for display models.", 6.0, 1.24, "Display models, Decor", 3],
   ["PETG", "petg", "PETG", "Strong, durable and resistant to moisture and chemicals.", 5.5, 1.27, "Functional parts, Enclosures", 4],
   ["PETG HS", "petg-hs", "PETG-HS", "High-speed PETG tuned for faster printing.", 5.5, 1.27, "Functional parts, Fast prints", 5],
-  ["ASA", "asa", "ASA", "UV-stable and heat resistant for outdoor parts.", 8.0, 1.07, "Outdoor parts, Automotive", 6],
-  ["TPU 95A", "tpu-95a", "TPU-95A", "Flexible, rubber-like material with great durability.", 10.0, 1.21, "Wearables, Gaskets, Flexible parts", 7],
-  ["ABS", "abs", "ABS", "Tough and heat resistant, ideal for functional applications.", 8.0, 1.04, "Mechanical parts, Tools", 8],
+  ["ASA", "asa", "ASA", "UV-stable and heat resistant for outdoor parts.", 8.0, 1.07, "Outdoor parts, Automotive", 8],
+  ["TPU 95A", "tpu-95a", "TPU-95A", "Flexible, rubber-like material with great durability.", 10.0, 1.21, "Wearables, Gaskets, Flexible parts", 6],
+  ["ABS", "abs", "ABS", "Tough and heat resistant, ideal for functional applications.", 8.0, 1.04, "Mechanical parts, Tools", 7],
 ];
 
 const PRINT_SETTINGS_SEED = [
@@ -203,7 +208,7 @@ const ensurePrintPricingSeed = async (conn) => {
           await conn.query(
             `INSERT INTO printing_materials (name, slug, code, description, price_per_gram, density_g_cm3, best_for, sort_order, is_active)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-             ON DUPLICATE KEY UPDATE price_per_gram = VALUES(price_per_gram), density_g_cm3 = VALUES(density_g_cm3), best_for = VALUES(best_for), code = VALUES(code), description = VALUES(description)`,
+             ON DUPLICATE KEY UPDATE price_per_gram = VALUES(price_per_gram), density_g_cm3 = VALUES(density_g_cm3), best_for = VALUES(best_for), code = VALUES(code), description = VALUES(description), sort_order = VALUES(sort_order)`,
             [name, slug, code, description, price, density, bestFor, sort]
           );
         } catch {}
@@ -224,6 +229,22 @@ const ensurePrintCartSchema = async () => {
         await ensureTable(conn, "order_items", false);
         await ensurePrintOrdersTable(conn);
         await ensurePrintPricingSeed(conn);
+        // Material ↔ color links (which colors each material offers).
+        // Empty link set = material offers every active color.
+        try {
+          await conn.query(`
+            CREATE TABLE IF NOT EXISTS material_colors (
+              material_id INT NOT NULL,
+              color_id INT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (material_id, color_id),
+              FOREIGN KEY (material_id) REFERENCES printing_materials(id) ON DELETE CASCADE,
+              FOREIGN KEY (color_id) REFERENCES printing_colors(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB;
+          `);
+        } catch (e) {
+          if (!warned) console.warn("⚠️ Could not ensure material_colors table:", e.message);
+        }
         // Track last login for the admin Users table (old DBs lack the column).
         try {
           if (!(await columnExists(conn, "users", "last_login"))) {
