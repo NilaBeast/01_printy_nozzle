@@ -587,6 +587,19 @@ const createOrder = async (req, res) => {
       surfaceAreaCm2: item.surface_area_cm2 !== undefined && item.surface_area_cm2 !== null
         ? parseFloat(item.surface_area_cm2)
         : undefined,
+      supportVolumeCm3: item.support_volume_cm3 !== undefined && item.support_volume_cm3 !== null
+        ? Math.max(0, parseFloat(item.support_volume_cm3))
+        : undefined,
+      // Exact Bambu CLI numbers travel with the cart row (NULL = heuristic).
+      slicerFilamentGrams: item.slicer_filament_grams !== undefined && item.slicer_filament_grams !== null
+        ? parseFloat(item.slicer_filament_grams)
+        : undefined,
+      slicerTimeHours: item.slicer_time_hours !== undefined && item.slicer_time_hours !== null
+        ? parseFloat(item.slicer_time_hours)
+        : undefined,
+      slicerSupportGrams: item.slicer_support_grams !== undefined && item.slicer_support_grams !== null
+        ? parseFloat(item.slicer_support_grams)
+        : undefined,
     });
     const printOrderNumber =
       "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
@@ -774,7 +787,7 @@ const createOrder = async (req, res) => {
                 ci.file_name, ci.file_url, ci.file_public_id, ci.file_size,
                 ci.dimension_x, ci.dimension_y, ci.dimension_z,
                 ci.material_id, ci.color_id, ci.custom_color_hex,
-                ci.infill_density, ci.surface_finish, ci.estimated_weight, ci.surface_area_cm2,
+                ci.infill_density, ci.surface_finish, ci.estimated_weight, ci.surface_area_cm2, ci.support_volume_cm3,
                 pm.name as material_name, pc.name as color_name, pc.hex_code as color_hex,
                 (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as product_image
          FROM cart_items ci
@@ -1110,13 +1123,13 @@ const createOrder = async (req, res) => {
                file_name, file_url, file_public_id, file_size,
                dimension_x, dimension_y, dimension_z,
                material_id, color_id, custom_color_hex,
-               infill_density, surface_finish, estimated_weight, surface_area_cm2)
+               infill_density, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3)
              VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?,
                'print', ?,
                ?, ?, ?, ?,
                ?, ?, ?,
                ?, ?, ?,
-               ?, ?, ?, ?)`,
+               ?, ?, ?, ?, ?)`,
             [
               orderId,
               printName,
@@ -1142,6 +1155,7 @@ const createOrder = async (req, res) => {
               item.surface_finish || "standard",
               item.estimated_weight != null ? Number(item.estimated_weight) : null,
               item.surface_area_cm2 != null ? Number(item.surface_area_cm2) : null,
+              item.support_volume_cm3 != null ? Math.max(0, Number(item.support_volume_cm3)) : null,
             ]
           );
         } else {

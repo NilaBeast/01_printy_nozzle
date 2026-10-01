@@ -1,0 +1,12 @@
+{
+  "preset_name": "Printynozzle P1S Machine",
+  "preset_type": "machine",
+  "printer_model": "P1S",
+  "printer_variant": "0.4 nozzle",
+  "nozzle_diameter": [0.4],
+  "bed_size": [256, 256, 256],
+  "printable_area": [256, 256],
+  "printable_height": 256,
+  "filament_diameter": [1.75],
+  "notes": "Bundled default mirroring Bambu Studio 'Bambu Lab P1S 0.4 nozzle'. For a 1:1 match with your Bambu Studio, export your own machine preset (Bambu Studio > File > Export > Export presets) and replace this file."
+}

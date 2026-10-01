@@ -166,9 +166,20 @@ const calculatePrintPrice = ({
   timeSlabs,          // dynamic slabs [{ min, max (null = no limit), rate }] — wins over timeRates
   density,            // material density g/cm³ (enables slicer shell model)
   surfaceAreaCm2,     // mesh surface area cm² (enables slicer shell model)
+  supportVolumeCm3,   // Bambu-style support filament volume cm³ (0/undefined = none)
+  // --- Free Bambu CLI exact numbers (preferred when present) ---
+  slicerFilamentGrams, // exact total filament (model + supports) from Bambu/Prusa G-code
+  slicerTimeHours,     // exact print time from Bambu/Prusa G-code
+  slicerSupportGrams,  // exact support filament from G-code (null = use supportVolumeCm3 path)
 }) => {
   // Slicer-style effective weight when geometry data is present,
   // otherwise the legacy whole-volume infill multiplier.
+  // When the free Bambu CLI sliced this exact file+settings, its G-code
+  // filament total (model + supports) wins over every heuristic.
+  const slicerFilament = Number(slicerFilamentGrams);
+  const useSlicerWeight = Number.isFinite(slicerFilament) && slicerFilament > 0;
+  const slicerSupport = Number(slicerSupportGrams);
+  const useSlicerSupport = Number.isFinite(slicerSupport) && slicerSupport >= 0;
   const infillMultiplier = LEGACY_INFILL_MULTIPLIERS[infillDensity] || 1.0;
   const slicerWeight = estimateFilamentWeight({
     solidWeight: estimatedWeight,
@@ -176,20 +187,46 @@ const calculatePrintPrice = ({
     surfaceAreaCm2,
     infillDensity,
   });
-  const effectiveWeight = slicerWeight !== null ? slicerWeight : estimatedWeight * infillMultiplier;
+  const modelWeight = useSlicerWeight
+    ? slicerFilament - (useSlicerSupport ? slicerSupport : 0)
+    : slicerWeight !== null ? slicerWeight : estimatedWeight * infillMultiplier;
+
+  // Support structures print in the same material: extra filament weight
+  // plus proportional extra print time.
+  const rho = Number(density) > 0 ? Number(density) : null;
+  const supportVol = Math.max(0, Number(supportVolumeCm3) || 0);
+  const supportWeight = useSlicerWeight
+    ? (useSlicerSupport ? Math.round(slicerSupport * 100) / 100 : 0)
+    : rho !== null && supportVol > 0
+      ? Math.round(supportVol * rho * 100) / 100
+      : 0;
+
+  const effectiveWeight = useSlicerWeight
+    ? Math.round(slicerFilament * 100) / 100
+    : Math.round((modelWeight + supportWeight) * 100) / 100;
 
   // Material charge = effective weight × selling rate (₹/g)
   const materialCost = Math.round(effectiveWeight * pricePerGram * 100) / 100;
 
-  // Estimated print time = effective weight × hours-per-gram factor.
-  // Weight already embeds STL volume × material density × infill, so time
-  // automatically depends on the attached file + selected material.
+  // Estimated print time: exact Bambu G-code time when sliced, else the
+  // calibrated weight × hours-per-gram factor. Weight already embeds STL
+  // volume × material density × infill + supports, so time automatically
+  // depends on the attached file + selected material.
   const hpg = Number(hoursPerGram) > 0 ? Number(hoursPerGram) : DEFAULT_HOURS_PER_GRAM;
-  const printTimeHours = Math.round(effectiveWeight * hpg * 100) / 100;
+  const slicerTime = Number(slicerTimeHours);
+  const useSlicerTime = Number.isFinite(slicerTime) && slicerTime > 0;
+  const printTimeHours = useSlicerTime
+    ? Math.round(slicerTime * 100) / 100
+    : Math.round(effectiveWeight * hpg * 100) / 100;
 
   // Printing-time charge = time × slab rate from the rate chart
   const { slab, rate: timeRate } = resolveTimeRate(printTimeHours, { timeSlabs, timeRates });
   const timeCost = Math.round(printTimeHours * timeRate * 100) / 100;
+
+  // Support split (same filament + same time rate, shown separately)
+  const supportCost = Math.round(supportWeight * pricePerGram * 100) / 100;
+  const supportTimeHours = Math.round(supportWeight * hpg * 100) / 100;
+  const supportTimeCost = Math.round(supportTimeHours * timeRate * 100) / 100;
 
   // Color cost
   const colorCost = Math.round((colorAdjustment || 0) * 100) / 100;
@@ -214,6 +251,12 @@ const calculatePrintPrice = ({
 
   return {
     effectiveWeight: Math.round(effectiveWeight * 100) / 100,
+    modelWeight: Math.round(modelWeight * 100) / 100,
+    supportWeight,
+    supportVolumeCm3: supportVol,
+    supportCost,
+    supportTimeHours,
+    supportTimeCost,
     materialCost,
     printTimeHours,
     timeRate,
@@ -229,7 +272,48 @@ const calculatePrintPrice = ({
     infillDensity,
     surfaceFinish,
     hoursPerGram: hpg,
+    // Provenance: 'bambu' when the free Bambu CLI sliced the exact file.
+    pricingSource: useSlicerWeight && useSlicerTime ? "bambu" : useSlicerWeight ? "bambu-weight" : "estimate",
+    slicerFilamentGrams: useSlicerWeight ? Math.round(slicerFilament * 100) / 100 : null,
+    slicerTimeHours: useSlicerTime ? Math.round(slicerTime * 100) / 100 : null,
   };
 };
 
-module.exports = { calculatePrintPrice, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, estimateFilamentWeight, SHELL_MM, WASTE_FACTOR, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };
+/**
+ * Price directly from Bambu CLI slicer numbers (exact Bambu Studio weight +
+ * time) plus the store's material/time/finish/GST rates. Thin wrapper over
+ * calculatePrintPrice for the slice-quote path.
+ */
+const calculatePrintPriceFromSlicer = ({
+  filamentGrams,
+  printTimeHours,
+  supportGrams = null,
+  pricePerGram,
+  surfaceFinish = "standard",
+  smoothFinishPerGram,
+  colorAdjustment = 0,
+  quantity = 1,
+  gstRate,
+  timeSlabs,
+  timeRates,
+  infillDensity = 50,
+}) => calculatePrintPrice({
+  estimatedWeight: Math.max(2, Number(filamentGrams) || 0),
+  pricePerGram,
+  infillDensity,
+  surfaceFinish,
+  smoothFinishPerGram,
+  colorAdjustment,
+  quantity,
+  gstRate,
+  density: 1.24,
+  surfaceAreaCm2: null, // force slicer path, not the shell heuristic
+  supportVolumeCm3: 0,
+  slicerFilamentGrams: filamentGrams,
+  slicerTimeHours: printTimeHours,
+  slicerSupportGrams: supportGrams,
+  timeSlabs,
+  timeRates,
+});
+
+module.exports = { calculatePrintPrice, calculatePrintPriceFromSlicer, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, estimateFilamentWeight, SHELL_MM, WASTE_FACTOR, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };

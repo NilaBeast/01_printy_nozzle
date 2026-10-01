@@ -28,6 +28,8 @@ const fetchCartRows = async (cartId) => {
               ci.dimension_x, ci.dimension_y, ci.dimension_z,
               ci.material_id, ci.color_id, ci.custom_color_hex,
               ci.infill_density, ci.surface_finish, ci.estimated_weight,
+              ci.surface_area_cm2, ci.support_volume_cm3,
+              ci.slicer_filament_grams, ci.slicer_time_hours, ci.slicer_support_grams,
               p.name, p.slug, p.price, p.compare_price, p.stock,
               pv.variant_name, pv.variant_value, pv.price_adjustment, pv.stock as variant_stock,
               (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as image,
@@ -279,6 +281,11 @@ const addPrintToCart = async (req, res) => {
       quantity = 1,
       estimated_weight,
       surface_area_cm2,
+      support_volume_cm3,
+      // Exact Bambu CLI numbers for this file+settings (from slice-quote).
+      slicer_filament_grams,
+      slicer_time_hours,
+      slicer_support_grams,
     } = req.body;
 
     if (!file_name || !material_id || !estimated_weight) {
@@ -339,6 +346,10 @@ const addPrintToCart = async (req, res) => {
       timeRates,
       density: parseFloat(materials[0].density_g_cm3) || 1.24,
       surfaceAreaCm2: surface_area_cm2 !== undefined ? parseFloat(surface_area_cm2) : undefined,
+      supportVolumeCm3: support_volume_cm3 !== undefined ? Math.max(0, parseFloat(support_volume_cm3) || 0) : undefined,
+      slicerFilamentGrams: slicer_filament_grams !== undefined ? parseFloat(slicer_filament_grams) : undefined,
+      slicerTimeHours: slicer_time_hours !== undefined ? parseFloat(slicer_time_hours) : undefined,
+      slicerSupportGrams: slicer_support_grams !== undefined ? parseFloat(slicer_support_grams) : undefined,
     });
 
     const unitPrice = round2(pricing.perUnitCost);
@@ -358,12 +369,14 @@ const addPrintToCart = async (req, res) => {
            file_name, file_url, file_public_id, file_size,
            dimension_x, dimension_y, dimension_z,
            material_id, color_id, custom_color_hex,
-           infill_density, surface_finish, estimated_weight, surface_area_cm2, print_time_hours, time_cost)
+           infill_density, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3, print_time_hours, time_cost,
+           slicer_filament_grams, slicer_time_hours, slicer_support_grams)
          VALUES (?, NULL, NULL, ?, 'print', ?,
            ?, ?, ?, ?,
            ?, ?, ?,
            ?, ?, ?,
-           ?, ?, ?, ?, ?, ?)`,
+           ?, ?, ?, ?, ?, ?, ?,
+           ?, ?, ?)`,
         [
           cartId,
           qty,
@@ -382,43 +395,91 @@ const addPrintToCart = async (req, res) => {
           surface_finish === "smooth" ? "smooth" : "standard",
           parseFloat(estimated_weight),
           surface_area_cm2 != null ? Number(surface_area_cm2) : null,
+          support_volume_cm3 != null ? Math.max(0, Number(support_volume_cm3)) : null,
           pricing.printTimeHours,
           pricing.timeCost,
+          slicer_filament_grams != null ? Number(slicer_filament_grams) : null,
+          slicer_time_hours != null ? Number(slicer_time_hours) : null,
+          slicer_support_grams != null ? Number(slicer_support_grams) : null,
         ]
       );
     } catch (e) {
       if (e && (e.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e.message || ""))) {
-        await db.query(
-          `INSERT INTO cart_items
-            (cart_id, product_id, variant_id, quantity, item_type, unit_price,
-             file_name, file_url, file_public_id, file_size,
-             dimension_x, dimension_y, dimension_z,
-             material_id, color_id, custom_color_hex,
-             infill_density, surface_finish, estimated_weight)
-           VALUES (?, NULL, NULL, ?, 'print', ?,
-             ?, ?, ?, ?,
-             ?, ?, ?,
-             ?, ?, ?,
-             ?, ?, ?)`,
-          [
-            cartId,
-            qty,
-            unitPrice,
-            file_name,
-            file_url || null,
-            file_public_id || null,
-            file_size != null ? Number(file_size) : null,
-            dimension_x != null ? Number(dimension_x) : null,
-            dimension_y != null ? Number(dimension_y) : null,
-            dimension_z != null ? Number(dimension_z) : null,
-            material_id,
-            color_id || null,
-            custom_color_hex || null,
-            parseInt(infill_density) || 50,
-            surface_finish === "smooth" ? "smooth" : "standard",
-            parseFloat(estimated_weight),
-          ]
-        );
+        // Legacy DB without the slicer/time columns — price stays Bambu-exact
+        // via unit_price; the row just doesn't carry the slicer breakdown.
+        try {
+          await db.query(
+            `INSERT INTO cart_items
+              (cart_id, product_id, variant_id, quantity, item_type, unit_price,
+               file_name, file_url, file_public_id, file_size,
+               dimension_x, dimension_y, dimension_z,
+               material_id, color_id, custom_color_hex,
+               infill_density, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3, print_time_hours, time_cost)
+             VALUES (?, NULL, NULL, ?, 'print', ?,
+               ?, ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?,
+               ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              cartId,
+              qty,
+              unitPrice,
+              file_name,
+              file_url || null,
+              file_public_id || null,
+              file_size != null ? Number(file_size) : null,
+              dimension_x != null ? Number(dimension_x) : null,
+              dimension_y != null ? Number(dimension_y) : null,
+              dimension_z != null ? Number(dimension_z) : null,
+              material_id,
+              color_id || null,
+              custom_color_hex || null,
+              parseInt(infill_density) || 50,
+              surface_finish === "smooth" ? "smooth" : "standard",
+              parseFloat(estimated_weight),
+              surface_area_cm2 != null ? Number(surface_area_cm2) : null,
+              support_volume_cm3 != null ? Math.max(0, Number(support_volume_cm3)) : null,
+              pricing.printTimeHours,
+              pricing.timeCost,
+            ]
+          );
+        } catch (e2) {
+          if (e2 && (e2.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(e2.message || ""))) {
+            await db.query(
+              `INSERT INTO cart_items
+                (cart_id, product_id, variant_id, quantity, item_type, unit_price,
+                 file_name, file_url, file_public_id, file_size,
+                 dimension_x, dimension_y, dimension_z,
+                 material_id, color_id, custom_color_hex,
+                 infill_density, surface_finish, estimated_weight)
+               VALUES (?, NULL, NULL, ?, 'print', ?,
+                 ?, ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?)`,
+              [
+                cartId,
+                qty,
+                unitPrice,
+                file_name,
+                file_url || null,
+                file_public_id || null,
+                file_size != null ? Number(file_size) : null,
+                dimension_x != null ? Number(dimension_x) : null,
+                dimension_y != null ? Number(dimension_y) : null,
+                dimension_z != null ? Number(dimension_z) : null,
+                material_id,
+                color_id || null,
+                custom_color_hex || null,
+                parseInt(infill_density) || 50,
+                surface_finish === "smooth" ? "smooth" : "standard",
+                parseFloat(estimated_weight),
+              ]
+            );
+          } else {
+            throw e2;
+          }
+        }
       } else {
         throw e;
       }

@@ -27,7 +27,9 @@ ALTER TABLE `printing_orders` ADD COLUMN IF NOT EXISTS `print_time_hours` DECIMA
 ALTER TABLE `printing_orders` ADD COLUMN IF NOT EXISTS `time_cost` DECIMAL(10,2) DEFAULT 0.00 AFTER `material_cost`;
 ALTER TABLE `cart_items` ADD COLUMN IF NOT EXISTS `print_time_hours` DECIMAL(10,2) NULL AFTER `estimated_weight`;
 ALTER TABLE `cart_items` ADD COLUMN IF NOT EXISTS `surface_area_cm2` DECIMAL(10,2) NULL AFTER `estimated_weight`;
+ALTER TABLE `cart_items` ADD COLUMN IF NOT EXISTS `support_volume_cm3` DECIMAL(10,2) NULL AFTER `surface_area_cm2`;
 ALTER TABLE `cart_items` ADD COLUMN IF NOT EXISTS `time_cost` DECIMAL(10,2) DEFAULT 0.00 AFTER `estimated_weight`;
 ALTER TABLE `order_items` ADD COLUMN IF NOT EXISTS `print_time_hours` DECIMAL(10,2) NULL AFTER `estimated_weight`;
 ALTER TABLE `order_items` ADD COLUMN IF NOT EXISTS `surface_area_cm2` DECIMAL(10,2) NULL AFTER `estimated_weight`;
+ALTER TABLE `order_items` ADD COLUMN IF NOT EXISTS `support_volume_cm3` DECIMAL(10,2) NULL AFTER `surface_area_cm2`;
 ALTER TABLE `order_items` ADD COLUMN IF NOT EXISTS `time_cost` DECIMAL(10,2) DEFAULT 0.00 AFTER `estimated_weight`;

@@ -230,6 +230,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
   surface_finish VARCHAR(20) DEFAULT 'standard',
   estimated_weight DECIMAL(10,2) DEFAULT NULL,
   surface_area_cm2 DECIMAL(10,2) DEFAULT NULL,
+  support_volume_cm3 DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
@@ -360,6 +361,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   surface_finish VARCHAR(20) DEFAULT 'standard',
   estimated_weight DECIMAL(10,2) DEFAULT NULL,
   surface_area_cm2 DECIMAL(10,2) DEFAULT NULL,
+  support_volume_cm3 DECIMAL(10,2) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
@@ -456,6 +458,17 @@ CREATE TABLE IF NOT EXISTS printing_materials (
   sort_order INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ===================== MATERIAL ↔ COLOR LINKS =====================
+-- Which colors each material offers. Empty link set = all active colors.
+CREATE TABLE IF NOT EXISTS material_colors (
+  material_id INT NOT NULL,
+  color_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (material_id, color_id),
+  FOREIGN KEY (material_id) REFERENCES printing_materials(id) ON DELETE CASCADE,
+  FOREIGN KEY (color_id) REFERENCES printing_colors(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ===================== 3D PRINTING COLORS =====================
@@ -699,9 +712,9 @@ INSERT INTO printing_materials (name, slug, code, description, price_per_gram, d
 ('PLA Matte', 'pla-matte', 'PLA-MATTE', 'Matte surface finish, hides layer lines for display models.', 6.00, 1.24, 'Display models, Decor', 3),
 ('PETG', 'petg', 'PETG', 'Strong, durable and resistant to moisture and chemicals.', 5.50, 1.27, 'Functional parts, Enclosures', 4),
 ('PETG HS', 'petg-hs', 'PETG-HS', 'High-speed PETG tuned for faster printing.', 5.50, 1.27, 'Functional parts, Fast prints', 5),
-('ASA', 'asa', 'ASA', 'UV-stable and heat resistant for outdoor parts.', 8.00, 1.07, 'Outdoor parts, Automotive', 6),
-('TPU 95A', 'tpu-95a', 'TPU-95A', 'Flexible, rubber-like material with great durability.', 10.00, 1.21, 'Wearables, Gaskets, Flexible parts', 7),
-('ABS', 'abs', 'ABS', 'Tough and heat resistant, ideal for functional applications.', 8.00, 1.04, 'Mechanical parts, Tools', 8)
+('TPU 95A', 'tpu-95a', 'TPU-95A', 'Flexible, rubber-like material with great durability.', 10.00, 1.21, 'Wearables, Gaskets, Flexible parts', 6),
+('ABS', 'abs', 'ABS', 'Tough and heat resistant, ideal for functional applications.', 8.00, 1.04, 'Mechanical parts, Tools', 7),
+('ASA', 'asa', 'ASA', 'UV-stable and heat resistant for outdoor parts.', 8.00, 1.07, 'Outdoor parts, Automotive', 8)
 ON DUPLICATE KEY UPDATE price_per_gram = VALUES(price_per_gram), density_g_cm3 = VALUES(density_g_cm3), best_for = VALUES(best_for), code = VALUES(code), description = VALUES(description);
 
 -- 3D Printing Colors
@@ -723,9 +736,9 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);
 -- General / Contact FAQs
 INSERT INTO faqs (category, question, answer, sort_order) VALUES
 ('contact', 'How can I track my order?', 'Once your order is shipped, you will receive an SMS and email with the tracking ID and link. You can also track it anytime directly under My Orders in your profile.', 1),
-('contact', 'How does the 3D printing service work?', 'Simply upload your 3D model file (STL, OBJ, or 3MF), choose your preferred material (PLA, PETG, ABS, TPU), select infill density and surface finish. Our automated calculator gives you an instant quote to place your order!', 2),
+('contact', 'How does the 3D printing service work?', 'Simply upload your 3D model file (STL only), choose your preferred material (PLA, PETG, ABS, TPU), select infill density and surface finish. Our automated calculator gives you an instant quote to place your order!', 2),
 ('contact', 'What payment methods do you accept?', 'We accept UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards (Visa, MasterCard, RuPay), Net Banking, and Cash on Delivery (COD) on eligible pin codes.', 3),
-('contact', 'What file formats are accepted for 3D printing?', 'We accept standard .STL, .OBJ, and .3MF files up to 100MB in size.', 4),
+('contact', 'What file formats are accepted for 3D printing?', 'We accept standard .STL files up to 100MB in size.', 4),
 ('contact', 'Do you offer bulk discounts?', 'Yes! For large volume component orders or bulk 3D printing batches, please contact our support team via the form above or email us at info.printynozzle@gmail.com.', 5),
 ('contact', 'What is your return policy?', 'We provide a 7-day hassle-free replacement or return warranty on all electronic components in case of manufacturing defects.', 6);
 

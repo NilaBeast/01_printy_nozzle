@@ -13,6 +13,8 @@ ensureDir("uploads/products");
 ensureDir("uploads/banners");
 ensureDir("uploads/prints");
 ensureDir("uploads/payments");
+ensureDir("uploads/tmp");
+ensureDir("uploads/slice-cache");
 
 /* ============ Product Image Upload ============ */
 const productImageStorage = multer.diskStorage({
@@ -73,12 +75,12 @@ const printFileUpload = multer({
   storage: printFileStorage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (req, file, cb) => {
-    const allowedExtensions = [".stl", ".obj", ".3mf"];
+    const allowedExtensions = [".stl", ".obj", ".3mf", ".amf", ".ply", ".glb", ".gltf"];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedExtensions.includes(ext)) {
       return cb(null, true);
     }
-    cb(new Error("Only .STL, .OBJ, and .3MF files are allowed"));
+    cb(new Error("Only 3D model files are allowed (.STL, .OBJ, .3MF, .AMF, .PLY, .GLB, .GLTF)"));
   },
 });
 
@@ -105,9 +107,30 @@ const paymentScreenshotUpload = multer({
   },
 });
 
+/* ============ 3D Slice-Quote Temp Upload (sliced, never stored) ============ */
+const sliceFileUpload = multer({
+  storage: multer.diskStorage({
+    destination: "uploads/tmp/",
+    filename: (req, file, cb) => {
+      const uniqueName = `slice_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
+      cb(null, uniqueName + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = [".stl", ".obj", ".3mf", ".amf", ".ply", ".glb", ".gltf"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) {
+      return cb(null, true);
+    }
+    cb(new Error("Only 3D model files are allowed (.STL, .OBJ, .3MF, .AMF, .PLY, .GLB, .GLTF)"));
+  },
+});
+
 module.exports = {
   productImageUpload,
   bannerImageUpload,
   printFileUpload,
   paymentScreenshotUpload,
+  sliceFileUpload,
 };

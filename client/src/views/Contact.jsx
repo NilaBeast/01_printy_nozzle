@@ -46,13 +46,13 @@ const FAQ_DATA_RIGHT = [
     id: 4,
     question: "How does the 3D printing service work?",
     answer:
-      "Simply head over to our 3D Printing section, upload your CAD files (.STL, .OBJ, .STEP), select your preferred material (PLA, PETG, ABS, Resin) and color, choose your infill percentage, and our industrial printers will manufacture and ship it to your doorstep.",
+      "Simply head over to our 3D Printing section, upload your CAD file (.STL, .OBJ, .3MF, .GLB), select your preferred material (PLA, PETG, ABS, Resin) and color, choose your infill percentage, and our industrial printers will manufacture and ship it to your doorstep.",
   },
   {
     id: 5,
     question: "What file formats are accepted for 3D printing?",
     answer:
-      "We support industry-standard 3D CAD formats including .STL, .OBJ, .STEP, .STP, and .3MF. If your project requires 3D modeling assistance, file optimization, or conversion, our engineering team can help.",
+      "We support standard 3D print formats (.STL, .OBJ, .3MF, .AMF, .PLY, .GLB, .GLTF) up to 100MB in size, previewed exactly as-uploaded. If your project requires 3D modeling assistance or file optimization, our engineering team can help.",
   },
   {
     id: 6,

@@ -21,7 +21,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import defaultPricingData from "../data/materialPrices.json";
-import ModelViewer3D from "../components/ModelViewer3D";
+import ModelViewer3D, {
+  SUPPORTED_MODEL_ACCEPT,
+  SUPPORTED_MODEL_EXTS,
+} from "../components/ModelViewer3D";
 import printingService from "../services/printing.service";
 import catalogService from "../services/catalog.service";
 import cartService from "../services/cart.service";
@@ -134,6 +137,7 @@ export default function Printing() {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [useSample, setUseSample] = useState(true);
+  const [modelThumb, setModelThumb] = useState(null);
   const [modelAnalysis, setModelAnalysis] = useState({
     fileName: "rocket.stl",
     fileSizeMB: 2.45,
@@ -178,8 +182,93 @@ export default function Printing() {
   const [selectedInfillId, setSelectedInfillId] = useState("50");
   const [selectedFinishId, setSelectedFinishId] = useState("standard");
   const [quantity, setQuantity] = useState(1);
+  const [supportsEnabled, setSupportsEnabled] = useState(true);
   const [placingPrintOrder, setPlacingPrintOrder] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
+
+  /* =========================================================
+     FREE BAMBU CLI — exact Bambu Studio numbers for this file+settings.
+     bambuQuote holds the last slice-quote response; it is only USED when
+     its requestKey matches the current file+options (else stale).
+     Without a slicer CLI installed the API 503s and we keep the estimator.
+     ========================================================= */
+  const [slicerStatus, setSlicerStatus] = useState(null);
+  const [bambuQuote, setBambuQuote] = useState(null);
+  const [bambuLoading, setBambuLoading] = useState(false);
+  const bambuRequestId = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    printingService
+      .getSlicerStatus()
+      .then((res) => {
+        if (active) setSlicerStatus(res.data?.slicer || null);
+      })
+      .catch(() => {
+        if (active) setSlicerStatus({ available: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Debounced exact slice: same file + material + infill + supports →
+  // same Bambu Studio filament/time as slicing in Bambu Studio itself.
+  const bambuRequestKey = useMemo(() => {
+    if (!uploadedFile || useSample) return null;
+    return [
+      uploadedFile.name,
+      uploadedFile.size,
+      uploadedFile.lastModified,
+      selectedMaterialId || "pla",
+      selectedInfillId,
+      supportsEnabled ? "sup" : "nosup",
+    ].join("|");
+  }, [uploadedFile, useSample, selectedMaterialId, selectedInfillId, supportsEnabled]);
+
+  useEffect(() => {
+    if (!bambuRequestKey || !uploadedFile) {
+      setBambuQuote(null);
+      setBambuLoading(false);
+      return;
+    }
+    const myId = ++bambuRequestId.current;
+    setBambuLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const mat = materials.find((m) => m.id === selectedMaterialId) || materials[0];
+        const isNumericId = typeof mat?.id === "number";
+        const params = {
+          ...(isNumericId ? { material_id: mat.id } : { material: mat?.slug || mat?.id || "pla" }),
+          density: mat?.density || 1.24,
+          infill_density: Number(selectedInfillId || 50),
+          supports: supportsEnabled,
+          layer_height: 0.2,
+          surface_finish: selectedFinishId === "smooth" ? "smooth" : "standard",
+          quantity: 1,
+        };
+        const res = await printingService.sliceQuote(uploadedFile, params);
+        if (bambuRequestId.current !== myId) return;
+        const slicer = res.data?.slicer;
+        if (res.data?.success && slicer?.filamentGrams > 0) {
+          setBambuQuote({ requestKey: bambuRequestKey, slicer, pricing: res.data?.pricing });
+        } else {
+          setBambuQuote(null);
+        }
+      } catch {
+        // 503 (no CLI) / 422 (unsliceable) → silent fallback to estimator.
+        if (bambuRequestId.current === myId) setBambuQuote(null);
+      } finally {
+        if (bambuRequestId.current === myId) setBambuLoading(false);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bambuRequestKey, uploadedFile, selectedMaterialId, selectedInfillId, selectedFinishId, supportsEnabled]);
+
+  const useBambu =
+    Boolean(bambuQuote?.slicer?.filamentGrams > 0) &&
+    bambuQuote?.requestKey === bambuRequestKey;
 
   useEffect(() => {
     let active = true;
@@ -223,6 +312,7 @@ export default function Printing() {
           pricePerGram: Number(material.price_per_gram || 0),
           density: Number(material.density_g_cm3 || 1.24),
           bestFor: material.best_for,
+          color_ids: Array.isArray(material.color_ids) ? material.color_ids.map(Number) : [],
           image: "/images/products/blue_filament.png",
         }));
 
@@ -266,6 +356,33 @@ export default function Printing() {
     return { id: "custom", name: "Custom", hex: selectedColorHex, priceAdjustment: 0 };
   }, [colors, selectedColorHex]);
 
+  // Colors offered for the selected material (admin assigns per material).
+  // A material with no linked colors offers every active color.
+  const availableColors = useMemo(() => {
+    const linked = selectedMaterial?.color_ids;
+    if (Array.isArray(linked) && linked.length > 0) {
+      const allowed = new Set(linked.map(Number));
+      const filtered = colors.filter((c) => allowed.has(Number(c.id)));
+      return filtered.length > 0 ? filtered : colors;
+    }
+    return colors;
+  }, [colors, selectedMaterial]);
+
+  // Keep the selection valid when switching materials.
+  useEffect(() => {
+    if (!availableColors.length) return;
+    const stillAvailable = availableColors.some(
+      (c) => c.hex.toLowerCase() === selectedColorHex.toLowerCase()
+    );
+    const isCustom = !colors.some(
+      (c) => c.hex.toLowerCase() === selectedColorHex.toLowerCase()
+    );
+    if (!stillAvailable && !isCustom) {
+      setSelectedColorHex(availableColors[0].hex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableColors]);
+
   const selectedInfill = useMemo(() => {
     return infillOptions.find((inf) => inf.id === selectedInfillId) || infillOptions[3];
   }, [infillOptions, selectedInfillId]);
@@ -278,8 +395,11 @@ export default function Printing() {
   // solid shells (walls + top/bottom, ~1mm) print at 100% density, only the
   // interior scales with infill %. Falls back to legacy whole-volume
   // multipliers when surface-area data is unavailable (old carts).
+  // Supports (Bambu-style auto): sparse columns + dense interface, same filament.
   const SHELL_MM = 1.0;
   const WASTE_FACTOR = 1.03;
+  const SUPPORT_DENSITY = 0.2;
+  const SUPPORT_INTERFACE_MM = 0.6;
   const LEGACY_INFILL_MULTIPLIERS = { 10: 0.4, 20: 0.55, 30: 0.7, 50: 1.0, 100: 1.5 };
 
   const estimateFilamentWeight = (solidWeight, density, surfaceAreaCm2, infillPct) => {
@@ -322,6 +442,14 @@ export default function Printing() {
     return Math.max(2, Math.round(baseWeight * mult));
   };
 
+  // Support filament weight from the analyzed support volume (same material).
+  const getSupportWeight = () => {
+    const vol = Number(modelAnalysis?.supportVolumeCm3);
+    const rho = Number(selectedMaterial?.density || 1.24);
+    if (!Number.isFinite(vol) || vol <= 0 || !Number.isFinite(rho) || rho <= 0) return 0;
+    return Math.round(vol * rho * 100) / 100;
+  };
+
   const quoteForWeight = (effectiveWeight) => {
     const materialCost = Math.round(effectiveWeight * (selectedMaterial?.pricePerGram || 4.5));
     const printTimeHours = Math.round(effectiveWeight * hoursPerGram * 100) / 100;
@@ -333,22 +461,75 @@ export default function Printing() {
 
   const getInfillCardPrice = (inf) => {
     const baseWeight = getBaseWeight();
-    const weight = getEffectiveWeight(baseWeight, inf);
+    const modelW = getEffectiveWeight(baseWeight, inf);
+    const weight = supportsEnabled
+      ? Math.max(2, Math.round(modelW + getSupportWeight()))
+      : modelW;
     const { materialCost, timeCost, finishCost } = quoteForWeight(weight);
     return materialCost + timeCost + finishCost + (inf.priceAdjustment || 0);
   };
 
   /* =========================================================
-     LIVE PRICE CALCULATION ENGINE — Final = Material + Time
-     Weight auto-derives from STL volume × material density × infill.
-     Time auto-derives from effective weight × hours-per-gram.
+     LIVE PRICE CALCULATION ENGINE — Final = Material + Time.
+     Exact Bambu Studio numbers (free CLI slice of THIS file+settings)
+     win whenever available; otherwise the built-in shell-model estimator.
      ========================================================= */
   const calculations = useMemo(() => {
+    // Exact path: Bambu CLI sliced this exact file + material + infill +
+    // supports. Filament total already includes supports; time is exact.
+    if (useBambu) {
+      const s = bambuQuote.slicer;
+      const weight = Math.max(2, Math.round(s.filamentGrams));
+      const supportW = supportsEnabled ? Math.round((s.supportGrams || 0) * 100) / 100 : 0;
+      const printTimeHours = Math.round((s.printTimeHours || 0) * 100) / 100;
+      const slab = getTimeSlabForHours(printTimeHours);
+      const timeRate = slab.rate || 0;
+      const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
+      const timeCost = Math.round(printTimeHours * timeRate * 100) / 100;
+      const supportCost = Math.round(supportW * (selectedMaterial?.pricePerGram || 4.5) * 100) / 100;
+      const supportTimeHours = weight > 0 ? Math.round((printTimeHours * supportW) / weight * 100) / 100 : 0;
+      const colorCost = selectedColor?.priceAdjustment || 0;
+      const infillCost = selectedInfill?.priceAdjustment || 0;
+      const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
+      const unitPrice = materialCost + timeCost + colorCost + infillCost + finishCost;
+      const subtotal = unitPrice * quantity;
+      const gstRate = pricingConfig.siteSettings?.gstRate || 0.18;
+      const gstAmount = +(subtotal * gstRate).toFixed(2);
+      const grandTotal = +(subtotal + gstAmount).toFixed(2);
+      const rawBase = modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : (modelAnalysis?.weightGrams || 20);
+      return {
+        baseWeight: Math.max(2, Math.round(rawBase)),
+        weight,
+        materialCost,
+        printTimeHours,
+        timeRate,
+        timeRateLabel: slab.label,
+        timeCost,
+        supportWeight: supportW,
+        supportCost,
+        supportTimeHours,
+        supportsApplied: supportsEnabled && supportW > 0,
+        colorCost,
+        infillCost,
+        finishCost,
+        unitPrice,
+        subtotal,
+        gstAmount,
+        grandTotal,
+        pricingSource: "bambu",
+        slicerEngine: s.engine,
+        slicerProfile: s.profile,
+        slicerPrinter: s.printer,
+      };
+    }
     const rawBase = modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : (modelAnalysis?.weightGrams || 20);
     const safeBase = Math.max(2, Math.round(rawBase));
     // Slicer-accurate effective weight: solid shell + infill-scaled interior
     // (falls back to legacy multipliers without surface-area data).
-    const weight = getEffectiveWeight(safeBase, selectedInfill);
+    const modelW = getEffectiveWeight(safeBase, selectedInfill);
+    // Bambu-style auto supports (same filament + proportional time).
+    const supportW = supportsEnabled ? getSupportWeight() : 0;
+    const weight = Math.max(2, Math.round(modelW + supportW));
 
     // Material charge = weight × selling rate (₹/g)
     const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
@@ -360,6 +541,10 @@ export default function Printing() {
 
     // Printing-time charge = time × slab rate
     const timeCost = Math.round(printTimeHours * timeRate * 100) / 100;
+
+    // Support split for display (merged into material + time above, like server)
+    const supportCost = Math.round(supportW * (selectedMaterial?.pricePerGram || 4.5) * 100) / 100;
+    const supportTimeHours = Math.round(supportW * hoursPerGram * 100) / 100;
 
     // Color adjustment (usually 0)
     const colorCost = selectedColor?.priceAdjustment || 0;
@@ -391,6 +576,10 @@ export default function Printing() {
       timeRate,
       timeRateLabel: slab.label,
       timeCost,
+      supportWeight: supportW,
+      supportCost,
+      supportTimeHours,
+      supportsApplied: supportsEnabled && supportW > 0,
       colorCost,
       infillCost,
       finishCost,
@@ -399,7 +588,7 @@ export default function Printing() {
       gstAmount,
       grandTotal,
     };
-  }, [modelAnalysis, useSample, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig, hoursPerGram, slabs]);
+  }, [modelAnalysis, useSample, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig, hoursPerGram, slabs, supportsEnabled, useBambu, bambuQuote]);
 
   const hasUploadedModel = Boolean(uploadedFile && !useSample);
   const summaryModel = hasUploadedModel
@@ -418,6 +607,10 @@ export default function Printing() {
         timeRate: 0,
         timeRateLabel: "0–5 hours",
         timeCost: 0,
+        supportWeight: 0,
+        supportCost: 0,
+        supportTimeHours: 0,
+        supportsApplied: false,
         colorCost: 0,
         infillCost: 0,
         finishCost: 0,
@@ -433,9 +626,11 @@ export default function Printing() {
      ========================================================= */
   const handleFileUpload = (file) => {
     if (!file) return;
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (!["stl", "obj", "3mf"].includes(ext)) {
-      toast.error("Please upload an .STL, .OBJ, or .3MF file.");
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if (!SUPPORTED_MODEL_EXTS.includes(ext)) {
+      toast.error(
+        `Unsupported file type ".${ext}". Please upload ${SUPPORTED_MODEL_EXTS.map((e) => "." + e.toUpperCase()).join(", ")}.`
+      );
       return;
     }
     if (MAX_FILE_SIZE_MB !== -1 && !isNaN(MAX_FILE_SIZE_MB)) {
@@ -444,8 +639,12 @@ export default function Printing() {
         return;
       }
     }
+    // New File object identity + cleared thumbnail forces the viewer to drop
+    // the previous mesh and render THIS file's exact geometry.
     setUploadedFile(file);
     setUseSample(false);
+    setModelThumb(null);
+    setBambuQuote(null);
     toast.success(`Loaded ${file.name}`);
   };
 
@@ -470,11 +669,16 @@ export default function Printing() {
   const handleRemoveModel = () => {
     setUploadedFile(null);
     setUseSample(false);
+    setModelThumb(null);
+    setBambuQuote(null);
     setModelAnalysis({
       fileName: "No file loaded",
       fileSizeMB: 0,
       dimensions: { x: 0, y: 0, z: 0 },
       volumeCm3: 0,
+      surfaceAreaCm2: 0,
+      overhangAreaCm2: 0,
+      supportVolumeCm3: 0,
       weightGrams: 0,
     });
     if (fileInputRef.current) {
@@ -482,6 +686,30 @@ export default function Printing() {
     }
     toast.info("Model removed. Upload a 3D model to calculate prices.");
   };
+
+  const handleViewerError = useCallback(
+    (message) => {
+      // The attached file could not be rendered exactly — drop it so the
+      // viewport never keeps showing the previous ("same") model.
+      setUploadedFile(null);
+      setUseSample(false);
+      setModelThumb(null);
+      setBambuQuote(null);
+      setModelAnalysis({
+        fileName: "No file loaded",
+        fileSizeMB: 0,
+        dimensions: { x: 0, y: 0, z: 0 },
+        volumeCm3: 0,
+        surfaceAreaCm2: 0,
+        overhangAreaCm2: 0,
+        supportVolumeCm3: 0,
+        weightGrams: 0,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (message) toast.error(message);
+    },
+    []
+  );
 
   const handleLoadSample = () => {
     setUploadedFile(null);
@@ -523,6 +751,16 @@ export default function Printing() {
     // Base (unscaled) weight — the server applies its slicer shell model
     estimated_weight: calculations.baseWeight,
     surface_area_cm2: modelAnalysis.surfaceAreaCm2 || null,
+    support_volume_cm3: supportsEnabled ? modelAnalysis.supportVolumeCm3 || 0 : 0,
+    // Exact Bambu CLI numbers for THIS file+settings — the server prices
+    // from these Bambu Studio numbers instead of the heuristic.
+    ...(useBambu
+      ? {
+          slicer_filament_grams: bambuQuote.slicer.filamentGrams,
+          slicer_time_hours: bambuQuote.slicer.printTimeHours,
+          slicer_support_grams: supportsEnabled ? bambuQuote.slicer.supportGrams || 0 : 0,
+        }
+      : {}),
   });
 
   const validatePrintSelection = () => {
@@ -668,7 +906,7 @@ export default function Printing() {
               <div className="step-badge">1</div>
               <div className="step-content">
                 <span className="step-title">Upload Model</span>
-                <span className="step-subtitle">Upload your .STL or .OBJ file</span>
+                <span className="step-subtitle">Upload your 3D file (STL, OBJ, 3MF…)</span>
               </div>
             </div>
 
@@ -725,10 +963,13 @@ export default function Printing() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".stl,.obj,.3mf"
+                      accept={SUPPORTED_MODEL_ACCEPT}
                       style={{ display: "none" }}
                       onChange={(e) => {
                         if (e.target.files?.[0]) handleFileUpload(e.target.files[0]);
+                        // Reset the input so re-attaching the SAME file still
+                        // fires onChange and re-renders its exact geometry.
+                        e.target.value = "";
                       }}
                     />
                     <div className="dropzone-icon-wrap">
@@ -747,7 +988,7 @@ export default function Printing() {
                       Choose File
                     </button>
                     <div className="dropzone-supports">
-                      Supports: .STL, .OBJ, .3MF{" "}
+                      Supports: {SUPPORTED_MODEL_EXTS.map((e) => "." + e.toUpperCase()).join(" • ")}{" "}
                       {MAX_FILE_SIZE_MB === -1
                         ? "(No file size limit)"
                         : `(Max file size: ${MAX_FILE_SIZE_MB}MB)`}
@@ -759,12 +1000,19 @@ export default function Printing() {
                     {useSample || uploadedFile ? (
                       <>
                         <ModelViewer3D
+                          key={
+                            uploadedFile
+                              ? `${uploadedFile.name}-${uploadedFile.size}-${uploadedFile.lastModified}`
+                              : "sample"
+                          }
                           file={uploadedFile}
                           color={selectedColorHex}
                           materialType={selectedMaterial.id}
                           density={selectedMaterial.density}
                           useSample={useSample}
                           onAnalysis={handleModelAnalysis}
+                          onThumbnail={setModelThumb}
+                          onError={handleViewerError}
                         />
                         <div className="viewer-meta-bar">
                           <div className="viewer-meta-left">
@@ -854,7 +1102,7 @@ export default function Printing() {
                     <div className="option-group-label">Color</div>
                     <div className="color-swatches-box">
                       <div className="color-swatches-grid">
-                        {colors.length ? colors.map((c) => {
+                        {availableColors.length ? availableColors.map((c) => {
                           const isSelected = selectedColorHex.toLowerCase() === c.hex.toLowerCase();
                           return (
                             <button
@@ -975,16 +1223,63 @@ export default function Printing() {
                     </div>
                   </div>
                 </div>
-                {/* Auto estimate note — weight & time from STL + material */}
+                {/* Supports (Bambu-style auto) */}
+                <div>
+                  <div className="option-group-label">
+                    <span>Supports</span>
+                    <span className="summary-delivery-time" style={{ fontWeight: 400 }}>
+                      {Number(modelAnalysis?.overhangAreaCm2 || 0) > 0
+                        ? `${modelAnalysis.overhangAreaCm2}cm² overhang detected`
+                        : "No overhang detected"}
+                    </span>
+                  </div>
+                  <div className="finish-cards-grid">
+                    <div
+                      className={`finish-card ${supportsEnabled ? "active" : ""}`}
+                      onClick={() => setSupportsEnabled(true)}
+                    >
+                      <div className="finish-name">Auto supports</div>
+                      <div className="finish-price">
+                        {supportsEnabled && calculations.supportWeight > 0
+                          ? `+${calculations.supportWeight}g`
+                          : "Auto"}
+                      </div>
+                    </div>
+                    <div
+                      className={`finish-card ${!supportsEnabled ? "active" : ""}`}
+                      onClick={() => setSupportsEnabled(false)}
+                    >
+                      <div className="finish-name">No supports</div>
+                      <div className="finish-price">₹0</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bambu-exact note — weight & time from the free Bambu CLI slice */}
                 <div className="summary-delivery-box" style={{ marginTop: 12 }}>
                   <Info size={20} className="summary-delivery-icon" />
                   <div className="summary-delivery-text">
-                    <span className="summary-delivery-label">Auto estimate from your STL</span>
+                    <span className="summary-delivery-label">
+                      {useBambu ? (
+                        <>Bambu Studio exact{bambuLoading ? " • updating…" : ""}</>
+                      ) : (
+                        <>Auto estimate from your 3D file{bambuLoading ? " • slicing…" : ""}</>
+                      )}
+                    </span>
                     <span className="summary-delivery-time">
                       {hasUploadedModel ? (
-                        <>Weight {calculations.weight}g • Time {Number(calculations.printTimeHours || 0).toFixed(2)}h ({calculations.timeRateLabel} @ ₹{calculations.timeRate}/h) • Final = Material ₹{calculations.materialCost} + Time ₹{calculations.timeCost}</>
+                        <>Weight {calculations.weight}g{calculations.supportsApplied ? ` (incl. ${calculations.supportWeight}g supports)` : ""} • Time {Number(calculations.printTimeHours || 0).toFixed(2)}h ({calculations.timeRateLabel} @ ₹{calculations.timeRate}/h) • Final = Material ₹{calculations.materialCost} + Time ₹{calculations.timeCost}</>
                       ) : (
-                        <>Upload an STL to auto-calculate weight, print time and final price.</>
+                        <>Upload a 3D file to auto-calculate weight, print time and final price.</>
+                      )}
+                    </span>
+                    <span className="summary-delivery-time" style={{ marginTop: 4 }}>
+                      {useBambu && bambuQuote?.slicer ? (
+                        <>Sliced exactly like Bambu Studio: {bambuQuote.slicer.printer} • {bambuQuote.slicer.profile} • {bambuQuote.slicer.engine} engine{bambuQuote.slicer.cached ? " • cached" : ""}</>
+                      ) : slicerStatus && !slicerStatus.available ? (
+                        <>Estimate mode (free Bambu Studio CLI not installed on server). Same configs, heuristic weight/time.</>
+                      ) : (
+                        <>Slicing exactly like Bambu Studio: P1S · 0.4 nozzle · 0.20mm Standard (2 walls · grid infill · tree-auto supports)…</>
                       )}
                     </span>
                     <span className="summary-delivery-time" style={{ marginTop: 4 }}>
@@ -1005,7 +1300,7 @@ export default function Printing() {
                 <div className="summary-model-item">
                   <div className="summary-model-thumb-wrap">
                     <img
-                      src="/images/rocket.png"
+                      src={modelThumb || "/images/rocket.png"}
                       alt="3D Model Preview"
                       className="summary-model-thumb"
                     />
@@ -1049,6 +1344,16 @@ export default function Printing() {
                       <span className="breakdown-price">₹{summaryCalculations.timeCost}</span>
                     </div>
                   </div>
+
+                  {summaryCalculations.supportsApplied && (
+                    <div className="breakdown-row">
+                      <span className="breakdown-label">Supports (auto • same material)</span>
+                      <div className="breakdown-value-group">
+                        <span className="breakdown-weight">+{summaryCalculations.supportWeight}g • +{Number(summaryCalculations.supportTimeHours || 0).toFixed(2)}h</span>
+                        <span className="breakdown-price">₹{summaryCalculations.supportCost}</span>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="breakdown-row">
                     <span className="breakdown-label">Color</span>

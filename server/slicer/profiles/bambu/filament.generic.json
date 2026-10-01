@@ -1,0 +1,10 @@
+{
+  "preset_name": "Generic filament (Printynozzle — temps/density set per material)",
+  "preset_type": "filament",
+  "filament_type": "QUOTE_MATERIAL",
+  "filament_density": "QUOTE_DENSITY",
+  "nozzle_temperature": "QUOTE_NOZZLE_TEMP",
+  "bed_temperature": "QUOTE_BED_TEMP",
+  "filament_diameter": 1.75,
+  "notes": "Per-quote material (PLA/PETG/TPU/ABS/ASA) is mapped in server/utils/bambuSlicer.js FILAMENT_MAP to the matching Bambu preset (PLA Basic, PLA Matte, PETG HF, TPU 95A HF, ABS, ASA). Replace with your exported Bambu filament preset for a 1:1 match."
+}

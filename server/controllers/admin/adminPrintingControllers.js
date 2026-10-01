@@ -134,7 +134,20 @@ const updatePrintOrderStatus = async (req, res) => {
 const getAllMaterials = async (req, res) => {
   try {
     const [materials] = await db.query("SELECT * FROM printing_materials ORDER BY id ASC");
-    return res.status(200).json({ success: true, data: materials });
+    let links = [];
+    try {
+      [links] = await db.query("SELECT material_id, color_id FROM material_colors");
+    } catch {
+      links = [];
+    }
+    const byMaterial = {};
+    links.forEach((l) => {
+      (byMaterial[l.material_id] = byMaterial[l.material_id] || []).push(l.color_id);
+    });
+    return res.status(200).json({
+      success: true,
+      data: materials.map((m) => ({ ...m, color_ids: byMaterial[m.id] || [] })),
+    });
   } catch (error) {
     console.error("Admin getAllMaterials error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -209,6 +222,75 @@ const deleteMaterial = async (req, res) => {
     return res.status(200).json({ success: true, message: "Material deleted successfully" });
   } catch (error) {
     console.error("Admin deleteMaterial error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ===================== MATERIAL ↔ COLOR LINKS =====================
+ * GET  /admin/printing/materials/:id/colors → linked color ids
+ * PUT  /admin/printing/materials/:id/colors { color_ids: [] } → replace all
+ * Empty list = material offers every active color. */
+const getMaterialColors = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.query(
+      "SELECT color_id FROM material_colors WHERE material_id = ? ORDER BY color_id ASC",
+      [id]
+    );
+    return res.status(200).json({ success: true, data: rows.map((r) => r.color_id) });
+  } catch (error) {
+    console.error("Admin getMaterialColors error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const setMaterialColors = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { color_ids = [] } = req.body;
+
+    const [existing] = await db.query("SELECT id FROM printing_materials WHERE id = ?", [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: "Material not found" });
+    }
+
+    const cleanIds = [...new Set((Array.isArray(color_ids) ? color_ids : []).map(Number).filter((n) => Number.isFinite(n)))];
+    // Keep only colors that actually exist.
+    let validIds = cleanIds;
+    if (cleanIds.length > 0) {
+      const [found] = await db.query(
+        `SELECT id FROM printing_colors WHERE id IN (${cleanIds.map(() => "?").join(",")})`,
+        cleanIds
+      );
+      const ok = new Set(found.map((r) => r.id));
+      validIds = cleanIds.filter((n) => ok.has(n));
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query("DELETE FROM material_colors WHERE material_id = ?", [id]);
+      for (const cid of validIds) {
+        await connection.query(
+          "INSERT INTO material_colors (material_id, color_id) VALUES (?, ?)",
+          [id, cid]
+        );
+      }
+      await connection.commit();
+    } catch (e) {
+      try {
+        await connection.rollback();
+      } catch {
+        /* ignore */
+      }
+      connection.release();
+      throw e;
+    }
+    connection.release();
+
+    return res.status(200).json({ success: true, message: "Material colors updated", data: validIds });
+  } catch (error) {
+    console.error("Admin setMaterialColors error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -402,6 +484,8 @@ module.exports = {
   createMaterial,
   updateMaterial,
   deleteMaterial,
+  getMaterialColors,
+  setMaterialColors,
   getAllColors,
   createColor,
   updateColor,
