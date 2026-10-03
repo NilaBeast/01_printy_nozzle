@@ -35,7 +35,6 @@ const validateManualPayload = (body = {}) => {
 
   if (!manualStr(customer.name)) return "Customer name is required";
   if (!manualStr(customer.phone)) return "Customer phone is required";
-  if (!manualStr(customer.address1)) return "Customer address is required";
   if (
     manualStr(customer.company_gstin || customer.gstin) &&
     !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(
@@ -44,18 +43,11 @@ const validateManualPayload = (body = {}) => {
   ) {
     return "Enter a valid 15-character company GSTIN";
   }
-  if (!manualStr(customer.city)) return "Customer city is required";
-  if (!manualStr(customer.state)) return "Customer state is required";
-  if (!manualStr(customer.pincode)) return "Customer pincode is required";
 
   if (!shippingSameAsBilling && shipping) {
     for (const [key, label] of [
       ["name", "Shipping name"],
       ["phone", "Shipping phone"],
-      ["address1", "Shipping address"],
-      ["city", "Shipping city"],
-      ["state", "Shipping state"],
-      ["pincode", "Shipping pincode"],
     ]) {
       if (!manualStr(shipping[key])) return `${label} is required`;
     }

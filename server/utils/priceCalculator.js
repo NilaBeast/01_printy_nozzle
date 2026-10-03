@@ -30,23 +30,41 @@ const DEFAULT_TIME_RATES = {
 const DEFAULT_HOURS_PER_GRAM = 0.15;
 
 /* Slicer-profile constants (must match the storefront estimator):
- * 1.0mm solid shell ≈ 0.2mm layers × 2 walls + top/bottom skins,
- * 3% extra for skirt/purge/flow losses. */
+ * solid shell ≈ 0.4mm-nozzle wall loops + ~0.2mm top/bottom skins
+ * (1.0mm at the default 2 walls), 3% extra for skirt/purge/flow losses. */
 const SHELL_MM = 1.0;
 const WASTE_FACTOR = 1.03;
+const BASE_LAYER_HEIGHT_MM = 0.2;
+
+// Wall loops (2|3|4) → solid shell thickness in mm.
+const shellMmForWalls = (wallLoops) => {
+  const walls = [2, 3, 4].includes(Number(wallLoops)) ? Number(wallLoops) : 2;
+  return Math.round((walls * 0.4 + 0.2) * 100) / 100;
+};
+
+// Layer height (mm) → print-time factor vs the 0.20mm baseline
+// (0.08mm takes ~2.5x longer, 0.28mm ~0.7x). Exact slicer times win when present.
+const timeFactorForLayerHeight = (layerHeightMm) => {
+  const h = Number(layerHeightMm) > 0 ? Number(layerHeightMm) : BASE_LAYER_HEIGHT_MM;
+  return BASE_LAYER_HEIGHT_MM / h;
+};
 
 // Whole-volume infill multipliers (legacy fallback only)
 const LEGACY_INFILL_MULTIPLIERS = {
   10: 0.4,
+  12: 0.43,
+  15: 0.47,
   20: 0.55,
+  25: 0.62,
   30: 0.7,
+  40: 0.85,
   50: 1.0,
   100: 1.5,
 };
 
 /* Slicer-style effective (filament) weight in grams. Returns null when the
  * inputs are unusable so callers can fall back to the legacy multipliers. */
-const estimateFilamentWeight = ({ solidWeight, density, surfaceAreaCm2, infillDensity }) => {
+const estimateFilamentWeight = ({ solidWeight, density, surfaceAreaCm2, infillDensity, shellMm = SHELL_MM }) => {
   const solid = Number(solidWeight);
   const rho = Number(density);
   const area = Number(surfaceAreaCm2);
@@ -55,8 +73,9 @@ const estimateFilamentWeight = ({ solidWeight, density, surfaceAreaCm2, infillDe
   if (!Number.isFinite(rho) || rho <= 0) return null;
   if (!Number.isFinite(area) || area <= 0) return null;
   if (!Number.isFinite(infill) || infill < 0 || infill > 100) return null;
+  const shell = Number(shellMm) > 0 ? Number(shellMm) : SHELL_MM;
   const solidVol = solid / rho; // cm³
-  const shellVol = Math.min(solidVol, area * (SHELL_MM / 10)); // cm³
+  const shellVol = Math.min(solidVol, area * (shell / 10)); // cm³
   const interiorVol = Math.max(0, solidVol - shellVol);
   const filamentVol = (shellVol + interiorVol * (infill / 100)) * WASTE_FACTOR;
   return Math.round(filamentVol * rho * 100) / 100;
@@ -155,8 +174,10 @@ const resolveTimeRate = (hours, slabsOrOpts) => {
 const calculatePrintPrice = ({
   estimatedWeight,    // grams (solid weight from STL volume × density, before infill scaling)
   pricePerGram,       // material selling rate ₹/g
-  infillDensity,      // 10, 20, 30, 50, 100
-  surfaceFinish,      // 'standard' or 'smooth'
+  infillDensity,      // 10, 12, 15, 20, 25, 30, 40, 50
+  layerHeightMm = 0.2, // 0.08 | 0.12 | 0.16 | 0.20 | 0.28 — scales print time
+  wallLoops = 2,       // 2 | 3 | 4 — scales the solid shell
+  surfaceFinish,      // 'standard' or 'smooth',
   smoothFinishPerGram, // extra cost per gram for smooth
   colorAdjustment,    // extra cost for color (usually 0)
   quantity,           // number of copies
@@ -172,6 +193,10 @@ const calculatePrintPrice = ({
   slicerTimeHours,     // exact print time from Bambu/Prusa G-code
   slicerSupportGrams,  // exact support filament from G-code (null = use supportVolumeCm3 path)
 }) => {
+  const walls = [2, 3, 4].includes(Number(wallLoops)) ? Number(wallLoops) : 2;
+  const layerH = Number(layerHeightMm) > 0 ? Number(layerHeightMm) : BASE_LAYER_HEIGHT_MM;
+  const shellMm = shellMmForWalls(walls);
+  const layerTimeFactor = timeFactorForLayerHeight(layerH);
   // Slicer-style effective weight when geometry data is present,
   // otherwise the legacy whole-volume infill multiplier.
   // When the free Bambu CLI sliced this exact file+settings, its G-code
@@ -186,6 +211,7 @@ const calculatePrintPrice = ({
     density,
     surfaceAreaCm2,
     infillDensity,
+    shellMm,
   });
   const modelWeight = useSlicerWeight
     ? slicerFilament - (useSlicerSupport ? slicerSupport : 0)
@@ -209,15 +235,15 @@ const calculatePrintPrice = ({
   const materialCost = Math.round(effectiveWeight * pricePerGram * 100) / 100;
 
   // Estimated print time: exact Bambu G-code time when sliced, else the
-  // calibrated weight × hours-per-gram factor. Weight already embeds STL
-  // volume × material density × infill + supports, so time automatically
-  // depends on the attached file + selected material.
+  // calibrated weight × hours-per-gram factor scaled by layer height.
+  // Weight already embeds STL volume × material density × infill + supports,
+  // so time automatically depends on the attached file + selected material.
   const hpg = Number(hoursPerGram) > 0 ? Number(hoursPerGram) : DEFAULT_HOURS_PER_GRAM;
   const slicerTime = Number(slicerTimeHours);
   const useSlicerTime = Number.isFinite(slicerTime) && slicerTime > 0;
   const printTimeHours = useSlicerTime
     ? Math.round(slicerTime * 100) / 100
-    : Math.round(effectiveWeight * hpg * 100) / 100;
+    : Math.round(effectiveWeight * hpg * layerTimeFactor * 100) / 100;
 
   // Printing-time charge = time × slab rate from the rate chart
   const { slab, rate: timeRate } = resolveTimeRate(printTimeHours, { timeSlabs, timeRates });
@@ -225,7 +251,9 @@ const calculatePrintPrice = ({
 
   // Support split (same filament + same time rate, shown separately)
   const supportCost = Math.round(supportWeight * pricePerGram * 100) / 100;
-  const supportTimeHours = Math.round(supportWeight * hpg * 100) / 100;
+  const supportTimeHours = useSlicerTime
+    ? Math.round(supportWeight * hpg * 100) / 100
+    : Math.round(supportWeight * hpg * layerTimeFactor * 100) / 100;
   const supportTimeCost = Math.round(supportTimeHours * timeRate * 100) / 100;
 
   // Color cost
@@ -270,6 +298,10 @@ const calculatePrintPrice = ({
     totalAmount,
     quantity,
     infillDensity,
+    layerHeightMm: layerH,
+    wallLoops: walls,
+    layerTimeFactor: Math.round(layerTimeFactor * 100) / 100,
+    shellMm,
     surfaceFinish,
     hoursPerGram: hpg,
     // Provenance: 'bambu' when the free Bambu CLI sliced the exact file.
@@ -316,4 +348,4 @@ const calculatePrintPriceFromSlicer = ({
   timeRates,
 });
 
-module.exports = { calculatePrintPrice, calculatePrintPriceFromSlicer, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, estimateFilamentWeight, SHELL_MM, WASTE_FACTOR, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };
+module.exports = { calculatePrintPrice, calculatePrintPriceFromSlicer, getTimeSlab, resolveTimeRate, parseTimeSlabs, timeRatesToSlabs, resolveSlabs, estimateFilamentWeight, shellMmForWalls, timeFactorForLayerHeight, SHELL_MM, WASTE_FACTOR, BASE_LAYER_HEIGHT_MM, DEFAULT_TIME_RATES, DEFAULT_TIME_SLABS, DEFAULT_HOURS_PER_GRAM };

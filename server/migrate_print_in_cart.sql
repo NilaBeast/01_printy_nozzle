@@ -29,6 +29,8 @@ ALTER TABLE `cart_items` ADD COLUMN `material_id` INT NULL;
 ALTER TABLE `cart_items` ADD COLUMN `color_id` INT NULL;
 ALTER TABLE `cart_items` ADD COLUMN `custom_color_hex` VARCHAR(7) NULL;
 ALTER TABLE `cart_items` ADD COLUMN `infill_density` INT DEFAULT 50;
+ALTER TABLE `cart_items` ADD COLUMN `layer_height` DECIMAL(4,2) DEFAULT 0.20;
+ALTER TABLE `cart_items` ADD COLUMN `wall_loops` INT DEFAULT 2;
 ALTER TABLE `cart_items` ADD COLUMN `surface_finish` VARCHAR(20) DEFAULT 'standard';
 ALTER TABLE `cart_items` ADD COLUMN `estimated_weight` DECIMAL(10,2) NULL;
 
@@ -46,5 +48,11 @@ ALTER TABLE `order_items` ADD COLUMN `material_id` INT NULL;
 ALTER TABLE `order_items` ADD COLUMN `color_id` INT NULL;
 ALTER TABLE `order_items` ADD COLUMN `custom_color_hex` VARCHAR(7) NULL;
 ALTER TABLE `order_items` ADD COLUMN `infill_density` INT DEFAULT 50;
+ALTER TABLE `order_items` ADD COLUMN `layer_height` DECIMAL(4,2) DEFAULT 0.20;
+ALTER TABLE `order_items` ADD COLUMN `wall_loops` INT DEFAULT 2;
 ALTER TABLE `order_items` ADD COLUMN `surface_finish` VARCHAR(20) DEFAULT 'standard';
 ALTER TABLE `order_items` ADD COLUMN `estimated_weight` DECIMAL(10,2) NULL;
+
+-- printing_orders print settings (run each; ignore "Duplicate column" errors)
+ALTER TABLE `printing_orders` ADD COLUMN `layer_height` DECIMAL(4,2) DEFAULT 0.20;
+ALTER TABLE `printing_orders` ADD COLUMN `wall_loops` INT DEFAULT 2;

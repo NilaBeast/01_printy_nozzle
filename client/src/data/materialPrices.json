@@ -156,6 +156,24 @@
       "description": "Ideal for decorative or display items with minimal stress."
     },
     {
+      "id": "12",
+      "percentage": 12,
+      "label": "12%",
+      "tag": "",
+      "factor": 0.72,
+      "priceAdjustment": 0,
+      "description": "Light display models with a bit more body than 10%."
+    },
+    {
+      "id": "15",
+      "percentage": 15,
+      "label": "15%",
+      "tag": "",
+      "factor": 0.75,
+      "priceAdjustment": 0,
+      "description": "Quick everyday prints with light strength."
+    },
+    {
       "id": "20",
       "percentage": 20,
       "label": "20%",
@@ -163,6 +181,15 @@
       "factor": 0.8,
       "priceAdjustment": 0,
       "description": "Good balance of print time and strength for standard models."
+    },
+    {
+      "id": "25",
+      "percentage": 25,
+      "label": "25%",
+      "tag": "",
+      "factor": 0.85,
+      "priceAdjustment": 0,
+      "description": "Sturdier standard prints for regular handling."
     },
     {
       "id": "30",
@@ -174,6 +201,15 @@
       "description": "Enhanced durability for regular use items."
     },
     {
+      "id": "40",
+      "percentage": 40,
+      "label": "40%",
+      "tag": "",
+      "factor": 0.95,
+      "priceAdjustment": 0,
+      "description": "Strong functional parts with moderate print time."
+    },
+    {
       "id": "50",
       "percentage": 50,
       "label": "50%",
@@ -181,15 +217,6 @@
       "factor": 1.0,
       "priceAdjustment": 0,
       "description": "High strength for functional prototypes and working parts."
-    },
-    {
-      "id": "100",
-      "percentage": 100,
-      "label": "100%",
-      "tag": "Solid",
-      "factor": 1.4,
-      "priceAdjustment": 0,
-      "description": "Maximum rigidity and density for heavy-duty mechanical components."
     }
   ],
   "surfaceFinishes": [

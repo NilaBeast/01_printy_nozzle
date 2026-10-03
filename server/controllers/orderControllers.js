@@ -570,6 +570,8 @@ const createOrder = async (req, res) => {
       estimatedWeight: parseFloat(item.estimated_weight || 20),
       pricePerGram,
       infillDensity: parseInt(item.infill_density) || 50,
+      layerHeightMm: parseFloat(item.layer_height) || 0.2,
+      wallLoops: [2, 3, 4].includes(Number(item.wall_loops)) ? Number(item.wall_loops) : 2,
       surfaceFinish: item.surface_finish || "standard",
       smoothFinishPerGram: smoothPerGram,
       colorAdjustment: colorAdj,
@@ -617,6 +619,8 @@ const createOrder = async (req, res) => {
       item.color_id || null,
       item.custom_color_hex || null,
       parseInt(item.infill_density) || 50,
+      parseFloat(item.layer_height) || 0.2,
+      [2, 3, 4].includes(Number(item.wall_loops)) ? Number(item.wall_loops) : 2,
       item.surface_finish || "standard",
       parseInt(item.quantity) || 1,
       breakdown.effectiveWeight,
@@ -650,14 +654,14 @@ const createOrder = async (req, res) => {
           file_name, file_url, file_public_id, file_size,
           dimension_x, dimension_y, dimension_z,
           material_id, color_id, custom_color_hex,
-          infill_density, surface_finish, quantity,
+          infill_density, layer_height, wall_loops, surface_finish, quantity,
           estimated_weight, print_time_hours, material_cost, time_cost, color_cost, finish_cost,
           subtotal, tax_amount, total_amount,
           shipping_name, shipping_phone, shipping_address1,
           shipping_city, shipping_state, shipping_pincode,
           company_name, company_address, company_gstin,
           payment_method, payment_status, payment_screenshot_url, notes
-        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         printRow
       );
     } catch (e) {
@@ -1111,8 +1115,10 @@ const createOrder = async (req, res) => {
         const colorLabel = item.color_name || item.custom_color_hex || "Custom";
         const infillLabel = `${item.infill_density || 50}%`;
         const finishLabel = item.surface_finish === "smooth" ? "Smooth" : "Standard";
+        const layerLabel = item.layer_height != null ? `${Number(item.layer_height).toFixed(2)}mm` : "0.20mm";
+        const wallsLabel = `${item.wall_loops || 2} Walls`;
         const printName = `Custom 3D Print (${item.file_name || "model"})`;
-        const variantSummary = `${materialLabel} • ${colorLabel} • ${infillLabel} • ${finishLabel}`;
+        const variantSummary = `${materialLabel} • ${colorLabel} • ${infillLabel} • ${layerLabel} • ${wallsLabel} • ${finishLabel}`;
 
         if (printAwareOrderItems) {
           await connection.query(
@@ -1123,13 +1129,13 @@ const createOrder = async (req, res) => {
                file_name, file_url, file_public_id, file_size,
                dimension_x, dimension_y, dimension_z,
                material_id, color_id, custom_color_hex,
-               infill_density, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3)
+               infill_density, layer_height, wall_loops, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3)
              VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?,
                'print', ?,
                ?, ?, ?, ?,
                ?, ?, ?,
                ?, ?, ?,
-               ?, ?, ?, ?, ?)`,
+               ?, ?, ?, ?, ?, ?, ?)`,
             [
               orderId,
               printName,
@@ -1152,6 +1158,8 @@ const createOrder = async (req, res) => {
               item.color_id || null,
               item.custom_color_hex || null,
               item.infill_density || 50,
+              item.layer_height != null ? Number(item.layer_height) : 0.2,
+              item.wall_loops || 2,
               item.surface_finish || "standard",
               item.estimated_weight != null ? Number(item.estimated_weight) : null,
               item.surface_area_cm2 != null ? Number(item.surface_area_cm2) : null,

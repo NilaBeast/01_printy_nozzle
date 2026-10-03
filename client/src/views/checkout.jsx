@@ -1407,7 +1407,7 @@ export default function Checkout() {
                           {qrConfig.upi_id && <span className="upi-id-badge">UPI ID: {qrConfig.upi_id}</span>}
                         </div>
                         {qrConfig.upi_id && (
-                          <button type="button" className="btn-check-pincode" onClick={copyUpiId}>
+                          <button type="button" className="btn-copy-upi" onClick={copyUpiId}>
                             Copy ID
                           </button>
                         )}

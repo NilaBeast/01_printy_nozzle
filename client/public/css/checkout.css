@@ -620,6 +620,7 @@
 }
 
 .upi-id-badge {
+  display: inline-block;
   font-size: 12px;
   font-weight: 600;
   color: #FF7508;
@@ -1051,6 +1052,22 @@
 }
 
 @media (max-width: 640px) {
+  .checkout-page-container {
+    padding: 0 12px;
+  }
+
+  .checkout-card {
+    padding: 16px;
+    min-width: 0;
+  }
+
+  .checkout-layout-grid,
+  .checkout-left-col,
+  .checkout-right-col,
+  .checkout-field-group {
+    min-width: 0;
+  }
+
   .checkout-stepper {
     flex-wrap: wrap;
     gap: 8px;
@@ -1063,6 +1080,49 @@
 
   .checkout-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .checkout-input,
+  .checkout-select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Pincode field: typed text must clear the absolute button */
+  .checkout-input-wrapper {
+    min-width: 0;
+  }
+
+  .checkout-input-wrapper .checkout-input {
+    padding-right: 118px;
+  }
+
+  .btn-check-pincode {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* QR UPI row: long UPI IDs must wrap instead of forcing overflow */
+  .qr-pay-upi-row {
+    flex-wrap: wrap;
+  }
+
+  .qr-pay-upi-meta {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
+  /* Order summary rows: long names wrap instead of overflowing */
+  .summary-product-item,
+  .summary-item-left,
+  .summary-item-meta {
+    min-width: 0;
+  }
+
+  .upi-id-badge {
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    min-width: 0;
   }
 
   .checkout-trust-bar {
@@ -1208,7 +1268,32 @@
 .qr-pay-upi-meta {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Inline copy button sitting right beside the UPI ID text */
+.btn-copy-upi {
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: center;
+  background: #FFF4EA;
+  border: 1px solid #FFD9B3;
+  color: #FF7508;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-copy-upi:hover {
+  background: #FF7508;
+  border-color: #FF7508;
+  color: #ffffff;
 }
 
 .qr-pay-payee {

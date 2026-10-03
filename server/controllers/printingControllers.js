@@ -131,6 +131,7 @@ const sliceQuote = async (req, res) => {
       infill_density = 50,
       supports = "true",
       layer_height = 0.2,
+      wall_loops = 2,
       surface_finish = "standard",
       quantity = 1,
       color_id = null,
@@ -141,6 +142,7 @@ const sliceQuote = async (req, res) => {
     // Client-known density (fallback JSON materials) beats the 1.24 default.
     if (Number(density) > 0) mat.density = Number(density);
     const supportsOn = !(supports === false || supports === "false" || supports === 0 || supports === "0");
+    const walls = [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2;
 
     const sliced = await sliceModel({
       inputPath: tmpPath,
@@ -149,6 +151,7 @@ const sliceQuote = async (req, res) => {
       infillDensity: parseInt(infill_density, 10) || 50,
       supports: supportsOn,
       layerHeight: Number(layer_height) || 0.2,
+      wallLoops: walls,
     });
     cleanup();
 
@@ -211,6 +214,8 @@ const sliceQuote = async (req, res) => {
         material: mat.key,
         infillDensity: parseInt(infill_density, 10) || 50,
         supports: supportsOn,
+        layerHeight: Number(layer_height) || 0.2,
+        wallLoops: walls,
         cached: !!sliced.cached,
       },
       pricing,
@@ -314,6 +319,8 @@ const calculatePrice = async (req, res) => {
       material_id,
       color_id,
       infill_density = 50,
+      layer_height = 0.2,
+      wall_loops = 2,
       surface_finish = "standard",
       quantity = 1,
       surface_area_cm2,
@@ -353,6 +360,8 @@ const calculatePrice = async (req, res) => {
       estimatedWeight: parseFloat(estimated_weight),
       pricePerGram: parseFloat(materials[0].price_per_gram),
       infillDensity: parseInt(infill_density),
+      layerHeightMm: parseFloat(layer_height) || 0.2,
+      wallLoops: [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2,
       surfaceFinish: surface_finish,
       smoothFinishPerGram: settingsMap.smooth_finish_per_gram || 3,
       colorAdjustment,
@@ -390,7 +399,7 @@ const createPrintOrder = async (req, res) => {
       file_name, file_url, file_public_id, file_size,
       dimension_x, dimension_y, dimension_z,
       material_id, color_id, custom_color_hex,
-      infill_density = 50, surface_finish = "standard", quantity = 1,
+      infill_density = 50, layer_height = 0.2, wall_loops = 2, surface_finish = "standard", quantity = 1,
       estimated_weight,
       surface_area_cm2,
       support_volume_cm3,
@@ -443,6 +452,8 @@ const createPrintOrder = async (req, res) => {
       estimatedWeight: parseFloat(estimated_weight),
       pricePerGram: parseFloat(materials[0].price_per_gram),
       infillDensity: parseInt(infill_density),
+      layerHeightMm: parseFloat(layer_height) || 0.2,
+      wallLoops: [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2,
       surfaceFinish: surface_finish,
       smoothFinishPerGram: settingsMap.smooth_finish_per_gram || 3,
       colorAdjustment,
@@ -471,20 +482,20 @@ const createPrintOrder = async (req, res) => {
           file_name, file_url, file_public_id, file_size,
           dimension_x, dimension_y, dimension_z,
           material_id, color_id, custom_color_hex,
-          infill_density, surface_finish, quantity,
+          infill_density, layer_height, wall_loops, surface_finish, quantity,
           estimated_weight, print_time_hours, material_cost, time_cost, color_cost, finish_cost,
           subtotal, tax_amount, total_amount,
           shipping_name, shipping_phone, shipping_address1,
           shipping_city, shipping_state, shipping_pincode,
           company_name, company_address, company_gstin,
           payment_method, payment_status, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.user.id, orderNumber, "confirmed",
           file_name, file_url, file_public_id || null, file_size || null,
           dimension_x || null, dimension_y || null, dimension_z || null,
           material_id, color_id || null, custom_color_hex || null,
-          parseInt(infill_density), surface_finish, parseInt(quantity),
+          parseInt(infill_density), parseFloat(layer_height) || 0.2, [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2, surface_finish, parseInt(quantity),
           pricing.effectiveWeight, pricing.printTimeHours, pricing.materialCost, pricing.timeCost, pricing.colorCost, pricing.finishCost,
           pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
           shipping_name || null, shipping_phone || null, shipping_address1 || null,

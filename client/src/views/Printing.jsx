@@ -176,11 +176,29 @@ export default function Printing() {
   const infillOptions = pricingConfig.infillOptions || defaultPricingData.infillOptions;
   const surfaceFinishes = pricingConfig.surfaceFinishes || defaultPricingData.surfaceFinishes;
 
+  // Layer height (mm) — thinner = finer detail but proportionally longer prints.
+  const LAYER_HEIGHT_OPTIONS = [
+    { id: "0.08", value: 0.08, label: "0.08 mm", tag: "Ultra fine" },
+    { id: "0.12", value: 0.12, label: "0.12 mm", tag: "Fine" },
+    { id: "0.16", value: 0.16, label: "0.16 mm", tag: "Detailed" },
+    { id: "0.20", value: 0.2, label: "0.20 mm", tag: "Standard" },
+    { id: "0.28", value: 0.28, label: "0.28 mm", tag: "Draft" },
+  ];
+
+  // Wall loops — more walls = thicker solid shell = stronger + heavier.
+  const WALL_OPTIONS = [
+    { id: "2", walls: 2, label: "2 Walls", tag: "Standard" },
+    { id: "3", walls: 3, label: "3 Walls", tag: "Stronger" },
+    { id: "4", walls: 4, label: "4 Walls", tag: "Strongest" },
+  ];
+
   const [selectedMaterialId, setSelectedMaterialId] = useState(materials[0]?.id || "pla");
   const [selectedColorHex, setSelectedColorHex] = useState("#1E88E5");
   const [customHexInput, setCustomHexInput] = useState("");
   const [selectedInfillId, setSelectedInfillId] = useState("50");
   const [selectedFinishId, setSelectedFinishId] = useState("standard");
+  const [selectedLayerHeightId, setSelectedLayerHeightId] = useState("0.20");
+  const [selectedWallsId, setSelectedWallsId] = useState("2");
   const [quantity, setQuantity] = useState(1);
   const [supportsEnabled, setSupportsEnabled] = useState(true);
   const [placingPrintOrder, setPlacingPrintOrder] = useState(false);
@@ -212,8 +230,8 @@ export default function Printing() {
     };
   }, []);
 
-  // Debounced exact slice: same file + material + infill + supports →
-  // same Bambu Studio filament/time as slicing in Bambu Studio itself.
+  // Debounced exact slice: same file + material + infill + layer + walls +
+  // supports → same Bambu Studio filament/time as slicing in Bambu Studio itself.
   const bambuRequestKey = useMemo(() => {
     if (!uploadedFile || useSample) return null;
     return [
@@ -222,12 +240,22 @@ export default function Printing() {
       uploadedFile.lastModified,
       selectedMaterialId || "pla",
       selectedInfillId,
+      selectedLayerHeightId,
+      selectedWallsId,
       supportsEnabled ? "sup" : "nosup",
     ].join("|");
-  }, [uploadedFile, useSample, selectedMaterialId, selectedInfillId, supportsEnabled]);
+  }, [uploadedFile, useSample, selectedMaterialId, selectedInfillId, selectedLayerHeightId, selectedWallsId, supportsEnabled]);
 
   useEffect(() => {
     if (!bambuRequestKey || !uploadedFile) {
+      setBambuQuote(null);
+      setBambuLoading(false);
+      return;
+    }
+    // Slicer status still loading → wait for it; known-unavailable
+    // (no CLI on server) → skip the call entirely so no 503 is fired;
+    // the built-in estimator is used instead.
+    if (!slicerStatus || slicerStatus.available === false) {
       setBambuQuote(null);
       setBambuLoading(false);
       return;
@@ -243,7 +271,8 @@ export default function Printing() {
           density: mat?.density || 1.24,
           infill_density: Number(selectedInfillId || 50),
           supports: supportsEnabled,
-          layer_height: 0.2,
+          layer_height: Number(selectedLayerHeight?.value) || 0.2,
+          wall_loops: Number(selectedWalls?.walls) || 2,
           surface_finish: selectedFinishId === "smooth" ? "smooth" : "standard",
           quantity: 1,
         };
@@ -264,7 +293,7 @@ export default function Printing() {
     }, 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bambuRequestKey, uploadedFile, selectedMaterialId, selectedInfillId, selectedFinishId, supportsEnabled]);
+  }, [bambuRequestKey, uploadedFile, selectedMaterialId, selectedInfillId, selectedLayerHeightId, selectedWallsId, selectedFinishId, supportsEnabled, slicerStatus?.available]);
 
   const useBambu =
     Boolean(bambuQuote?.slicer?.filamentGrams > 0) &&
@@ -384,25 +413,48 @@ export default function Printing() {
   }, [availableColors]);
 
   const selectedInfill = useMemo(() => {
-    return infillOptions.find((inf) => inf.id === selectedInfillId) || infillOptions[3];
+    return (
+      infillOptions.find((inf) => inf.id === selectedInfillId) ||
+      infillOptions.find((inf) => inf.id === "50") ||
+      infillOptions[0]
+    );
   }, [infillOptions, selectedInfillId]);
 
   const selectedFinish = useMemo(() => {
     return surfaceFinishes.find((f) => f.id === selectedFinishId) || surfaceFinishes[0];
   }, [surfaceFinishes, selectedFinishId]);
 
+  const selectedLayerHeight = useMemo(() => {
+    return (
+      LAYER_HEIGHT_OPTIONS.find((l) => l.id === selectedLayerHeightId) ||
+      LAYER_HEIGHT_OPTIONS.find((l) => l.id === "0.20") ||
+      LAYER_HEIGHT_OPTIONS[0]
+    );
+  }, [selectedLayerHeightId]);
+
+  const selectedWalls = useMemo(() => {
+    return WALL_OPTIONS.find((w) => w.id === selectedWallsId) || WALL_OPTIONS[0];
+  }, [selectedWallsId]);
+
+  // Print time scales inversely with layer height vs the 0.20mm baseline
+  // (0.08mm takes ~2.5x longer, 0.28mm ~0.7x). Exact slicer times win when available.
+  const layerTimeFactor = 0.2 / (Number(selectedLayerHeight?.value) || 0.2);
+
+  // Solid shell thickness: 0.4mm-nozzle wall loops + ~0.2mm top/bottom skins
+  // (1.0mm at the default 2 walls — matches the previous constant).
+  const shellMm = (Number(selectedWalls?.walls) || 2) * 0.4 + 0.2;
+
   // Slicer-style weight model (must match server/utils/priceCalculator.js):
   // solid shells (walls + top/bottom, ~1mm) print at 100% density, only the
   // interior scales with infill %. Falls back to legacy whole-volume
   // multipliers when surface-area data is unavailable (old carts).
   // Supports (Bambu-style auto): sparse columns + dense interface, same filament.
-  const SHELL_MM = 1.0;
   const WASTE_FACTOR = 1.03;
   const SUPPORT_DENSITY = 0.2;
   const SUPPORT_INTERFACE_MM = 0.6;
-  const LEGACY_INFILL_MULTIPLIERS = { 10: 0.4, 20: 0.55, 30: 0.7, 50: 1.0, 100: 1.5 };
+  const LEGACY_INFILL_MULTIPLIERS = { 10: 0.4, 12: 0.43, 15: 0.47, 20: 0.55, 25: 0.62, 30: 0.7, 40: 0.85, 50: 1.0, 100: 1.5 };
 
-  const estimateFilamentWeight = (solidWeight, density, surfaceAreaCm2, infillPct) => {
+  const estimateFilamentWeight = (solidWeight, density, surfaceAreaCm2, infillPct, shellThicknessMm = 1.0) => {
     const solid = Number(solidWeight);
     const rho = Number(density);
     const area = Number(surfaceAreaCm2);
@@ -411,8 +463,9 @@ export default function Printing() {
     if (!Number.isFinite(rho) || rho <= 0) return null;
     if (!Number.isFinite(area) || area <= 0) return null;
     if (!Number.isFinite(infill) || infill < 0 || infill > 100) return null;
+    const shellMm = Number(shellThicknessMm) > 0 ? Number(shellThicknessMm) : 1.0;
     const solidVol = solid / rho;
-    const shellVol = Math.min(solidVol, area * (SHELL_MM / 10));
+    const shellVol = Math.min(solidVol, area * (shellMm / 10));
     const interiorVol = Math.max(0, solidVol - shellVol);
     return Math.round((shellVol + interiorVol * (infill / 100)) * WASTE_FACTOR * rho * 100) / 100;
   };
@@ -434,7 +487,8 @@ export default function Printing() {
       baseWeight,
       selectedMaterial?.density || 1.24,
       modelAnalysis?.surfaceAreaCm2,
-      Number(inf?.id)
+      Number(inf?.id),
+      shellMm
     );
     if (est !== null) return Math.max(2, Math.round(est));
     const key = Number(inf?.id);
@@ -452,7 +506,7 @@ export default function Printing() {
 
   const quoteForWeight = (effectiveWeight) => {
     const materialCost = Math.round(effectiveWeight * (selectedMaterial?.pricePerGram || 4.5));
-    const printTimeHours = Math.round(effectiveWeight * hoursPerGram * 100) / 100;
+    const printTimeHours = Math.round(effectiveWeight * hoursPerGram * layerTimeFactor * 100) / 100;
     const slab = getTimeSlabForHours(printTimeHours);
     const timeCost = Math.round(printTimeHours * (slab.rate || 0) * 100) / 100;
     const finishCost = Math.round(effectiveWeight * (selectedFinish?.pricePerGram || 0));
@@ -534,8 +588,9 @@ export default function Printing() {
     // Material charge = weight × selling rate (₹/g)
     const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
 
-    // Estimated print time from file + material (weight already embeds both)
-    const printTimeHours = Math.round(weight * hoursPerGram * 100) / 100;
+    // Estimated print time from file + material (weight already embeds both).
+    // Layer height scales time vs the 0.20mm baseline (exact slicer times win).
+    const printTimeHours = Math.round(weight * hoursPerGram * layerTimeFactor * 100) / 100;
     const slab = getTimeSlabForHours(printTimeHours);
     const timeRate = slab.rate || 0;
 
@@ -544,7 +599,7 @@ export default function Printing() {
 
     // Support split for display (merged into material + time above, like server)
     const supportCost = Math.round(supportW * (selectedMaterial?.pricePerGram || 4.5) * 100) / 100;
-    const supportTimeHours = Math.round(supportW * hoursPerGram * 100) / 100;
+    const supportTimeHours = Math.round(supportW * hoursPerGram * layerTimeFactor * 100) / 100;
 
     // Color adjustment (usually 0)
     const colorCost = selectedColor?.priceAdjustment || 0;
@@ -588,7 +643,7 @@ export default function Printing() {
       gstAmount,
       grandTotal,
     };
-  }, [modelAnalysis, useSample, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig, hoursPerGram, slabs, supportsEnabled, useBambu, bambuQuote]);
+  }, [modelAnalysis, useSample, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig, hoursPerGram, slabs, supportsEnabled, useBambu, bambuQuote, selectedLayerHeight, selectedWalls, layerTimeFactor, shellMm]);
 
   const hasUploadedModel = Boolean(uploadedFile && !useSample);
   const summaryModel = hasUploadedModel
@@ -747,6 +802,8 @@ export default function Printing() {
     custom_color_hex: selectedColor.id === "custom" ? selectedColorHex : null,
     infill_density: Number(selectedInfill.id || 50),
     surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
+    layer_height: Number(selectedLayerHeight?.value) || 0.2,
+    wall_loops: Number(selectedWalls?.walls) || 2,
     quantity,
     // Base (unscaled) weight — the server applies its slicer shell model
     estimated_weight: calculations.baseWeight,
@@ -1145,6 +1202,28 @@ export default function Printing() {
                   </div>
                 </div>
 
+                {/* Layer Height */}
+                <div>
+                  <div className="option-group-label">
+                    <span>Layer Height</span>
+                  </div>
+                  <div className="infill-cards-grid">
+                    {LAYER_HEIGHT_OPTIONS.map((lh) => {
+                      const isSelected = lh.id === selectedLayerHeightId;
+                      return (
+                        <div
+                          key={lh.id}
+                          className={`infill-card ${isSelected ? "active" : ""}`}
+                          onClick={() => setSelectedLayerHeightId(lh.id)}
+                        >
+                          <div className="infill-percentage">{lh.label}</div>
+                          <div className="infill-tag">{lh.tag}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Infill Density */}
                 <div>
                   <div className="option-group-label">
@@ -1172,6 +1251,28 @@ export default function Printing() {
                           <div className="infill-tag">
                             ₹{cardPrice} {inf.tag ? `(${inf.tag})` : ""}
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Wall Count */}
+                <div>
+                  <div className="option-group-label">
+                    <span>Wall Count</span>
+                  </div>
+                  <div className="finish-cards-grid">
+                    {WALL_OPTIONS.map((w) => {
+                      const isSelected = w.id === selectedWallsId;
+                      return (
+                        <div
+                          key={w.id}
+                          className={`finish-card ${isSelected ? "active" : ""}`}
+                          onClick={() => setSelectedWallsId(w.id)}
+                        >
+                          <div className="finish-name">{w.label}</div>
+                          <div className="finish-price">{w.tag}</div>
                         </div>
                       );
                     })}
@@ -1279,7 +1380,7 @@ export default function Printing() {
                       ) : slicerStatus && !slicerStatus.available ? (
                         <>Estimate mode (free Bambu Studio CLI not installed on server). Same configs, heuristic weight/time.</>
                       ) : (
-                        <>Slicing exactly like Bambu Studio: P1S · 0.4 nozzle · 0.20mm Standard (2 walls · grid infill · tree-auto supports)…</>
+                        <>Slicing exactly like Bambu Studio: P1S · 0.4 nozzle · {selectedLayerHeight.label} {selectedLayerHeight.tag} ({selectedWalls.label} · grid infill · tree-auto supports)…</>
                       )}
                     </span>
                     <span className="summary-delivery-time" style={{ marginTop: 4 }}>
@@ -1312,7 +1413,7 @@ export default function Printing() {
                       {summaryModel.dimensions.z} mm
                     </div>
                     <div className="summary-model-tags">
-                      {selectedMaterial.name} • {selectedColor.name} • {selectedInfill.label} Infill
+                      {selectedMaterial.name} • {selectedColor.name} • {selectedInfill.label} Infill • {selectedLayerHeight.label} • {selectedWalls.label}
                     </div>
                     <div className="summary-model-qty">Qty: {summaryQuantity}</div>
                     <button
@@ -1368,6 +1469,22 @@ export default function Printing() {
                     <div className="breakdown-value-group">
                       <span className="breakdown-weight">{selectedInfill.tag || `${selectedInfill.percentage}%`}</span>
                       <span className="breakdown-price">₹{summaryCalculations.infillCost}</span>
+                    </div>
+                  </div>
+
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Layer Height</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{selectedLayerHeight.label} ({selectedLayerHeight.tag})</span>
+                      <span className="breakdown-price">{layerTimeFactor === 1 ? "Base time" : layerTimeFactor > 1 ? `${layerTimeFactor.toFixed(2)}× time` : `${(1 / layerTimeFactor).toFixed(2)}× faster`}</span>
+                    </div>
+                  </div>
+
+                  <div className="breakdown-row">
+                    <span className="breakdown-label">Wall Count</span>
+                    <div className="breakdown-value-group">
+                      <span className="breakdown-weight">{selectedWalls.label} ({selectedWalls.tag})</span>
+                      <span className="breakdown-price">{shellMm.toFixed(1)}mm shell</span>
                     </div>
                   </div>
 
