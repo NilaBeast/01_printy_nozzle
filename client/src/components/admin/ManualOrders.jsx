@@ -651,20 +651,20 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               <label className="pf-field"><span>Country</span>
                 <input value={form.customer.country} onChange={(e) => setCustomer({ country: e.target.value })} />
               </label>
-              <label className="pf-field"><span>Address Line 1 <b>*</b></span>
-                <input required value={form.customer.address1} onChange={(e) => setCustomer({ address1: e.target.value })} />
+              <label className="pf-field"><span>Address Line 1</span>
+                <input value={form.customer.address1} onChange={(e) => setCustomer({ address1: e.target.value })} />
               </label>
               <label className="pf-field"><span>Address Line 2</span>
                 <input value={form.customer.address2} onChange={(e) => setCustomer({ address2: e.target.value })} />
               </label>
-              <label className="pf-field"><span>City <b>*</b></span>
-                <input required value={form.customer.city} onChange={(e) => setCustomer({ city: e.target.value })} />
+              <label className="pf-field"><span>City</span>
+                <input value={form.customer.city} onChange={(e) => setCustomer({ city: e.target.value })} />
               </label>
-              <label className="pf-field"><span>State <b>*</b></span>
-                <input required value={form.customer.state} onChange={(e) => setCustomer({ state: e.target.value })} placeholder="West Bengal" />
+              <label className="pf-field"><span>State</span>
+                <input value={form.customer.state} onChange={(e) => setCustomer({ state: e.target.value })} placeholder="West Bengal" />
               </label>
-              <label className="pf-field"><span>Pincode <b>*</b></span>
-                <input required value={form.customer.pincode} onChange={(e) => setCustomer({ pincode: e.target.value })} />
+              <label className="pf-field"><span>Pincode</span>
+                <input value={form.customer.pincode} onChange={(e) => setCustomer({ pincode: e.target.value })} />
               </label>
             </div>
           </div>
@@ -729,20 +729,20 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                 <label className="pf-field"><span>Country</span>
                   <input value={form.shipping.country} onChange={(e) => setShipping({ country: e.target.value })} />
                 </label>
-                <label className="pf-field"><span>Address Line 1 <b>*</b></span>
-                  <input required value={form.shipping.address1} onChange={(e) => setShipping({ address1: e.target.value })} />
+                <label className="pf-field"><span>Address Line 1</span>
+                  <input value={form.shipping.address1} onChange={(e) => setShipping({ address1: e.target.value })} />
                 </label>
                 <label className="pf-field"><span>Address Line 2</span>
                   <input value={form.shipping.address2} onChange={(e) => setShipping({ address2: e.target.value })} />
                 </label>
-                <label className="pf-field"><span>City <b>*</b></span>
-                  <input required value={form.shipping.city} onChange={(e) => setShipping({ city: e.target.value })} />
+                <label className="pf-field"><span>City</span>
+                  <input value={form.shipping.city} onChange={(e) => setShipping({ city: e.target.value })} />
                 </label>
-                <label className="pf-field"><span>State <b>*</b></span>
-                  <input required value={form.shipping.state} onChange={(e) => setShipping({ state: e.target.value })} />
+                <label className="pf-field"><span>State</span>
+                  <input value={form.shipping.state} onChange={(e) => setShipping({ state: e.target.value })} />
                 </label>
-                <label className="pf-field"><span>Pincode <b>*</b></span>
-                  <input required value={form.shipping.pincode} onChange={(e) => setShipping({ pincode: e.target.value })} />
+                <label className="pf-field"><span>Pincode</span>
+                  <input value={form.shipping.pincode} onChange={(e) => setShipping({ pincode: e.target.value })} />
                 </label>
               </div>
             )}

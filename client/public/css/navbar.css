@@ -489,7 +489,13 @@
 }
 
 
-.products-nav-item:hover
+.products-nav-item {
+  position: relative;
+}
+
+.products-nav-item.open
+.products-arrow,
+.products-nav-item:focus-within
 .products-arrow {
   transform:
     rotate(180deg);
@@ -543,6 +549,9 @@
    PRODUCT DROPDOWN HOVER BRIDGE
    ========================================================= */
 
+/* Narrow hover bridge: covers only the link→menu gap of THIS item,
+   so it can never steal hovers from the neighbouring menu. */
+
 .products-nav-item::after {
   content: "";
 
@@ -550,9 +559,11 @@
 
   left: 0;
 
+  right: 0;
+
   top: 100%;
 
-  width: 235px;
+  width: auto;
 
   height: 8px;
 
@@ -562,7 +573,9 @@
 }
 
 
-.products-nav-item:hover
+.products-nav-item.open
+.products-dropdown,
+.products-nav-item:focus-within
 .products-dropdown {
   opacity: 1;
 
@@ -2713,18 +2726,17 @@ and (min-width: 992px) {
 
   position: absolute;
 
-  left: 50%;
+  left: 0;
+
+  right: 0;
 
   top: 100%;
 
-  width: 720px;
+  width: auto;
 
   height: 10px;
 
   background: transparent;
-
-  transform:
-    translateX(-50%);
 
   pointer-events: auto;
 }
@@ -2772,7 +2784,9 @@ and (min-width: 992px) {
   z-index: 1002;
 }
 
-.bestseller-nav-item:hover
+.bestseller-nav-item.open
+.bestseller-dropdown,
+.bestseller-nav-item:focus-within
 .bestseller-dropdown {
   opacity: 1;
 

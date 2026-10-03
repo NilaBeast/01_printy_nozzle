@@ -817,32 +817,40 @@
 
   .cart-item-row,
   .skeleton-cart-row {
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
-      "thumb details"
-      "thumb price"
-      "qty total"
-      "remove remove";
+      "info info"
+      "price total"
+      "qty total";
     gap: 12px;
     padding: 16px 40px 16px 0;
     position: relative;
+    min-width: 0;
+  }
+
+  /* Product block always spans full width so the name can never be squeezed */
+  .cart-product-info {
+    grid-area: info;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .cart-thumb-wrapper {
-    grid-area: thumb;
-  }
-
-  .cart-product-info {
-    grid-area: details;
-    grid-column: auto;
-    min-width: 0;
+    flex: 0 0 72px;
   }
 
   .cart-product-details {
+    flex: 1 1 auto;
     min-width: 0;
   }
 
-  .cart-product-name {
+  .cart-product-name,
+  .cart-product-sub {
+    display: block;
+    min-width: 0;
+    word-break: normal;
     overflow-wrap: break-word;
   }
 

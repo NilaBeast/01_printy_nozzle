@@ -27,7 +27,7 @@ const fetchCartRows = async (cartId) => {
               ci.file_name, ci.file_url, ci.file_public_id, ci.file_size,
               ci.dimension_x, ci.dimension_y, ci.dimension_z,
               ci.material_id, ci.color_id, ci.custom_color_hex,
-              ci.infill_density, ci.surface_finish, ci.estimated_weight,
+              ci.infill_density, ci.layer_height, ci.wall_loops, ci.surface_finish, ci.estimated_weight,
               ci.surface_area_cm2, ci.support_volume_cm3,
               ci.slicer_filament_grams, ci.slicer_time_hours, ci.slicer_support_grams,
               p.name, p.slug, p.price, p.compare_price, p.stock,
@@ -80,6 +80,8 @@ const mapCartRow = (row) => {
     const colorLabel = row.color_name || row.custom_color_hex || "Custom";
     const infill = row.infill_density || 50;
     const finish = row.surface_finish === "smooth" ? "Smooth" : "Standard";
+    const layerLabel = row.layer_height != null ? `${Number(row.layer_height).toFixed(2)}mm` : "0.20mm";
+    const wallsLabel = `${row.wall_loops || 2} Walls`;
     const dims =
       row.dimension_x != null
         ? `${Number(row.dimension_x)}×${Number(row.dimension_y)}×${Number(row.dimension_z)} mm`
@@ -91,7 +93,7 @@ const mapCartRow = (row) => {
       name: row.file_name ? `3D Print — ${row.file_name}` : "Custom 3D Print",
       slug: null,
       category_name: "3D Printing",
-      variant_value: `${material} • ${colorLabel} • ${infill}% • ${finish}`,
+      variant_value: `${material} • ${colorLabel} • ${infill}% • ${layerLabel} • ${wallsLabel} • ${finish}`,
       subtitle: `${material} • ${colorLabel} • ${infill}%`,
       image: "/images/rocket.png",
       unit_price: unit,
@@ -277,6 +279,8 @@ const addPrintToCart = async (req, res) => {
       color_id,
       custom_color_hex,
       infill_density = 50,
+      layer_height = 0.2,
+      wall_loops = 2,
       surface_finish = "standard",
       quantity = 1,
       estimated_weight,
@@ -336,6 +340,8 @@ const addPrintToCart = async (req, res) => {
       estimatedWeight: parseFloat(estimated_weight),
       pricePerGram: parseFloat(materials[0].price_per_gram),
       infillDensity: parseInt(infill_density) || 50,
+      layerHeightMm: parseFloat(layer_height) || 0.2,
+      wallLoops: [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2,
       surfaceFinish: surface_finish === "smooth" ? "smooth" : "standard",
       smoothFinishPerGram: settingsMap.smooth_finish_per_gram || 3,
       colorAdjustment,
@@ -369,13 +375,13 @@ const addPrintToCart = async (req, res) => {
            file_name, file_url, file_public_id, file_size,
            dimension_x, dimension_y, dimension_z,
            material_id, color_id, custom_color_hex,
-           infill_density, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3, print_time_hours, time_cost,
+           infill_density, layer_height, wall_loops, surface_finish, estimated_weight, surface_area_cm2, support_volume_cm3, print_time_hours, time_cost,
            slicer_filament_grams, slicer_time_hours, slicer_support_grams)
          VALUES (?, NULL, NULL, ?, 'print', ?,
            ?, ?, ?, ?,
            ?, ?, ?,
            ?, ?, ?,
-           ?, ?, ?, ?, ?, ?, ?,
+           ?, ?, ?, ?, ?, ?, ?, ?, ?,
            ?, ?, ?)`,
         [
           cartId,
@@ -392,6 +398,8 @@ const addPrintToCart = async (req, res) => {
           color_id || null,
           custom_color_hex || null,
           parseInt(infill_density) || 50,
+          parseFloat(layer_height) || 0.2,
+          [2, 3, 4].includes(Number(wall_loops)) ? Number(wall_loops) : 2,
           surface_finish === "smooth" ? "smooth" : "standard",
           parseFloat(estimated_weight),
           surface_area_cm2 != null ? Number(surface_area_cm2) : null,

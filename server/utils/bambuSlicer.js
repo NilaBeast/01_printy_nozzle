@@ -369,11 +369,35 @@ function readTextOrNull(file) {
   }
 }
 
+/** Per-quote copy of a Bambu process profile with exact layer height +
+ * wall loops applied. Falls back to the bundled file when it cannot be
+ * parsed (Bambu then uses the band default — never a crash). */
+function writeQuoteProcessFile(workDir, file, { layerHeight, wallLoops }) {
+  const src = profilePath("bambu", file);
+  try {
+    const raw = fs.readFileSync(src, "utf8");
+    const json = JSON.parse(raw);
+    const h = Number(layerHeight);
+    if (Number.isFinite(h) && h > 0) {
+      json.layer_height = h;
+      json.first_layer_height = Math.min(0.3, Math.round((h + 0.04) * 100) / 100);
+    }
+    const walls = Number(wallLoops);
+    if ([2, 3, 4].includes(walls)) json.wall_loops = walls;
+    const dest = path.join(workDir, `quote-process-${file}`);
+    fs.writeFileSync(dest, JSON.stringify(json), "utf8");
+    return dest;
+  } catch {
+    return src;
+  }
+}
+
 /** Build a Prusa-family INI for this quote (Bambu-equivalent defaults). */
-function buildPrusaIni({ infillDensity, supports, filament, layerHeight }) {
+function buildPrusaIni({ infillDensity, supports, filament, layerHeight, wallLoops }) {
   const base = readTextOrNull(profilePath("prusa", "base.ini")) || "";
   const h = Number(layerHeight) || 0.2;
   const infill = Math.min(100, Math.max(0, Number(infillDensity ?? 50)));
+  const walls = [2, 3, 4].includes(Number(wallLoops)) ? Number(wallLoops) : 2;
   const overrides = [
     `layer_height = ${h}`,
     `first_layer_height = ${Math.min(0.3, h + 0.04)}`,
@@ -381,7 +405,7 @@ function buildPrusaIni({ infillDensity, supports, filament, layerHeight }) {
     `fill_pattern = grid`,
     `top_solid_layers = 5`,
     `bottom_solid_layers = 3`,
-    `perimeters = 2`,
+    `perimeters = ${walls}`,
     `support_material = ${supports ? 1 : 0}`,
     `support_material_auto = ${supports ? 1 : 0}`,
     `support_material_style = tree`,
@@ -407,10 +431,12 @@ function extractGcodeFrom3mf(mfPath) {
   return null;
 }
 
-async function sliceWithBambu(binary, { inputPath, workDir, infillDensity, supports, filament, layerHeight }) {
+async function sliceWithBambu(binary, { inputPath, workDir, infillDensity, supports, filament, layerHeight, wallLoops }) {
   const process = processProfileFor(layerHeight);
   const machineFile = profilePath("bambu", "machine.p1s.json");
-  const processFile = profilePath("bambu", process.file);
+  // Per-quote copy of the process profile so layer height + wall loops are
+  // exact (bundled JSONs carry the band default; unknown CLI keys are ignored).
+  const processFile = writeQuoteProcessFile(workDir, process.file, { layerHeight, wallLoops });
   const filamentFile = profilePath("bambu", "filament.generic.json");
   const out3mf = path.join(workDir, "out.gcode.3mf");
   const args = [
@@ -437,8 +463,8 @@ async function sliceWithBambu(binary, { inputPath, workDir, infillDensity, suppo
   return { ok: true, stats, engine: "bambu", profile: process.label, out3mf };
 }
 
-async function sliceWithPrusaFamily(binary, engine, { inputPath, workDir, infillDensity, supports, filament, layerHeight }) {
-  const ini = buildPrusaIni({ infillDensity, supports, filament, layerHeight });
+async function sliceWithPrusaFamily(binary, engine, { inputPath, workDir, infillDensity, supports, filament, layerHeight, wallLoops }) {
+  const ini = buildPrusaIni({ infillDensity, supports, filament, layerHeight, wallLoops });
   const iniPath = path.join(workDir, "quote.ini");
   const outGcode = path.join(workDir, "out.gcode");
   fs.writeFileSync(iniPath, ini, "utf8");
@@ -460,12 +486,12 @@ async function sliceWithPrusaFamily(binary, engine, { inputPath, workDir, infill
  * return EXACT filament + time numbers.
  *
  * Input: { inputPath, material ('pla'|slug), density?, infillDensity (10-100),
- *          supports (bool), layerHeight? (default 0.2) }
+ *          supports (bool), layerHeight? (default 0.2), wallLoops? (2|3|4, default 2) }
  * Output: { ok, available, engine, filamentGrams, printTimeHours, supportGrams,
  *           profile, printer, cached, error? }
  * Never throws for a missing binary — returns { ok:false, available:false }.
  */
-async function sliceModel({ inputPath, material = "pla", density, infillDensity = 50, supports = true, layerHeight = 0.2 } = {}) {
+async function sliceModel({ inputPath, material = "pla", density, infillDensity = 50, supports = true, layerHeight = 0.2, wallLoops = 2 } = {}) {
   const status = await getSlicerStatus();
   if (!status.available) {
     return { ok: false, available: false, engine: null, error: status.message };
@@ -476,13 +502,15 @@ async function sliceModel({ inputPath, material = "pla", density, infillDensity 
   const filament = filamentFor(material, density);
   const infill = Math.min(100, Math.max(0, Number(infillDensity ?? 50)));
   const useSupports = supports !== false && supports !== "false" && supports !== 0;
+  const walls = [2, 3, 4].includes(Number(wallLoops)) ? Number(wallLoops) : 2;
+  const height = Number(layerHeight) > 0 ? Number(layerHeight) : 0.2;
 
   // Cache: same file bytes + same settings → same Bambu result.
   let cacheKey = null;
   try {
     ensureDir(CACHE_DIR);
     const hash = await sha256File(inputPath);
-    cacheKey = `${hash}.${String(material).toLowerCase()}.${infill}.${useSupports ? 1 : 0}.${Number(layerHeight) || 0.2}.json`;
+    cacheKey = `${hash}.${String(material).toLowerCase()}.${infill}.${useSupports ? 1 : 0}.${height}.${walls}.json`;
     const hit = path.join(CACHE_DIR, cacheKey);
     if (fs.existsSync(hit)) {
       const cached = JSON.parse(fs.readFileSync(hit, "utf8"));
@@ -496,9 +524,9 @@ async function sliceModel({ inputPath, material = "pla", density, infillDensity 
   try {
     let result;
     if (status.engine === "bambu") {
-      result = await sliceWithBambu(status.binary, { inputPath, workDir, infillDensity: infill, supports: useSupports, filament, layerHeight });
+      result = await sliceWithBambu(status.binary, { inputPath, workDir, infillDensity: infill, supports: useSupports, filament, layerHeight: height, wallLoops: walls });
     } else {
-      result = await sliceWithPrusaFamily(status.binary, status.engine, { inputPath, workDir, infillDensity: infill, supports: useSupports, filament, layerHeight });
+      result = await sliceWithPrusaFamily(status.binary, status.engine, { inputPath, workDir, infillDensity: infill, supports: useSupports, filament, layerHeight: height, wallLoops: walls });
     }
     if (!result.ok) {
       return { ok: false, available: true, engine: status.engine, error: result.error };

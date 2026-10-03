@@ -129,6 +129,40 @@ const readCartCount = () => {
   }, [user?.avatar_url]);
 
   /* =====================================================
+     DESKTOP DROPDOWNS (HOVER INTENT)
+     Pure CSS :hover lets the 720px best-sellers bridge steal hovers
+     from Products. A single openMenu state with a short close delay
+     keeps exactly one menu open and tolerates the link→menu gap.
+     ===================================================== */
+
+  const [openMenu, setOpenMenu] = useState(null);
+
+  const menuCloseTimer = useRef(null);
+
+  const openDesktopMenu = (menu) => {
+    if (menuCloseTimer.current) {
+      clearTimeout(menuCloseTimer.current);
+      menuCloseTimer.current = null;
+    }
+    setOpenMenu(menu);
+  };
+
+  const scheduleDesktopMenuClose = () => {
+    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    menuCloseTimer.current = setTimeout(() => {
+      setOpenMenu(null);
+      menuCloseTimer.current = null;
+    }, 180);
+  };
+
+  useEffect(
+    () => () => {
+      if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    },
+    []
+  );
+
+  /* =====================================================
      CLOSE EVERYTHING
      ===================================================== */
 
@@ -142,6 +176,8 @@ const readCartCount = () => {
     setMobileBestOpen(false);
 
     setAccountOpen(false);
+
+    setOpenMenu(null);
   };
 
   /* =====================================================
@@ -522,7 +558,11 @@ useEffect(() => {
                   PRODUCTS
                   ================================================= */}
 
-              <li className="nav-item products-nav-item">
+              <li
+                className={`nav-item products-nav-item ${openMenu === "products" ? "open" : ""}`}
+                onMouseEnter={() => openDesktopMenu("products")}
+                onMouseLeave={scheduleDesktopMenuClose}
+              >
                 <NavLink
                   to="/products"
                   end
@@ -538,7 +578,11 @@ useEffect(() => {
 
                 {/* PRODUCTS DROPDOWN */}
 
-                <div className="products-dropdown">
+                <div
+                  className={`products-dropdown ${openMenu === "products" ? "open" : ""}`}
+                  onMouseEnter={() => openDesktopMenu("products")}
+                  onMouseLeave={scheduleDesktopMenuClose}
+                >
                   <NavLink to="/products" onClick={closeNavbar}>
                     <i className="bi bi-grid"></i>
 
@@ -584,7 +628,11 @@ useEffect(() => {
                   BEST SELLERS (AUTOMATIC FROM ORDERS)
                   ================================================= */}
 
-              <li className="nav-item bestseller-nav-item">
+              <li
+                className={`nav-item bestseller-nav-item ${openMenu === "bestsellers" ? "open" : ""}`}
+                onMouseEnter={() => openDesktopMenu("bestsellers")}
+                onMouseLeave={scheduleDesktopMenuClose}
+              >
                 <NavLink
                   to="/products?sort=bestselling"
                   className={() =>
@@ -599,7 +647,11 @@ useEffect(() => {
 
                 {/* BEST SELLERS MEGA DROPDOWN */}
 
-                <div className="bestseller-dropdown">
+                <div
+                  className={`bestseller-dropdown ${openMenu === "bestsellers" ? "open" : ""}`}
+                  onMouseEnter={() => openDesktopMenu("bestsellers")}
+                  onMouseLeave={scheduleDesktopMenuClose}
+                >
                   {bestSellerLoading ? (
                     <div className="bestseller-loading">Loading best sellers...</div>
                   ) : bestSellerCats.length === 0 ? (

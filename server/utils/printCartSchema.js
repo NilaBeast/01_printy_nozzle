@@ -27,6 +27,8 @@ const CART_PRINT_COLUMNS = [
   ["color_id", "INT NULL"],
   ["custom_color_hex", "VARCHAR(7) NULL"],
   ["infill_density", "INT DEFAULT 50"],
+  ["layer_height", "DECIMAL(4,2) DEFAULT 0.20"],
+  ["wall_loops", "INT DEFAULT 2"],
   ["surface_finish", "VARCHAR(20) DEFAULT 'standard'"],
   ["estimated_weight", "DECIMAL(10,2) NULL"],
   ["surface_area_cm2", "DECIMAL(10,2) NULL"],
@@ -122,6 +124,8 @@ const ensurePrintOrdersTable = async (conn) => {
           color_id INT DEFAULT NULL,
           custom_color_hex VARCHAR(7) DEFAULT NULL,
           infill_density INT DEFAULT 50,
+          layer_height DECIMAL(4,2) DEFAULT 0.20,
+          wall_loops INT DEFAULT 2,
           surface_finish ENUM('standard', 'smooth') DEFAULT 'standard',
           quantity INT DEFAULT 1,
           estimated_weight DECIMAL(8,2) DEFAULT NULL,
@@ -174,6 +178,12 @@ const ensurePrintOrdersTable = async (conn) => {
         }
         if (!(await columnExists(conn, "printing_orders", "time_cost"))) {
           await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `time_cost` DECIMAL(10,2) DEFAULT 0.00 AFTER `material_cost`");
+        }
+        if (!(await columnExists(conn, "printing_orders", "layer_height"))) {
+          await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `layer_height` DECIMAL(4,2) DEFAULT 0.20 AFTER `infill_density`");
+        }
+        if (!(await columnExists(conn, "printing_orders", "wall_loops"))) {
+          await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `wall_loops` INT DEFAULT 2 AFTER `layer_height`");
         }
       } catch (e) {
         if (!warned) console.warn("⚠️ Could not add printing_orders time columns:", e.message);

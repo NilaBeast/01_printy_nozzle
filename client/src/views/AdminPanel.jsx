@@ -7334,6 +7334,14 @@ function AdminPrintOrderDetail({ order, loading, onBack, onStatusUpdate, onNotes
               <span className="admin-detail-value">{order.infill_density || 50}%</span>
             </div>
             <div className="admin-detail-field">
+              <span className="admin-detail-label">Layer Height</span>
+              <span className="admin-detail-value">{order.layer_height != null ? `${Number(order.layer_height).toFixed(2)}mm` : "0.20mm"}</span>
+            </div>
+            <div className="admin-detail-field">
+              <span className="admin-detail-label">Wall Loops</span>
+              <span className="admin-detail-value">{order.wall_loops || 2}</span>
+            </div>
+            <div className="admin-detail-field">
               <span className="admin-detail-label">Surface Finish</span>
               <span className="admin-detail-value" style={{ textTransform: "capitalize" }}>{order.surface_finish || "standard"}</span>
             </div>
