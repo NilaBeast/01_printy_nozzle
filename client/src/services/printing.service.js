@@ -41,6 +41,14 @@ const printingService = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  // Guest WhatsApp quote request (details + model file). Server stores the
+  // quotation and returns the wa.me deep link to open.
+  sendQuote: (formData) => {
+    return api.post("/printing/quote", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 180000,
+    });
+  },
   createOrder: (payload) => api.post("/printing/order", payload),
   getUserPrintOrders: (params = {}) => api.get("/printing/orders", { params }),
   getPrintOrderById: (id) => api.get(`/printing/orders/${id}`),

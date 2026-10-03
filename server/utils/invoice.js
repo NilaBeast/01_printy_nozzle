@@ -526,15 +526,25 @@ const buildManualInvoiceData = ({
     });
   }
 
-  const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
-  const taxTotal = round2(lines.reduce((s, l) => s + l.tax, 0));
+  const linesSubtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
+  const linesTax = round2(lines.reduce((s, l) => s + l.tax, 0));
   const orderDiscount = Math.max(0, Number(discount) || 0);
-  const computedTotal = Math.max(0, round2(subtotal + taxTotal - orderDiscount));
-  // Optional admin round figure — the invoice total becomes exactly this.
+  const computedTotal = Math.max(0, round2(linesSubtotal + linesTax - orderDiscount));
+  // Optional admin round figure — treated as the FINAL GST-inclusive total:
+  // GST is auto-split out of it at the invoice rate, so Taxes is always
+  // calculated even when the line rates are left blank.
   const figure = Number(roundTotal);
   const useFigure = Number.isFinite(figure) && figure > 0;
-  const grandTotal = useFigure ? round2(figure) : computedTotal;
-  const roundOff = useFigure ? round2(grandTotal - computedTotal) : 0;
+  let subtotal = linesSubtotal;
+  let taxTotal = linesTax;
+  let grandTotal = computedTotal;
+  let roundOff = 0;
+  if (useFigure) {
+    grandTotal = round2(figure);
+    taxTotal = taxRate > 0 ? round2((grandTotal * taxRate) / (100 + taxRate)) : 0;
+    subtotal = round2(grandTotal - taxTotal + orderDiscount);
+    roundOff = 0;
+  }
   const qtyTotal = lines.reduce((s, l) => s + Number(l.qty || 0), 0);
   // Advance paid (clamped to the total) → pending auto-calculates.
   const amountPaidNum = Math.min(Math.max(0, Number(amountPaid) || 0), grandTotal);

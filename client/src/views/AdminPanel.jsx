@@ -219,6 +219,14 @@ function AdminPanel() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [printOrders, setPrintOrders] = useState([]);
+  const [quotations, setQuotations] = useState([]);
+  const [quotationsLoading, setQuotationsLoading] = useState(false);
+  const [quotationSearch, setQuotationSearch] = useState("");
+  const [quotationStatusFilter, setQuotationStatusFilter] = useState("all");
+  const [quotationPage, setQuotationPage] = useState(1);
+  const [expandedQuotationId, setExpandedQuotationId] = useState(null);
+  // Prefill for ManualOrders when "Generate Invoice" is clicked on a quotation.
+  const [manualPrefill, setManualPrefill] = useState(null);
   const [users, setUsers] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -400,6 +408,76 @@ function AdminPanel() {
     if (activeTab === "settings") loadShipStatus();
   }, [activeTab]);
 
+  const loadQuotations = async () => {
+    setQuotationsLoading(true);
+    try {
+      const res = await adminService.listPrintQuotations({ limit: 100 });
+      setQuotations(res.data?.data?.quotations || []);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to load quotations");
+    } finally {
+      setQuotationsLoading(false);
+    }
+  };
+
+  // Reload quotations whenever the Quotations subtab is opened.
+  useEffect(() => {
+    if (activeTab === "printing" && printSubTab === "quotations") {
+      loadQuotations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, printSubTab]);
+
+  const updateQuotationStatus = async (id, status) => {
+    try {
+      await adminService.updatePrintQuotation(id, { status });
+      setQuotations((prev) => prev.map((q) => (q.id === id ? { ...q, status } : q)));
+      toast.success("Quotation status updated");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Unable to update quotation");
+    }
+  };
+
+  const deleteQuotation = async (q) => {
+    if (!window.confirm(`Delete quotation #${q.id} from ${q.customer_name}? This cannot be undone.`)) return;
+    try {
+      await adminService.deletePrintQuotation(q.id);
+      setQuotations((prev) => prev.filter((x) => x.id !== q.id));
+      if (expandedQuotationId === q.id) setExpandedQuotationId(null);
+      toast.success("Quotation deleted");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Delete failed");
+    }
+  };
+
+  const generateInvoiceFromQuotation = (q) => {
+    // Jump to the manual invoice page with every quotation field prefilled.
+    setManualPrefill({ key: Date.now(), quotation: q });
+    setActiveTab("manual");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info(`Quotation #${q.id} loaded into the manual invoice form`);
+  };
+
+  const filteredQuotations = useMemo(() => {
+    const term = quotationSearch.trim().toLowerCase();
+    return (quotations || []).filter((q) => {
+      const matchesStatus = quotationStatusFilter === "all" || q.status === quotationStatusFilter;
+      const matchesSearch =
+        !term ||
+        [q.customer_name, q.customer_phone, q.customer_email, q.file_name]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(term));
+      return matchesStatus && matchesSearch;
+    });
+  }, [quotations, quotationSearch, quotationStatusFilter]);
+
+  const formatQuotationDate = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
   const loadAdminData = async () => {
     setLoading(true);
     try {
@@ -408,6 +486,7 @@ function AdminPanel() {
         productsRes,
         ordersRes,
         printOrdersRes,
+        quotationsRes,
         usersRes,
         couponsRes,
         categoriesRes,
@@ -426,6 +505,7 @@ function AdminPanel() {
         adminService.getProducts({ limit: 50 }),
         adminService.getOrders({ limit: 50 }),
         adminService.getPrintOrders({ limit: 50 }),
+        adminService.listPrintQuotations({ limit: 100 }).catch(() => ({ data: { data: { quotations: [] } } })),
         adminService.getUsers({ limit: 50 }),
         adminService.getCoupons(),
         adminService.getCategories(),
@@ -445,6 +525,7 @@ function AdminPanel() {
       setProducts(productsRes.data.data?.products || []);
       setOrders(ordersRes.data.data?.orders || []);
       setPrintOrders(printOrdersRes.data.data?.orders || []);
+      setQuotations(quotationsRes.data.data?.quotations || []);
       setUsers(usersRes.data.data?.users || []);
       setCoupons(couponsRes.data.data || []);
       setCategories(categoriesRes.data.categories || []);
@@ -2084,6 +2165,7 @@ function AdminPanel() {
 
   const printSubTabs = [
     { id: "orders", label: "3D Printing Orders", count: printOrders.length, Icon: Box },
+    { id: "quotations", label: "3D Print Quotations", count: quotations.length, Icon: MessageSquare },
     { id: "colors", label: "Colors", count: colors.length, Icon: Palette },
     { id: "materials", label: "Materials", count: materials.length, Icon: Cuboid },
     { id: "rates", label: "Hourly Rates", count: hourlySlabs.length, Icon: Clock },
@@ -3086,7 +3168,7 @@ function AdminPanel() {
                     {paginatedCustomerOrders.length ? (
                       paginatedCustomerOrders.map((order, idx) => {
                         const rowNum = (safeOrderPage - 1) * orderPerPage + idx + 1;
-                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || "Guest";
+                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || order.shipping_name || "Guest";
                         const items = Array.isArray(order.items) ? order.items : [];
                         const itemCount = order.item_count ?? items.length ?? 0;
                         const firstItem = items[0];
@@ -3128,7 +3210,7 @@ function AdminPanel() {
                                 </span>
                                 <span>
                                   <strong className="admin-print-customer">{customerName}</strong>
-                                  <span className="admin-print-sub">{order.email || "—"}</span>
+                                  <span className="admin-print-sub">{order.email || order.shipping_phone || "—"}</span>
                                   {order.shipping_phone && (
                                     <span className="admin-print-sub">+91 {order.shipping_phone}</span>
                                   )}
@@ -3311,6 +3393,7 @@ function AdminPanel() {
                 brands={brands}
                 products={products}
                 materials={materials}
+                prefill={manualPrefill}
               />
             )}
 
@@ -3461,7 +3544,7 @@ function AdminPanel() {
                     {paginatedPrintOrders.length ? (
                       paginatedPrintOrders.map((order, idx) => {
                         const rowNum = (safePrintPage - 1) * printPerPage + idx + 1;
-                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || "Guest";
+                        const customerName = `${order.first_name || ""} ${order.last_name || ""}`.trim() || order.shipping_name || "Guest";
                         const colorHex = order.color_hex || order.custom_color_hex || "#cbd5e1";
                         const colorName = order.color_name || (order.custom_color_hex ? "Custom" : "—");
                         const created = formatPrintDate(order.created_at);
@@ -3487,7 +3570,7 @@ function AdminPanel() {
                             </span>
                             <span>
                               <strong className="admin-print-customer">{customerName}</strong>
-                              <span className="admin-print-sub">{order.email || "—"}</span>
+                              <span className="admin-print-sub">{order.email || order.shipping_phone || "—"}</span>
                             </span>
                             <span>
                               <span className="admin-print-file">
@@ -3630,6 +3713,203 @@ function AdminPanel() {
                     statusOptions={printStatusOptions}
                     money={money}
                   />
+                )}
+
+                {printSubTab === "quotations" && (
+                <div className="admin-panel admin-section-panel admin-print-orders-panel">
+                  <div className="admin-panel-title-row admin-print-orders-head">
+                    <div className="admin-colors-title">
+                      <span className="admin-print-orders-ico">
+                        <MessageSquare size={22} />
+                      </span>
+                      <div>
+                        <h2>3D Print Quotations</h2>
+                        <p className="admin-panel-subtitle">WhatsApp quote requests sent by customers — review and generate invoices.</p>
+                      </div>
+                    </div>
+                    <div className="admin-actions compact">
+                      <button type="button" className="admin-secondary" onClick={loadQuotations} disabled={quotationsLoading}>
+                        <RefreshCw size={16} />
+                        <span>{quotationsLoading ? "Loading..." : "Refresh"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-orders-filters">
+                    <label className="admin-search">
+                      <Search size={15} />
+                      <input
+                        value={quotationSearch}
+                        onChange={(e) => { setQuotationSearch(e.target.value); setQuotationPage(1); }}
+                        placeholder="Search by name, phone, email, file..."
+                      />
+                    </label>
+                    <select
+                      className="admin-filter-select"
+                      value={quotationStatusFilter}
+                      onChange={(e) => { setQuotationStatusFilter(e.target.value); setQuotationPage(1); }}
+                      aria-label="Filter quotations by status"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="new">New</option>
+                      <option value="quoted">Quoted</option>
+                      <option value="invoiced">Invoiced</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  <div className="admin-orders-table-wrap">
+                    <div className="admin-orders-table-head">
+                      <span>#</span>
+                      <span>Date</span>
+                      <span>Customer</span>
+                      <span>Model/File</span>
+                      <span>Material</span>
+                      <span>Status</span>
+                      <span className="actions">Actions</span>
+                    </div>
+                    {quotationsLoading ? (
+                      <div className="admin-empty small">Loading quotations...</div>
+                    ) : filteredQuotations.length ? (
+                      filteredQuotations
+                        .slice((quotationPage - 1) * 10, quotationPage * 10)
+                        .map((q, idx) => {
+                          const rowNum = (quotationPage - 1) * 10 + idx + 1;
+                          const expanded = expandedQuotationId === q.id;
+                          return (
+                            <React.Fragment key={q.id}>
+                              <div className="admin-orders-table-row">
+                                <span className="admin-print-num">{rowNum}</span>
+                                <span>
+                                  <strong className="admin-print-date-text">{formatQuotationDate(q.created_at)}</strong>
+                                  <span className="admin-print-sub">ID {q.id}</span>
+                                </span>
+                                <span>
+                                  <strong className="admin-print-customer">{q.customer_name}</strong>
+                                  <span className="admin-print-sub">{q.customer_phone}</span>
+                                </span>
+                                <span>
+                                  <span className="admin-print-file">
+                                    <span className="admin-print-file-thumb">
+                                      <Box size={22} />
+                                    </span>
+                                    <span>
+                                      <strong className="admin-print-file-name">{q.file_name || "model"}</strong>
+                                      <span className="admin-print-sub">
+                                        {q.file_size ? `${q.file_size} MB • ` : ""}Qty {q.quantity || 1}
+                                      </span>
+                                    </span>
+                                  </span>
+                                </span>
+                                <span>
+                                  {q.material_name ? (
+                                    <span className="admin-print-material">{q.material_name}</span>
+                                  ) : "—"}
+                                </span>
+                                <span>
+                                  <span className={`admin-pay-pill ${q.status === "invoiced" ? "done" : "pending"}`}>
+                                    {q.status}
+                                  </span>
+                                </span>
+                                <span className="admin-print-actions">
+                                  <button type="button" className="admin-icon-btn view" onClick={() => setExpandedQuotationId(expanded ? null : q.id)} title="View details">
+                                    <Eye size={16} />
+                                  </button>
+                                  {q.file_url && (
+                                    <a className="admin-icon-btn view" href={q.file_url} target="_blank" rel="noreferrer" title="Download model file" download>
+                                      <Download size={16} />
+                                    </a>
+                                  )}
+                                  <button type="button" className="admin-icon-btn menu" onClick={() => deleteQuotation(q)} title="Delete quotation">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </span>
+                              </div>
+                              {expanded && (
+                                <div className="manual-detail-row">
+                                  <div className="manual-detail-grid">
+                                    <div>
+                                      <strong>Customer</strong>
+                                      <p>
+                                        {q.customer_name}<br />
+                                        {q.customer_phone}
+                                        {q.customer_email ? (<><br />{q.customer_email}</>) : null}
+                                        <br /><br />{q.customer_address}
+                                      </p>
+                                      <p>
+                                        <strong>Model:</strong> {q.file_name || "model"}
+                                        {(q.dimension_x || q.dimension_y || q.dimension_z) ? (
+                                          <> ({[q.dimension_x, q.dimension_y, q.dimension_z].filter((d) => d !== null && d !== undefined).join(" x ")} mm)</>
+                                        ) : null}
+                                        <br />
+                                        <strong>Material:</strong> {q.material_name || "—"}
+                                        {" • "}<strong>Color:</strong> {q.color_name || q.custom_color_hex || "—"}
+                                        {" • "}<strong>Qty:</strong> {q.quantity || 1}
+                                      </p>
+                                      {q.file_url && (
+                                        <p>
+                                          <a href={q.file_url} target="_blank" rel="noreferrer" download>
+                                            Download attached 3D file
+                                          </a>
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <strong>Status</strong>
+                                      <p>
+                                        <select
+                                          className="admin-filter-select"
+                                          value={q.status}
+                                          onChange={(e) => updateQuotationStatus(q.id, e.target.value)}
+                                        >
+                                          <option value="new">New</option>
+                                          <option value="quoted">Quoted</option>
+                                          <option value="invoiced">Invoiced</option>
+                                          <option value="cancelled">Cancelled</option>
+                                        </select>
+                                      </p>
+                                      {q.admin_notes && (
+                                        <p><strong>Notes:</strong> {q.admin_notes}</p>
+                                      )}
+                                      <p>
+                                        <button
+                                          type="button"
+                                          className="admin-primary"
+                                          onClick={() => generateInvoiceFromQuotation(q)}
+                                          disabled={q.status === "invoiced"}
+                                          title={q.status === "invoiced" ? "Already invoiced" : "Open the manual invoice form with these details prefilled"}
+                                        >
+                                          <FileText size={14} /> Generate Invoice
+                                        </button>
+                                      </p>
+                                      {q.status === "invoiced" && q.printing_order_id && (
+                                        <p className="admin-print-sub">Print order #{q.printing_order_id} created</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
+                    ) : <div className="admin-empty small">No quotations yet — customer WhatsApp quote requests will appear here.</div>}
+                  </div>
+
+                  <div className="admin-colors-foot">
+                    <div className="admin-colors-page-info">
+                      <span>
+                        {filteredQuotations.length
+                          ? `Showing ${Math.min((quotationPage - 1) * 10 + 1, filteredQuotations.length)} to ${Math.min(quotationPage * 10, filteredQuotations.length)} of ${filteredQuotations.length} quotations`
+                          : "No quotations to show"}
+                      </span>
+                    </div>
+                    <div className="admin-colors-pagination">
+                      <button type="button" className="admin-page-btn" disabled={quotationPage <= 1} onClick={() => setQuotationPage((p) => p - 1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
+                      <span className="admin-page-current">{quotationPage}</span>
+                      <button type="button" className="admin-page-btn" disabled={quotationPage >= Math.max(1, Math.ceil(filteredQuotations.length / 10))} onClick={() => setQuotationPage((p) => p + 1)} aria-label="Next page"><ChevronRight size={16} /></button>
+                    </div>
+                  </div>
+                </div>
                 )}
 
                 {printSubTab === "materials" && (

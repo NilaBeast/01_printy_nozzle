@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const crypto = require("crypto");
 const {
   getInvoiceSettings,
   buildManualInvoiceData,
@@ -8,6 +9,7 @@ const {
 } = require("../../utils/invoice");
 const { triggerAutoShipment } = require("../../utils/shippingSync");
 const { mailOrderInvoiceById } = require("../../utils/mailer");
+const { ensurePrintQuotationSchema } = require("../../utils/printQuotationSchema");
 
 /* ===================== MANUAL INVOICES (ADMIN, SAVED IN DB) =====================
  * Offline / phone orders. Every invoice is stored in `manual_invoices` +
@@ -23,6 +25,7 @@ const { mailOrderInvoiceById } = require("../../utils/mailer");
 const { ensureManualInvoiceSchema } = require("../../utils/manualInvoiceSchema");
 
 const manualStr = (v) => (v === undefined || v === null ? "" : String(v).trim());
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
 const validateManualPayload = (body = {}) => {
   const {
@@ -141,6 +144,160 @@ const savedRowToInvoiceInput = (row, items) => ({
   amountPaid: Number(row.amount_paid ?? 0),
   payment: { methodLabel: row.payment_method, status: row.payment_status },
 });
+
+/* ===================== WHATSAPP QUOTATION → PRINT ORDER =====================
+ * When a manual invoice is generated from a 3D-print quotation
+ * (body.quotation_id), the admin-priced print line becomes a real
+ * `printing_orders` row so it shows up under 3D Printing → 3D Printing
+ * Orders. Runs inside the invoice transaction: any failure rolls the
+ * whole invoice back with a clear message. */
+const QUOTATION_PAY_METHOD = {
+  UPI: "upi",
+  Card: "card",
+  "Net Banking": "net_banking",
+  Wallet: "wallet",
+  "Bank Transfer": "net_banking",
+  Cash: "cod",
+  "Cash on Delivery": "cod",
+};
+
+const linkQuotationToPrintOrder = async ({
+  connection,
+  quotationId,
+  items,
+  preview,
+  customer,
+  invoiceNumber,
+  payment,
+  invoiceId,
+  gstRate = 18,
+  roundFigure = null,
+}) => {
+  await ensurePrintQuotationSchema().catch(() => {});
+  const [[quotation]] = await connection.query("SELECT * FROM print_quotations WHERE id = ?", [quotationId]);
+  if (!quotation) {
+    throw Object.assign(new Error("Linked quotation not found. Please refresh the quotations list."), { status: 404 });
+  }
+  if (quotation.status === "invoiced") {
+    throw Object.assign(new Error(`Quotation #${quotationId} is already invoiced.`), { status: 400 });
+  }
+  const printIndices = (items || [])
+    .map((it, idx) => ({ it, idx }))
+    .filter(({ it }) => (it.item_type || "product") === "print")
+    .map(({ idx }) => idx);
+  if (!printIndices.length) {
+    throw Object.assign(new Error("Add at least one 3D Print line item to invoice this quotation."), { status: 400 });
+  }
+
+  // Material must satisfy the printing_orders FK — prefer the quotation's,
+  // fall back to the first active material.
+  let materialId = Number(quotation.material_id) || null;
+  if (materialId) {
+    const [mrows] = await connection.query("SELECT id FROM printing_materials WHERE id = ? AND is_active = 1", [materialId]);
+    if (!mrows.length) materialId = null;
+  }
+  if (!materialId) {
+    const [mrows] = await connection.query("SELECT id FROM printing_materials WHERE is_active = 1 ORDER BY sort_order ASC LIMIT 1");
+    if (!mrows.length) {
+      throw Object.assign(new Error("No active printing material found for this order."), { status: 400 });
+    }
+    materialId = mrows[0].id;
+  }
+  let colorId = Number(quotation.color_id) || null;
+  if (colorId) {
+    const [crows] = await connection.query("SELECT id FROM printing_colors WHERE id = ?", [colorId]);
+    if (!crows.length) colorId = null;
+  }
+
+  const payMethod = QUOTATION_PAY_METHOD[manualStr(payment?.methodLabel) || manualStr(payment?.method)] || "cod";
+  const payStatus = (manualStr(payment?.status) || "PAID").toUpperCase() === "PAID" ? "paid" : "pending";
+  const rate = Number(gstRate) || 0;
+
+  // Price each print line. When the admin typed a round figure (final
+  // GST-inclusive total), it is shared across the print lines in proportion
+  // to their line totals — with everything going to the first print line
+  // when the lines are blank — and GST is auto-split out of each share.
+  const figNum = Number(roundFigure);
+  const useFigure = Number.isFinite(figNum) && figNum > 0;
+  const lineTotals = printIndices.map((i) => Number(preview.lines[i]?.total) || 0);
+  const linesSum = lineTotals.reduce((s, v) => s + v, 0);
+  const priced = printIndices.map((itemIdx, k) => {
+    const src = preview.lines[itemIdx] || {};
+    if (!useFigure) {
+      return { itemIdx, amount: src.amount || 0, tax: src.tax || 0, total: src.total || 0, qty: Math.max(1, Number(src.qty) || 1) };
+    }
+    const share = linesSum > 0 ? lineTotals[k] / linesSum : k === 0 ? 1 : 0;
+    const total = round2(figNum * share);
+    const tax = rate > 0 ? round2((total * rate) / (100 + rate)) : 0;
+    return { itemIdx, amount: round2(total - tax), tax, total, qty: Math.max(1, Number(src.qty) || 1) };
+  });
+
+  const custName = manualStr(customer.name) || quotation.customer_name;
+  const custPhone = manualStr(customer.phone) || quotation.customer_phone;
+  const custAddr1 = [manualStr(customer.address1), manualStr(customer.address2)].filter(Boolean).join(", ") || null;
+  const finishFor = (itemIdx) =>
+    ["standard", "smooth"].includes((items[itemIdx] || {}).surface_finish)
+      ? items[itemIdx].surface_finish
+      : "standard";
+
+  let firstOrderId = null;
+  for (const p of priced) {
+    const orderNumber = "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
+    const [orderRes] = await connection.query(
+      `INSERT INTO printing_orders (
+         user_id, order_number, status,
+         file_name, file_url, file_public_id, file_size,
+         dimension_x, dimension_y, dimension_z,
+         material_id, color_id, custom_color_hex,
+         infill_density, surface_finish, quantity,
+         estimated_weight, print_time_hours, material_cost, time_cost, color_cost, finish_cost,
+         subtotal, tax_amount, total_amount,
+         shipping_name, shipping_phone, shipping_address1,
+         shipping_city, shipping_state, shipping_pincode,
+         company_name, company_address, company_gstin,
+         payment_method, payment_status, notes
+       ) VALUES (NULL, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 50, ?, ?, NULL, NULL, ?, 0, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        orderNumber,
+        quotation.file_name || "model",
+        quotation.file_url,
+        quotation.file_public_id || null,
+        quotation.file_size ?? null,
+        quotation.dimension_x ?? null,
+        quotation.dimension_y ?? null,
+        quotation.dimension_z ?? null,
+        materialId,
+        colorId,
+        quotation.custom_color_hex || null,
+        finishFor(p.itemIdx),
+        p.qty,
+        p.amount,
+        p.amount,
+        p.tax,
+        p.total,
+        custName,
+        custPhone,
+        custAddr1,
+        manualStr(customer.city) || null,
+        manualStr(customer.state) || null,
+        manualStr(customer.pincode) || null,
+        manualStr(customer.company_name || customer.company) || null,
+        manualStr(customer.company_address || customer.companyAddress) || null,
+        manualStr(customer.company_gstin || customer.gstin).toUpperCase() || null,
+        payMethod,
+        payStatus,
+        `From WhatsApp quotation #${quotation.id} • Manual invoice ${invoiceNumber}`,
+      ]
+    );
+    if (firstOrderId === null) firstOrderId = orderRes.insertId;
+  }
+
+  await connection.query(
+    "UPDATE print_quotations SET status = 'invoiced', manual_invoice_id = ?, printing_order_id = ? WHERE id = ?",
+    [invoiceId, firstOrderId, quotation.id]
+  );
+  return { orderId: firstOrderId, orderNumber: null };
+};
 
 const createManualInvoice = async (req, res) => {
   try {
@@ -317,6 +474,24 @@ const createManualInvoice = async (req, res) => {
         );
       }
 
+      // WhatsApp quotation → the priced print line becomes a real 3D print
+      // order automatically (visible under 3D Printing → 3D Printing Orders).
+      const quotationId = Number(req.body?.quotation_id) || null;
+      if (quotationId) {
+        await linkQuotationToPrintOrder({
+          connection,
+          quotationId,
+          items,
+          preview,
+          customer,
+          invoiceNumber,
+          payment,
+          invoiceId,
+          gstRate: Number(gstRate),
+          roundFigure,
+        });
+      }
+
       await connection.commit();
     } catch (e) {
       try {
@@ -343,7 +518,8 @@ const createManualInvoice = async (req, res) => {
     return res.send(pdf);
   } catch (error) {
     console.error("Admin createManualInvoice error:", error);
-    return res.status(500).json({ success: false, message: "Unable to save invoice" });
+    const status = Number(error?.status) >= 400 && Number(error?.status) < 500 ? error.status : 500;
+    return res.status(status).json({ success: false, message: status === 500 ? "Unable to save invoice" : error.message });
   }
 };
 

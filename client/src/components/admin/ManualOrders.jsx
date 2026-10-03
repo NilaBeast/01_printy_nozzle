@@ -64,11 +64,14 @@ const composePrintDescription = (row) => {
   return `3D Print: ${row.file_name || "model"}${bits.length ? ` — ${bits.join(" • ")}` : ""}`;
 };
 
-function ManualOrders({ categories = [], brands = [], products = [], materials = [] }) {
+function ManualOrders({ categories = [], brands = [], products = [], materials = [], prefill = null }) {
   const [form, setForm] = useState(blankForm);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingNumber, setEditingNumber] = useState("");
+  // Linked WhatsApp quotation (from 3D Printing → 3D Print Quotations →
+  // Generate Invoice). Saving the invoice auto-creates the 3D print order.
+  const [quotationId, setQuotationId] = useState(null);
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -86,6 +89,57 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
   const setCustomer = (patch) =>
     setForm((prev) => ({ ...prev, customer: { ...prev.customer, ...patch } }));
+
+  /* Quotation prefill — fills customer + the attached 3D file as a print row. */
+  useEffect(() => {
+    const q = prefill?.quotation;
+    if (!prefill?.key || !q) return;
+    setEditingId(null);
+    setEditingNumber("");
+    setQuotationId(q.id);
+    setForm({
+      ...blankForm(),
+      customer: {
+        ...EMPTY_PERSON,
+        name: q.customer_name || "",
+        email: q.customer_email || "",
+        phone: q.customer_phone || "",
+        address1: q.customer_address1 || q.customer_address || "",
+        address2: q.customer_address2 || "",
+        city: q.customer_city || "",
+        state: q.customer_state || "",
+        pincode: q.customer_pincode || "",
+        country: q.customer_country || "India",
+      },
+      items: [
+        {
+          key: `${Date.now()}-quote`,
+          item_type: "print",
+          product_id: null,
+          description: composePrintDescription({
+            file_name: q.file_name,
+            material_name: q.material_name,
+            color_name: q.color_name || q.custom_color_hex,
+            infill_density: "",
+            surface_finish: "",
+          }),
+          hsn: "",
+          rate: "",
+          qty: Math.max(1, Number(q.quantity) || 1),
+          disc: "",
+          file_name: q.file_name || "",
+          material_name: q.material_name || "",
+          color_name: q.color_name || q.custom_color_hex || "",
+          infill_density: "",
+          surface_finish: "standard",
+        },
+      ],
+    });
+    setCustomerSuggestions([]);
+    setShowSuggestions(false);
+    toast.success(`Quotation #${q.id} loaded — set the price and save`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.key]);
 
   /* Customer autocomplete — typing the name refills saved billing details. */
   const onCustomerNameChange = (value) => {
@@ -319,30 +373,45 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
 
   const totals = useMemo(() => {
     const rate = Number(form.gstRate) || 0;
-    let subtotal = 0;
-    let taxTotal = 0;
+    let linesSubtotal = 0;
+    let linesTax = 0;
     form.items.forEach((it) => {
       const gross = (Number(it.rate) || 0) * (Number(it.qty) || 0);
       const disc = Math.min(Number(it.disc) || 0, gross);
       const amount = gross - disc;
-      subtotal += amount;
-      taxTotal += (amount * rate) / 100;
+      linesSubtotal += amount;
+      linesTax += (amount * rate) / 100;
     });
     const ship = Number(form.shippingCost) || 0;
     const disc = Number(form.discount) || 0;
-    const grand = Math.max(0, Math.round((subtotal + taxTotal + ship - disc) * 100) / 100);
+    const computed = Math.max(0, Math.round((linesSubtotal + linesTax + ship - disc) * 100) / 100);
     const figureNum = Number(form.roundTotal);
     const figure = Number.isFinite(figureNum) && figureNum > 0 ? Math.round(figureNum * 100) / 100 : null;
-    const final = figure !== null ? figure : grand;
+    // Round figure = final GST-inclusive total: GST auto-splits out of it at
+    // the invoice rate, so Taxes is calculated even with blank line rates.
+    let subtotal;
+    let taxTotal;
+    let grand;
+    let roundOff = 0;
+    if (figure !== null) {
+      grand = figure;
+      taxTotal = rate > 0 ? Math.round((grand * rate) / (100 + rate) * 100) / 100 : 0;
+      subtotal = Math.round((grand - taxTotal + disc) * 100) / 100;
+    } else {
+      subtotal = Math.round(linesSubtotal * 100) / 100;
+      taxTotal = Math.round(linesTax * 100) / 100;
+      grand = computed;
+    }
+    const final = grand;
     // Advance paid (clamped to the final total) → pending auto-calculates.
     const paid = Math.min(Math.max(0, Number(form.amountPaid) || 0), final);
     const pending = Math.round((final - paid) * 100) / 100;
     return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      taxTotal: Math.round(taxTotal * 100) / 100,
+      subtotal,
+      taxTotal,
       grand,
       figure,
-      roundOff: figure !== null ? Math.round((figure - grand) * 100) / 100 : 0,
+      roundOff,
       final,
       paid,
       pending,
@@ -368,6 +437,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
   };
 
   const buildPayload = () => ({
+    ...(quotationId ? { quotation_id: quotationId } : {}),
     customer: {
       ...form.customer,
       company_name: form.company?.name || "",
@@ -420,6 +490,10 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
       }
       const filename = await adminService.createManualInvoicePdf(buildPayload());
       toast.success(`Invoice saved. ${filename} downloaded.`);
+      if (quotationId) {
+        toast.info("3D print order created from this quotation.");
+      }
+      setQuotationId(null);
       setForm(blankForm());
       setPage(1);
       loadInvoices(1, search);
@@ -433,6 +507,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
   const cancelEdit = () => {
     setEditingId(null);
     setEditingNumber("");
+    setQuotationId(null);
     setForm(blankForm());
     setCustomerSuggestions([]);
     setShowSuggestions(false);
@@ -608,6 +683,19 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                 </div>
                 <button type="button" className="admin-secondary" onClick={cancelEdit} disabled={saving}>
                   <X size={14} /> Cancel Edit
+                </button>
+              </div>
+            </div>
+          )}
+          {quotationId && !editingId && (
+            <div className="pf-section" style={{ border: "1.5px solid #16a34a" }}>
+              <div className="pf-section-head">
+                <div>
+                  <h3>From WhatsApp Quotation #{quotationId}</h3>
+                  <p>Customer details and the 3D file are prefilled. Set the price and save — the 3D print order is created automatically.</p>
+                </div>
+                <button type="button" className="admin-secondary" onClick={() => setQuotationId(null)} disabled={saving}>
+                  <X size={14} /> Unlink
                 </button>
               </div>
             </div>
@@ -882,8 +970,8 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               <label className="pf-field"><span>Amount Paid (Rs., advance)</span>
                 <input type="number" min="0" step="0.01" value={form.amountPaid} onChange={(e) => set({ amountPaid: e.target.value })} placeholder="0.00" />
               </label>
-              <label className="pf-field" style={{ gridColumn: "1 / -1" }}><span>Round Figure (Rs., optional)</span>
-                <input type="number" min="0" step="0.01" value={form.roundTotal} onChange={(e) => set({ roundTotal: e.target.value })} placeholder={`Computed Rs. ${totals.grand.toFixed(2)} — leave empty to use it`} />
+              <label className="pf-field" style={{ gridColumn: "1 / -1" }}><span>Round Figure (Rs., optional — final total incl. GST)</span>
+                <input type="number" min="0" step="0.01" value={form.roundTotal} onChange={(e) => set({ roundTotal: e.target.value })} placeholder="Leave empty to total the lines — or type the final amount and GST auto-splits" />
               </label>
             </div>
             <div className="manual-totals">
@@ -895,7 +983,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
                 <span>Discount <strong>- Rs. {(Number(form.discount) || 0).toFixed(2)}</strong></span>
               )}
               <span>Taxes ({Number(form.gstRate) || 0}%) <strong>Rs. {totals.taxTotal.toFixed(2)}</strong></span>
-              {totals.figure !== null && (
+              {totals.roundOff !== 0 && (
                 <span>Round Off <strong>Rs. {totals.roundOff.toFixed(2)}</strong></span>
               )}
               <span className="grand">Total <strong>Rs. {totals.final.toFixed(2)}</strong></span>
@@ -920,7 +1008,7 @@ function ManualOrders({ categories = [], brands = [], products = [], materials =
               </>
             ) : (
               <>
-                <button type="button" className="admin-secondary" onClick={() => setForm(blankForm())} disabled={saving}>Reset</button>
+                <button type="button" className="admin-secondary" onClick={() => { setForm(blankForm()); setQuotationId(null); }} disabled={saving}>Reset</button>
                 <button type="submit" className="admin-primary" disabled={saving || !form.items.length}>
                   <Download size={16} />
                   <span>{saving ? "Saving..." : "Save & Generate PDF"}</span>
