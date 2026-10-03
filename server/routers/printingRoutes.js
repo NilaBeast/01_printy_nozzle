@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   uploadPrintFile,
+  createPrintQuotation,
   getPrintingConfig,
   getMaterials,
   getColors,
@@ -25,6 +26,8 @@ router.post("/calculate-price", calculatePrice);
 router.post("/upload", printFileUpload.single("file"), uploadPrintFile);
 // Exact Bambu Studio slice (free CLI). Slices a temp copy — nothing stored.
 router.post("/slice-quote", sliceFileUpload.single("file"), sliceQuote);
+// Guest WhatsApp quote request (details + model file stored as quotation).
+router.post("/quote", printFileUpload.single("file"), createPrintQuotation);
 
 // Authenticated print order endpoints
 router.post("/order", protect, createPrintOrder);

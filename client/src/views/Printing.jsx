@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   UploadCloud,
@@ -11,14 +11,11 @@ import {
   Headphones,
   Box,
   Layers,
-  HelpCircle,
-  Check,
   ArrowRight,
-  RotateCcw,
   Sparkles,
-  Info,
-  X,
   AlertTriangle,
+  MessageCircle,
+  X,
 } from "lucide-react";
 import defaultPricingData from "../data/materialPrices.json";
 import ModelViewer3D, {
@@ -27,8 +24,6 @@ import ModelViewer3D, {
 } from "../components/ModelViewer3D";
 import printingService from "../services/printing.service";
 import catalogService from "../services/catalog.service";
-import cartService from "../services/cart.service";
-import { syncCartBadge } from "../utils/cartSync";
 import {
   MAX_PRINT_WIDTH_MM,
   MAX_PRINT_DEPTH_MM,
@@ -37,99 +32,40 @@ import {
 } from "../config";
 import "../../public/css/printing.css";
 
+const WHATSAPP_DISPLAY_NUMBER = "+91 98366 09063";
+
+const blankQuoteForm = () => ({
+  name: "",
+  phone: "",
+  email: "",
+  country: "India",
+  address1: "",
+  address2: "",
+  city: "",
+  state: "",
+  pincode: "",
+});
+
 export default function Printing() {
-  const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const optionsSectionRef = useRef(null);
 
   /* =========================================================
-     PRICING CONFIGURATION (DB settings with JSON fallback)
+     MATERIALS / COLORS / DELIVERY INFO (no pricing anymore)
      ========================================================= */
   const [serverMaterials, setServerMaterials] = useState(null);
   const [serverColors, setServerColors] = useState(null);
   const [serverSiteSettings, setServerSiteSettings] = useState(null);
-  const [serverTimeRates, setServerTimeRates] = useState(null);
-  const [serverSlabsRaw, setServerSlabsRaw] = useState(null);
-  const [serverHoursPerGram, setServerHoursPerGram] = useState(null);
   const defaultPricingConfig = defaultPricingData;
-  const parseSlabs = (raw) => {
-    let arr = raw;
-    if (typeof arr === "string") {
-      try {
-        arr = JSON.parse(arr);
-      } catch {
-        return null;
-      }
-    }
-    if (!Array.isArray(arr) || arr.length === 0) return null;
-    const clean = [];
-    for (const s of arr) {
-      const min = Number(s.min);
-      const max = s.max === null || s.max === undefined || s.max === "" ? null : Number(s.max);
-      const rate = Number(s.rate);
-      if (!Number.isFinite(min) || min < 0 || !Number.isFinite(rate) || rate < 0) return null;
-      if (max !== null && (!Number.isFinite(max) || max <= min)) return null;
-      clean.push({ min, max, rate });
-    }
-    clean.sort((a, b) => a.min - b.min);
-    return clean;
-  };
-  const defaultSlabs = parseSlabs(defaultPricingConfig?.timeSlabs) || [
-    { min: 0, max: 5, rate: 50 },
-    { min: 5, max: 10, rate: 45 },
-    { min: 10, max: 20, rate: 40 },
-    { min: 20, max: null, rate: 35 },
-  ];
-  // Hourly slabs: admin Hourly Rates tab (JSON) wins, legacy 4 keys are fallback.
-  const slabs = useMemo(() => {
-    if (serverSlabsRaw) return serverSlabsRaw;
-    if (serverTimeRates && [serverTimeRates.rate_0_5, serverTimeRates.rate_5_10, serverTimeRates.rate_10_20, serverTimeRates.rate_20_plus].every((v) => v !== undefined && v !== null && v !== "")) {
-      return [
-        { min: 0, max: 5, rate: Number(serverTimeRates.rate_0_5) },
-        { min: 5, max: 10, rate: Number(serverTimeRates.rate_5_10) },
-        { min: 10, max: 20, rate: Number(serverTimeRates.rate_10_20) },
-        { min: 20, max: null, rate: Number(serverTimeRates.rate_20_plus) },
-      ];
-    }
-    return defaultSlabs;
-  }, [serverSlabsRaw, serverTimeRates]);
-  const slabLabelFor = (slab) => (slab.max === null ? `${slab.min}+ hours` : `${slab.min}–${slab.max} hours`);
-  const timeRates = {
-    rate_0_5: Number(serverTimeRates?.rate_0_5 ?? defaultPricingConfig?.siteSettings?.timeRates?.rate_0_5 ?? 50),
-    rate_5_10: Number(serverTimeRates?.rate_5_10 ?? defaultPricingConfig?.siteSettings?.timeRates?.rate_5_10 ?? 45),
-    rate_10_20: Number(serverTimeRates?.rate_10_20 ?? defaultPricingConfig?.siteSettings?.timeRates?.rate_10_20 ?? 40),
-    rate_20_plus: Number(serverTimeRates?.rate_20_plus ?? defaultPricingConfig?.siteSettings?.timeRates?.rate_20_plus ?? 35),
-  };
-  const hoursPerGram = Number(serverHoursPerGram ?? defaultPricingConfig?.siteSettings?.hoursPerGram ?? 0.15) || 0.15;
-  const pricingConfig = {
-    ...defaultPricingConfig,
-    siteSettings: {
-      ...defaultPricingConfig.siteSettings,
-      ...(serverSiteSettings || {}),
-      gstRate: serverSiteSettings?.gstRate ?? defaultPricingConfig.siteSettings?.gstRate ?? 0.18,
-      estimatedDeliveryDays:
-        serverSiteSettings?.estimatedDeliveryDays ??
-        defaultPricingConfig.siteSettings?.estimatedDeliveryDays ??
-        "3 – 5 Working Days",
-      deliveryRegion:
-        serverSiteSettings?.deliveryRegion ??
-        defaultPricingConfig.siteSettings?.deliveryRegion ??
-        "Across India",
-    },
-    surfaceFinishes: (defaultPricingConfig.surfaceFinishes || []).map((finish) =>
-      finish.id === "smooth"
-        ? {
-            ...finish,
-            pricePerGram:
-              serverSiteSettings?.smoothFinishPerGram !== undefined
-                ? serverSiteSettings.smoothFinishPerGram
-                : finish.pricePerGram,
-            tag: `+ ₹${serverSiteSettings?.smoothFinishPerGram ?? finish.pricePerGram} / gram`,
-          }
-        : finish
-    ),
-  };
-  const [isInfillModalOpen, setIsInfillModalOpen] = useState(false);
+
+  const deliveryDays =
+    serverSiteSettings?.estimatedDeliveryDays ??
+    defaultPricingConfig.siteSettings?.estimatedDeliveryDays ??
+    "3 – 5 Working Days";
+  const deliveryRegion =
+    serverSiteSettings?.deliveryRegion ??
+    defaultPricingConfig.siteSettings?.deliveryRegion ??
+    "Across India";
 
   /* =========================================================
      3D MODEL STATE
@@ -169,135 +105,22 @@ export default function Printing() {
   const isOversized = isWidthExceeded || isDepthExceeded || isHeightExceeded;
 
   /* =========================================================
-     PRINT OPTIONS STATE
+     PRINT OPTIONS STATE (material / color / quantity only)
      ========================================================= */
-  const materials = serverMaterials !== null ? serverMaterials : (pricingConfig.materials || []);
-  const colors = serverColors !== null ? serverColors : (pricingConfig.colors || []);
-  const infillOptions = pricingConfig.infillOptions || defaultPricingData.infillOptions;
-  const surfaceFinishes = pricingConfig.surfaceFinishes || defaultPricingData.surfaceFinishes;
-
-  // Layer height (mm) — thinner = finer detail but proportionally longer prints.
-  const LAYER_HEIGHT_OPTIONS = [
-    { id: "0.08", value: 0.08, label: "0.08 mm", tag: "Ultra fine" },
-    { id: "0.12", value: 0.12, label: "0.12 mm", tag: "Fine" },
-    { id: "0.16", value: 0.16, label: "0.16 mm", tag: "Detailed" },
-    { id: "0.20", value: 0.2, label: "0.20 mm", tag: "Standard" },
-    { id: "0.28", value: 0.28, label: "0.28 mm", tag: "Draft" },
-  ];
-
-  // Wall loops — more walls = thicker solid shell = stronger + heavier.
-  const WALL_OPTIONS = [
-    { id: "2", walls: 2, label: "2 Walls", tag: "Standard" },
-    { id: "3", walls: 3, label: "3 Walls", tag: "Stronger" },
-    { id: "4", walls: 4, label: "4 Walls", tag: "Strongest" },
-  ];
+  const materials = serverMaterials !== null ? serverMaterials : (defaultPricingConfig.materials || []);
+  const colors = serverColors !== null ? serverColors : (defaultPricingConfig.colors || []);
 
   const [selectedMaterialId, setSelectedMaterialId] = useState(materials[0]?.id || "pla");
   const [selectedColorHex, setSelectedColorHex] = useState("#1E88E5");
   const [customHexInput, setCustomHexInput] = useState("");
-  const [selectedInfillId, setSelectedInfillId] = useState("50");
-  const [selectedFinishId, setSelectedFinishId] = useState("standard");
-  const [selectedLayerHeightId, setSelectedLayerHeightId] = useState("0.20");
-  const [selectedWallsId, setSelectedWallsId] = useState("2");
   const [quantity, setQuantity] = useState(1);
-  const [supportsEnabled, setSupportsEnabled] = useState(true);
-  const [placingPrintOrder, setPlacingPrintOrder] = useState(false);
-  const [addingToCart, setAddingToCart] = useState(false);
 
   /* =========================================================
-     FREE BAMBU CLI — exact Bambu Studio numbers for this file+settings.
-     bambuQuote holds the last slice-quote response; it is only USED when
-     its requestKey matches the current file+options (else stale).
-     Without a slicer CLI installed the API 503s and we keep the estimator.
+     WHATSAPP QUOTE MODAL STATE
      ========================================================= */
-  const [slicerStatus, setSlicerStatus] = useState(null);
-  const [bambuQuote, setBambuQuote] = useState(null);
-  const [bambuLoading, setBambuLoading] = useState(false);
-  const bambuRequestId = useRef(0);
-
-  useEffect(() => {
-    let active = true;
-    printingService
-      .getSlicerStatus()
-      .then((res) => {
-        if (active) setSlicerStatus(res.data?.slicer || null);
-      })
-      .catch(() => {
-        if (active) setSlicerStatus({ available: false });
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // Debounced exact slice: same file + material + infill + layer + walls +
-  // supports → same Bambu Studio filament/time as slicing in Bambu Studio itself.
-  const bambuRequestKey = useMemo(() => {
-    if (!uploadedFile || useSample) return null;
-    return [
-      uploadedFile.name,
-      uploadedFile.size,
-      uploadedFile.lastModified,
-      selectedMaterialId || "pla",
-      selectedInfillId,
-      selectedLayerHeightId,
-      selectedWallsId,
-      supportsEnabled ? "sup" : "nosup",
-    ].join("|");
-  }, [uploadedFile, useSample, selectedMaterialId, selectedInfillId, selectedLayerHeightId, selectedWallsId, supportsEnabled]);
-
-  useEffect(() => {
-    if (!bambuRequestKey || !uploadedFile) {
-      setBambuQuote(null);
-      setBambuLoading(false);
-      return;
-    }
-    // Slicer status still loading → wait for it; known-unavailable
-    // (no CLI on server) → skip the call entirely so no 503 is fired;
-    // the built-in estimator is used instead.
-    if (!slicerStatus || slicerStatus.available === false) {
-      setBambuQuote(null);
-      setBambuLoading(false);
-      return;
-    }
-    const myId = ++bambuRequestId.current;
-    setBambuLoading(true);
-    const timer = setTimeout(async () => {
-      try {
-        const mat = materials.find((m) => m.id === selectedMaterialId) || materials[0];
-        const isNumericId = typeof mat?.id === "number";
-        const params = {
-          ...(isNumericId ? { material_id: mat.id } : { material: mat?.slug || mat?.id || "pla" }),
-          density: mat?.density || 1.24,
-          infill_density: Number(selectedInfillId || 50),
-          supports: supportsEnabled,
-          layer_height: Number(selectedLayerHeight?.value) || 0.2,
-          wall_loops: Number(selectedWalls?.walls) || 2,
-          surface_finish: selectedFinishId === "smooth" ? "smooth" : "standard",
-          quantity: 1,
-        };
-        const res = await printingService.sliceQuote(uploadedFile, params);
-        if (bambuRequestId.current !== myId) return;
-        const slicer = res.data?.slicer;
-        if (res.data?.success && slicer?.filamentGrams > 0) {
-          setBambuQuote({ requestKey: bambuRequestKey, slicer, pricing: res.data?.pricing });
-        } else {
-          setBambuQuote(null);
-        }
-      } catch {
-        // 503 (no CLI) / 422 (unsliceable) → silent fallback to estimator.
-        if (bambuRequestId.current === myId) setBambuQuote(null);
-      } finally {
-        if (bambuRequestId.current === myId) setBambuLoading(false);
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bambuRequestKey, uploadedFile, selectedMaterialId, selectedInfillId, selectedLayerHeightId, selectedWallsId, selectedFinishId, supportsEnabled, slicerStatus?.available]);
-
-  const useBambu =
-    Boolean(bambuQuote?.slicer?.filamentGrams > 0) &&
-    bambuQuote?.requestKey === bambuRequestKey;
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [quoteForm, setQuoteForm] = useState(blankQuoteForm);
+  const [sendingQuote, setSendingQuote] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -314,24 +137,9 @@ export default function Printing() {
 
         const serverConfig = configResponse.data.settings || {};
         setServerSiteSettings({
-          gstRate: serverConfig.gst_rate !== undefined ? Number(serverConfig.gst_rate) / 100 : undefined,
-          smoothFinishPerGram: serverConfig.smooth_finish_per_gram !== undefined ? Number(serverConfig.smooth_finish_per_gram) : undefined,
-          freeShippingThreshold: serverConfig.free_shipping_threshold !== undefined ? Number(serverConfig.free_shipping_threshold) : undefined,
           estimatedDeliveryDays: serverConfig.printing_delivery_days || undefined,
           deliveryRegion: serverConfig.printing_delivery_region || undefined,
         });
-        setServerHoursPerGram(
-          serverConfig.print_hours_per_gram !== undefined && serverConfig.print_hours_per_gram !== null && serverConfig.print_hours_per_gram !== ""
-            ? Number(serverConfig.print_hours_per_gram)
-            : null
-        );
-        setServerTimeRates({
-          rate_0_5: serverConfig.print_rate_0_5 !== undefined ? Number(serverConfig.print_rate_0_5) : undefined,
-          rate_5_10: serverConfig.print_rate_5_10 !== undefined ? Number(serverConfig.print_rate_5_10) : undefined,
-          rate_10_20: serverConfig.print_rate_10_20 !== undefined ? Number(serverConfig.print_rate_10_20) : undefined,
-          rate_20_plus: serverConfig.print_rate_20_plus !== undefined ? Number(serverConfig.print_rate_20_plus) : undefined,
-        });
-        setServerSlabsRaw(parseSlabs(serverConfig.print_time_slabs) || null);
 
         const mappedMaterials = (materialsResponse.data.materials || []).map((material) => ({
           id: material.id,
@@ -412,267 +220,12 @@ export default function Printing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableColors]);
 
-  const selectedInfill = useMemo(() => {
-    return (
-      infillOptions.find((inf) => inf.id === selectedInfillId) ||
-      infillOptions.find((inf) => inf.id === "50") ||
-      infillOptions[0]
-    );
-  }, [infillOptions, selectedInfillId]);
-
-  const selectedFinish = useMemo(() => {
-    return surfaceFinishes.find((f) => f.id === selectedFinishId) || surfaceFinishes[0];
-  }, [surfaceFinishes, selectedFinishId]);
-
-  const selectedLayerHeight = useMemo(() => {
-    return (
-      LAYER_HEIGHT_OPTIONS.find((l) => l.id === selectedLayerHeightId) ||
-      LAYER_HEIGHT_OPTIONS.find((l) => l.id === "0.20") ||
-      LAYER_HEIGHT_OPTIONS[0]
-    );
-  }, [selectedLayerHeightId]);
-
-  const selectedWalls = useMemo(() => {
-    return WALL_OPTIONS.find((w) => w.id === selectedWallsId) || WALL_OPTIONS[0];
-  }, [selectedWallsId]);
-
-  // Print time scales inversely with layer height vs the 0.20mm baseline
-  // (0.08mm takes ~2.5x longer, 0.28mm ~0.7x). Exact slicer times win when available.
-  const layerTimeFactor = 0.2 / (Number(selectedLayerHeight?.value) || 0.2);
-
-  // Solid shell thickness: 0.4mm-nozzle wall loops + ~0.2mm top/bottom skins
-  // (1.0mm at the default 2 walls — matches the previous constant).
-  const shellMm = (Number(selectedWalls?.walls) || 2) * 0.4 + 0.2;
-
-  // Slicer-style weight model (must match server/utils/priceCalculator.js):
-  // solid shells (walls + top/bottom, ~1mm) print at 100% density, only the
-  // interior scales with infill %. Falls back to legacy whole-volume
-  // multipliers when surface-area data is unavailable (old carts).
-  // Supports (Bambu-style auto): sparse columns + dense interface, same filament.
-  const WASTE_FACTOR = 1.03;
-  const SUPPORT_DENSITY = 0.2;
-  const SUPPORT_INTERFACE_MM = 0.6;
-  const LEGACY_INFILL_MULTIPLIERS = { 10: 0.4, 12: 0.43, 15: 0.47, 20: 0.55, 25: 0.62, 30: 0.7, 40: 0.85, 50: 1.0, 100: 1.5 };
-
-  const estimateFilamentWeight = (solidWeight, density, surfaceAreaCm2, infillPct, shellThicknessMm = 1.0) => {
-    const solid = Number(solidWeight);
-    const rho = Number(density);
-    const area = Number(surfaceAreaCm2);
-    const infill = Number(infillPct);
-    if (!Number.isFinite(solid) || solid <= 0) return null;
-    if (!Number.isFinite(rho) || rho <= 0) return null;
-    if (!Number.isFinite(area) || area <= 0) return null;
-    if (!Number.isFinite(infill) || infill < 0 || infill > 100) return null;
-    const shellMm = Number(shellThicknessMm) > 0 ? Number(shellThicknessMm) : 1.0;
-    const solidVol = solid / rho;
-    const shellVol = Math.min(solidVol, area * (shellMm / 10));
-    const interiorVol = Math.max(0, solidVol - shellVol);
-    return Math.round((shellVol + interiorVol * (infill / 100)) * WASTE_FACTOR * rho * 100) / 100;
-  };
-
-  const getTimeSlabForHours = (hours) => {
-    const h = Number(hours || 0);
-    const match =
-      slabs.find((s) => h > s.min && (s.max === null || h <= s.max)) ||
-      slabs[slabs.length - 1] ||
-      slabs[0];
-    return { label: slabLabelFor(match), rate: match.rate };
-  };
-
-  const getBaseWeight = () =>
-    Math.max(2, Math.round(modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : modelAnalysis?.weightGrams || 20));
-
-  const getEffectiveWeight = (baseWeight, inf) => {
-    const est = estimateFilamentWeight(
-      baseWeight,
-      selectedMaterial?.density || 1.24,
-      modelAnalysis?.surfaceAreaCm2,
-      Number(inf?.id),
-      shellMm
-    );
-    if (est !== null) return Math.max(2, Math.round(est));
-    const key = Number(inf?.id);
-    const mult = LEGACY_INFILL_MULTIPLIERS[key] !== undefined ? LEGACY_INFILL_MULTIPLIERS[key] : inf?.factor || 1.0;
-    return Math.max(2, Math.round(baseWeight * mult));
-  };
-
-  // Support filament weight from the analyzed support volume (same material).
-  const getSupportWeight = () => {
-    const vol = Number(modelAnalysis?.supportVolumeCm3);
-    const rho = Number(selectedMaterial?.density || 1.24);
-    if (!Number.isFinite(vol) || vol <= 0 || !Number.isFinite(rho) || rho <= 0) return 0;
-    return Math.round(vol * rho * 100) / 100;
-  };
-
-  const quoteForWeight = (effectiveWeight) => {
-    const materialCost = Math.round(effectiveWeight * (selectedMaterial?.pricePerGram || 4.5));
-    const printTimeHours = Math.round(effectiveWeight * hoursPerGram * layerTimeFactor * 100) / 100;
-    const slab = getTimeSlabForHours(printTimeHours);
-    const timeCost = Math.round(printTimeHours * (slab.rate || 0) * 100) / 100;
-    const finishCost = Math.round(effectiveWeight * (selectedFinish?.pricePerGram || 0));
-    return { materialCost, printTimeHours, slab, timeCost, finishCost };
-  };
-
-  const getInfillCardPrice = (inf) => {
-    const baseWeight = getBaseWeight();
-    const modelW = getEffectiveWeight(baseWeight, inf);
-    const weight = supportsEnabled
-      ? Math.max(2, Math.round(modelW + getSupportWeight()))
-      : modelW;
-    const { materialCost, timeCost, finishCost } = quoteForWeight(weight);
-    return materialCost + timeCost + finishCost + (inf.priceAdjustment || 0);
-  };
-
-  /* =========================================================
-     LIVE PRICE CALCULATION ENGINE — Final = Material + Time.
-     Exact Bambu Studio numbers (free CLI slice of THIS file+settings)
-     win whenever available; otherwise the built-in shell-model estimator.
-     ========================================================= */
-  const calculations = useMemo(() => {
-    // Exact path: Bambu CLI sliced this exact file + material + infill +
-    // supports. Filament total already includes supports; time is exact.
-    if (useBambu) {
-      const s = bambuQuote.slicer;
-      const weight = Math.max(2, Math.round(s.filamentGrams));
-      const supportW = supportsEnabled ? Math.round((s.supportGrams || 0) * 100) / 100 : 0;
-      const printTimeHours = Math.round((s.printTimeHours || 0) * 100) / 100;
-      const slab = getTimeSlabForHours(printTimeHours);
-      const timeRate = slab.rate || 0;
-      const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
-      const timeCost = Math.round(printTimeHours * timeRate * 100) / 100;
-      const supportCost = Math.round(supportW * (selectedMaterial?.pricePerGram || 4.5) * 100) / 100;
-      const supportTimeHours = weight > 0 ? Math.round((printTimeHours * supportW) / weight * 100) / 100 : 0;
-      const colorCost = selectedColor?.priceAdjustment || 0;
-      const infillCost = selectedInfill?.priceAdjustment || 0;
-      const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
-      const unitPrice = materialCost + timeCost + colorCost + infillCost + finishCost;
-      const subtotal = unitPrice * quantity;
-      const gstRate = pricingConfig.siteSettings?.gstRate || 0.18;
-      const gstAmount = +(subtotal * gstRate).toFixed(2);
-      const grandTotal = +(subtotal + gstAmount).toFixed(2);
-      const rawBase = modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : (modelAnalysis?.weightGrams || 20);
-      return {
-        baseWeight: Math.max(2, Math.round(rawBase)),
-        weight,
-        materialCost,
-        printTimeHours,
-        timeRate,
-        timeRateLabel: slab.label,
-        timeCost,
-        supportWeight: supportW,
-        supportCost,
-        supportTimeHours,
-        supportsApplied: supportsEnabled && supportW > 0,
-        colorCost,
-        infillCost,
-        finishCost,
-        unitPrice,
-        subtotal,
-        gstAmount,
-        grandTotal,
-        pricingSource: "bambu",
-        slicerEngine: s.engine,
-        slicerProfile: s.profile,
-        slicerPrinter: s.printer,
-      };
-    }
-    const rawBase = modelAnalysis?.fileName?.includes("rocket") && useSample ? 20 : (modelAnalysis?.weightGrams || 20);
-    const safeBase = Math.max(2, Math.round(rawBase));
-    // Slicer-accurate effective weight: solid shell + infill-scaled interior
-    // (falls back to legacy multipliers without surface-area data).
-    const modelW = getEffectiveWeight(safeBase, selectedInfill);
-    // Bambu-style auto supports (same filament + proportional time).
-    const supportW = supportsEnabled ? getSupportWeight() : 0;
-    const weight = Math.max(2, Math.round(modelW + supportW));
-
-    // Material charge = weight × selling rate (₹/g)
-    const materialCost = Math.round(weight * (selectedMaterial?.pricePerGram || 4.5));
-
-    // Estimated print time from file + material (weight already embeds both).
-    // Layer height scales time vs the 0.20mm baseline (exact slicer times win).
-    const printTimeHours = Math.round(weight * hoursPerGram * layerTimeFactor * 100) / 100;
-    const slab = getTimeSlabForHours(printTimeHours);
-    const timeRate = slab.rate || 0;
-
-    // Printing-time charge = time × slab rate
-    const timeCost = Math.round(printTimeHours * timeRate * 100) / 100;
-
-    // Support split for display (merged into material + time above, like server)
-    const supportCost = Math.round(supportW * (selectedMaterial?.pricePerGram || 4.5) * 100) / 100;
-    const supportTimeHours = Math.round(supportW * hoursPerGram * layerTimeFactor * 100) / 100;
-
-    // Color adjustment (usually 0)
-    const colorCost = selectedColor?.priceAdjustment || 0;
-
-    // Infill price adjustment (from JSON or admin settings)
-    const infillCost = selectedInfill?.priceAdjustment || 0;
-
-    // Surface finish cost = weight * finishPricePerGram
-    const finishCost = Math.round(weight * (selectedFinish?.pricePerGram || 0));
-
-    // Unit subtotal — Final price = Material charge + Printing-time charge (+ extras)
-    const unitPrice = materialCost + timeCost + colorCost + infillCost + finishCost;
-
-    // Total subtotal for quantity
-    const subtotal = unitPrice * quantity;
-
-    // GST (18%)
-    const gstRate = pricingConfig.siteSettings?.gstRate || 0.18;
-    const gstAmount = +(subtotal * gstRate).toFixed(2);
-
-    // Grand total
-    const grandTotal = +(subtotal + gstAmount).toFixed(2);
-
-    return {
-      baseWeight: safeBase,
-      weight,
-      materialCost,
-      printTimeHours,
-      timeRate,
-      timeRateLabel: slab.label,
-      timeCost,
-      supportWeight: supportW,
-      supportCost,
-      supportTimeHours,
-      supportsApplied: supportsEnabled && supportW > 0,
-      colorCost,
-      infillCost,
-      finishCost,
-      unitPrice,
-      subtotal,
-      gstAmount,
-      grandTotal,
-    };
-  }, [modelAnalysis, useSample, selectedMaterial, selectedColor, selectedInfill, selectedFinish, quantity, pricingConfig, hoursPerGram, slabs, supportsEnabled, useBambu, bambuQuote, selectedLayerHeight, selectedWalls, layerTimeFactor, shellMm]);
-
   const hasUploadedModel = Boolean(uploadedFile && !useSample);
   const summaryModel = hasUploadedModel
     ? modelAnalysis
     : {
         ...modelAnalysis,
         dimensions: { x: 0, y: 0, z: 0 },
-      };
-  const summaryCalculations = hasUploadedModel
-    ? calculations
-    : {
-        baseWeight: 0,
-        weight: 0,
-        materialCost: 0,
-        printTimeHours: 0,
-        timeRate: 0,
-        timeRateLabel: "0–5 hours",
-        timeCost: 0,
-        supportWeight: 0,
-        supportCost: 0,
-        supportTimeHours: 0,
-        supportsApplied: false,
-        colorCost: 0,
-        infillCost: 0,
-        finishCost: 0,
-        unitPrice: 0,
-        subtotal: 0,
-        gstAmount: 0,
-        grandTotal: 0,
       };
   const summaryQuantity = hasUploadedModel ? quantity : 0;
 
@@ -699,7 +252,6 @@ export default function Printing() {
     setUploadedFile(file);
     setUseSample(false);
     setModelThumb(null);
-    setBambuQuote(null);
     toast.success(`Loaded ${file.name}`);
   };
 
@@ -721,25 +273,25 @@ export default function Printing() {
     }
   };
 
-  const handleRemoveModel = () => {
-    setUploadedFile(null);
-    setUseSample(false);
-    setModelThumb(null);
-    setBambuQuote(null);
+  const resetAnalysis = () => {
     setModelAnalysis({
       fileName: "No file loaded",
       fileSizeMB: 0,
       dimensions: { x: 0, y: 0, z: 0 },
       volumeCm3: 0,
-      surfaceAreaCm2: 0,
-      overhangAreaCm2: 0,
-      supportVolumeCm3: 0,
       weightGrams: 0,
     });
+  };
+
+  const handleRemoveModel = () => {
+    setUploadedFile(null);
+    setUseSample(false);
+    setModelThumb(null);
+    resetAnalysis();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-    toast.info("Model removed. Upload a 3D model to calculate prices.");
+    toast.info("Model removed. Upload a 3D model to request a quote.");
   };
 
   const handleViewerError = useCallback(
@@ -749,17 +301,7 @@ export default function Printing() {
       setUploadedFile(null);
       setUseSample(false);
       setModelThumb(null);
-      setBambuQuote(null);
-      setModelAnalysis({
-        fileName: "No file loaded",
-        fileSizeMB: 0,
-        dimensions: { x: 0, y: 0, z: 0 },
-        volumeCm3: 0,
-        surfaceAreaCm2: 0,
-        overhangAreaCm2: 0,
-        supportVolumeCm3: 0,
-        weightGrams: 0,
-      });
+      resetAnalysis();
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (message) toast.error(message);
     },
@@ -786,105 +328,95 @@ export default function Printing() {
   };
 
   /* =========================================================
-     3D PRINT ORDER — supports both Add to Cart (unified checkout
-     with products, coupons incl. GST, shipping) and direct order
+     WHATSAPP QUOTE — modal → server stores quotation → WhatsApp opens
+     with the customer details + hosted model-file link.
      ========================================================= */
-  const buildPrintPayload = (uploaded) => ({
-    file_name: uploaded?.name || modelAnalysis.fileName || "model.stl",
-    file_url: uploaded?.url,
-    file_public_id: uploaded?.public_id || null,
-    file_size: uploaded?.size || modelAnalysis.fileSizeMB,
-    dimension_x: modelAnalysis.dimensions.x,
-    dimension_y: modelAnalysis.dimensions.y,
-    dimension_z: modelAnalysis.dimensions.z,
-    material_id: selectedMaterial.id,
-    color_id: selectedColor.id === "custom" ? null : selectedColor.id,
-    custom_color_hex: selectedColor.id === "custom" ? selectedColorHex : null,
-    infill_density: Number(selectedInfill.id || 50),
-    surface_finish: selectedFinish.id === "smooth" ? "smooth" : "standard",
-    layer_height: Number(selectedLayerHeight?.value) || 0.2,
-    wall_loops: Number(selectedWalls?.walls) || 2,
-    quantity,
-    // Base (unscaled) weight — the server applies its slicer shell model
-    estimated_weight: calculations.baseWeight,
-    surface_area_cm2: modelAnalysis.surfaceAreaCm2 || null,
-    support_volume_cm3: supportsEnabled ? modelAnalysis.supportVolumeCm3 || 0 : 0,
-    // Exact Bambu CLI numbers for THIS file+settings — the server prices
-    // from these Bambu Studio numbers instead of the heuristic.
-    ...(useBambu
-      ? {
-          slicer_filament_grams: bambuQuote.slicer.filamentGrams,
-          slicer_time_hours: bambuQuote.slicer.printTimeHours,
-          slicer_support_grams: supportsEnabled ? bambuQuote.slicer.supportGrams || 0 : 0,
-        }
-      : {}),
-  });
-
-  const validatePrintSelection = () => {
-    if (!hasUploadedModel || !modelAnalysis || modelAnalysis.weightGrams <= 0) {
+  const openQuoteModal = () => {
+    if (!hasUploadedModel || !modelAnalysis || (modelAnalysis?.weightGrams || 0) <= 0) {
       toast.warning("Please upload a 3D model first.");
-      return false;
-    }
-    if (!localStorage.getItem("token")) {
-      toast.info("Please login before ordering a 3D print");
-      navigate("/login", { state: { from: "/3d-printing" } });
-      return false;
+      return;
     }
     if (isOversized) {
       toast.error(
         `Model exceeds maximum printable volume (${MAX_PRINT_WIDTH_MM === -1 ? "No limit" : MAX_PRINT_WIDTH_MM + "mm"} × ${MAX_PRINT_DEPTH_MM === -1 ? "No limit" : MAX_PRINT_DEPTH_MM + "mm"} × ${MAX_PRINT_HEIGHT_MM === -1 ? "No limit" : MAX_PRINT_HEIGHT_MM + "mm"}). Please scale down your model.`
       );
-      return false;
+      return;
     }
-    if (typeof selectedMaterial?.id !== "number") {
-      toast.warning("Pricing data is still loading. Please wait a moment and try again.");
-      return false;
+    if (!selectedMaterial) {
+      toast.warning("Options are still loading. Please wait a moment and try again.");
+      return;
     }
-    return true;
+    setQuoteForm(blankQuoteForm());
+    setIsQuoteModalOpen(true);
   };
 
-  const handleAddToCart = async () => {
-    if (!validatePrintSelection()) return;
-    setAddingToCart(true);
-    try {
-      let uploaded = null;
-      if (uploadedFile) {
-        const uploadResponse = await printingService.uploadFile(uploadedFile);
-        uploaded = uploadResponse.data.file;
-      }
-      await cartService.addPrintItem(buildPrintPayload(uploaded));
-      await syncCartBadge();
-      toast.success("Custom 3D print added to cart!");
-      navigate("/cart");
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "Unable to add 3D print to cart");
-    } finally {
-      setAddingToCart(false);
+  const handleQuoteSend = async (e) => {
+    e?.preventDefault?.();
+    if (sendingQuote) return;
+    const name = quoteForm.name.trim();
+    const phone = quoteForm.phone.trim();
+    const email = quoteForm.email.trim();
+    const country = quoteForm.country.trim() || "India";
+    const address1 = quoteForm.address1.trim();
+    const address2 = quoteForm.address2.trim();
+    const city = quoteForm.city.trim();
+    const state = quoteForm.state.trim();
+    const pincode = quoteForm.pincode.trim();
+    if (!name) {
+      toast.error("Please enter your name.");
+      return;
     }
-  };
-
-  const handleBuyNow = async () => {
-    if (!validatePrintSelection()) return;
-    setPlacingPrintOrder(true);
+    if (!phone || phone.replace(/\D/g, "").length < 10) {
+      toast.error("Please enter a valid phone number.");
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+    if (!address1) {
+      toast.error("Please enter your address.");
+      return;
+    }
+    if (!uploadedFile) {
+      toast.error("Please attach your 3D model file first.");
+      return;
+    }
+    setSendingQuote(true);
     try {
-      let uploaded = null;
-      if (uploadedFile) {
-        const uploadResponse = await printingService.uploadFile(uploadedFile);
-        uploaded = uploadResponse.data.file;
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      formData.append("customer_name", name);
+      formData.append("customer_phone", phone);
+      formData.append("customer_email", email);
+      formData.append("address1", address1);
+      formData.append("address2", address2);
+      formData.append("city", city);
+      formData.append("state", state);
+      formData.append("pincode", pincode);
+      formData.append("country", country);
+      formData.append("material_id", selectedMaterial?.id ?? "");
+      formData.append("material_name", selectedMaterial?.name ?? "");
+      if (selectedColor?.id !== "custom") formData.append("color_id", selectedColor?.id ?? "");
+      formData.append("color_name", selectedColor?.name ?? "");
+      if (selectedColor?.id === "custom") formData.append("custom_color_hex", selectedColorHex);
+      formData.append("quantity", String(quantity));
+      formData.append("dimension_x", modelAnalysis.dimensions.x);
+      formData.append("dimension_y", modelAnalysis.dimensions.y);
+      formData.append("dimension_z", modelAnalysis.dimensions.z);
+
+      const res = await printingService.sendQuote(formData);
+      const whatsappUrl = res.data?.whatsapp_url;
+      if (!res.data?.success || !whatsappUrl) {
+        throw new Error(res.data?.message || "Unable to send quote request");
       }
-
-      const response = await printingService.createOrder({
-        ...buildPrintPayload(uploaded),
-        payment_method: "cod",
-      });
-
-      toast.success(response.data.message || "3D print order placed");
-      const orderNumber = response.data.order?.order_number;
-      navigate(orderNumber ? `/orders/${orderNumber}` : "/orders");
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      toast.success("Opening WhatsApp with your quote details!");
+      setIsQuoteModalOpen(false);
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Unable to place 3D print order");
+      toast.error(error?.response?.data?.message || error?.message || "Unable to send quote request");
     } finally {
-      setPlacingPrintOrder(false);
+      setSendingQuote(false);
     }
   };
 
@@ -902,8 +434,8 @@ export default function Printing() {
                 <span className="hero-title-highlight">Printed in 3D.</span>
               </h1>
               <p className="hero-subtitle">
-                Upload your 3D model, choose your material and color, and we'll print it
-                with precision and deliver to your door.
+                Upload your 3D model, choose your material and color, and get a
+                quote instantly on WhatsApp.
               </p>
 
               <div className="hero-pills">
@@ -986,8 +518,8 @@ export default function Printing() {
             <div className="step-item">
               <div className="step-badge">3</div>
               <div className="step-content">
-                <span className="step-title">Place Order</span>
-                <span className="step-subtitle">Secure payment & fast delivery</span>
+                <span className="step-title">Get Quote</span>
+                <span className="step-subtitle">Send it on WhatsApp & get pricing</span>
               </div>
             </div>
           </div>
@@ -1064,8 +596,8 @@ export default function Printing() {
                           }
                           file={uploadedFile}
                           color={selectedColorHex}
-                          materialType={selectedMaterial.id}
-                          density={selectedMaterial.density}
+                          materialType={selectedMaterial?.id}
+                          density={selectedMaterial?.density}
                           useSample={useSample}
                           onAnalysis={handleModelAnalysis}
                           onThumbnail={setModelThumb}
@@ -1147,7 +679,9 @@ export default function Printing() {
                             onClick={() => setSelectedMaterialId(mat.id)}
                           >
                             <div className="material-name">{mat.name}</div>
-                            <div className="material-price">₹{mat.pricePerGram} / gram</div>
+                            {mat.description && (
+                              <div className="material-price">{mat.description}</div>
+                            )}
                           </div>
                         );
                       }) : <div className="text-muted py-2">No materials available</div>}
@@ -1202,193 +736,28 @@ export default function Printing() {
                   </div>
                 </div>
 
-                {/* Layer Height */}
+                {/* Quantity */}
                 <div>
-                  <div className="option-group-label">
-                    <span>Layer Height</span>
-                  </div>
-                  <div className="infill-cards-grid">
-                    {LAYER_HEIGHT_OPTIONS.map((lh) => {
-                      const isSelected = lh.id === selectedLayerHeightId;
-                      return (
-                        <div
-                          key={lh.id}
-                          className={`infill-card ${isSelected ? "active" : ""}`}
-                          onClick={() => setSelectedLayerHeightId(lh.id)}
-                        >
-                          <div className="infill-percentage">{lh.label}</div>
-                          <div className="infill-tag">{lh.tag}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Infill Density */}
-                <div>
-                  <div className="option-group-label">
-                    <span>Infill Density</span>
+                  <div className="option-group-label">Quantity</div>
+                  <div className="qty-stepper-box">
                     <button
                       type="button"
-                      className="what-is-infill-link btn btn-link p-0"
-                      onClick={() => setIsInfillModalOpen(true)}
+                      className="qty-stepper-btn"
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      disabled={quantity <= 1}
                     >
-                      What is Infill?
+                      <Minus size={15} />
+                    </button>
+                    <span className="qty-stepper-val">{quantity}</span>
+                    <button
+                      type="button"
+                      className="qty-stepper-btn"
+                      onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                    >
+                      <Plus size={15} />
                     </button>
                   </div>
-
-                  <div className="infill-cards-grid">
-                    {infillOptions.map((inf) => {
-                      const isSelected = inf.id === selectedInfillId;
-                      const cardPrice = getInfillCardPrice(inf);
-                      return (
-                        <div
-                          key={inf.id}
-                          className={`infill-card ${isSelected ? "active" : ""}`}
-                          onClick={() => setSelectedInfillId(inf.id)}
-                        >
-                          <div className="infill-percentage">{inf.label}</div>
-                          <div className="infill-tag">
-                            ₹{cardPrice} {inf.tag ? `(${inf.tag})` : ""}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
-
-                {/* Wall Count */}
-                <div>
-                  <div className="option-group-label">
-                    <span>Wall Count</span>
-                  </div>
-                  <div className="finish-cards-grid">
-                    {WALL_OPTIONS.map((w) => {
-                      const isSelected = w.id === selectedWallsId;
-                      return (
-                        <div
-                          key={w.id}
-                          className={`finish-card ${isSelected ? "active" : ""}`}
-                          onClick={() => setSelectedWallsId(w.id)}
-                        >
-                          <div className="finish-name">{w.label}</div>
-                          <div className="finish-price">{w.tag}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Quantity & Surface Finish */}
-                <div className="qty-finish-row">
-                  {/* Quantity */}
-                  <div>
-                    <div className="option-group-label">Quantity</div>
-                    <div className="qty-stepper-box">
-                      <button
-                        type="button"
-                        className="qty-stepper-btn"
-                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        disabled={quantity <= 1}
-                      >
-                        <Minus size={15} />
-                      </button>
-                      <span className="qty-stepper-val">{quantity}</span>
-                      <button
-                        type="button"
-                        className="qty-stepper-btn"
-                        onClick={() => setQuantity((q) => q + 1)}
-                      >
-                        <Plus size={15} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Surface Finish */}
-                  <div>
-                    <div className="option-group-label">Surface Finish</div>
-                    <div className="finish-cards-grid">
-                      {surfaceFinishes.map((f) => {
-                        const isSelected = f.id === selectedFinishId;
-                        return (
-                          <div
-                            key={f.id}
-                            className={`finish-card ${isSelected ? "active" : ""}`}
-                            onClick={() => setSelectedFinishId(f.id)}
-                          >
-                            <div className="finish-name">{f.name}</div>
-                            <div className="finish-price">{f.tag}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-                {/* Supports (Bambu-style auto) */}
-                <div>
-                  <div className="option-group-label">
-                    <span>Supports</span>
-                    <span className="summary-delivery-time" style={{ fontWeight: 400 }}>
-                      {Number(modelAnalysis?.overhangAreaCm2 || 0) > 0
-                        ? `${modelAnalysis.overhangAreaCm2}cm² overhang detected`
-                        : "No overhang detected"}
-                    </span>
-                  </div>
-                  <div className="finish-cards-grid">
-                    <div
-                      className={`finish-card ${supportsEnabled ? "active" : ""}`}
-                      onClick={() => setSupportsEnabled(true)}
-                    >
-                      <div className="finish-name">Auto supports</div>
-                      <div className="finish-price">
-                        {supportsEnabled && calculations.supportWeight > 0
-                          ? `+${calculations.supportWeight}g`
-                          : "Auto"}
-                      </div>
-                    </div>
-                    <div
-                      className={`finish-card ${!supportsEnabled ? "active" : ""}`}
-                      onClick={() => setSupportsEnabled(false)}
-                    >
-                      <div className="finish-name">No supports</div>
-                      <div className="finish-price">₹0</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bambu-exact note — weight & time from the free Bambu CLI slice */}
-                <div className="summary-delivery-box" style={{ marginTop: 12 }}>
-                  <Info size={20} className="summary-delivery-icon" />
-                  <div className="summary-delivery-text">
-                    <span className="summary-delivery-label">
-                      {useBambu ? (
-                        <>Bambu Studio exact{bambuLoading ? " • updating…" : ""}</>
-                      ) : (
-                        <>Auto estimate from your 3D file{bambuLoading ? " • slicing…" : ""}</>
-                      )}
-                    </span>
-                    <span className="summary-delivery-time">
-                      {hasUploadedModel ? (
-                        <>Weight {calculations.weight}g{calculations.supportsApplied ? ` (incl. ${calculations.supportWeight}g supports)` : ""} • Time {Number(calculations.printTimeHours || 0).toFixed(2)}h ({calculations.timeRateLabel} @ ₹{calculations.timeRate}/h) • Final = Material ₹{calculations.materialCost} + Time ₹{calculations.timeCost}</>
-                      ) : (
-                        <>Upload a 3D file to auto-calculate weight, print time and final price.</>
-                      )}
-                    </span>
-                    <span className="summary-delivery-time" style={{ marginTop: 4 }}>
-                      {useBambu && bambuQuote?.slicer ? (
-                        <>Sliced exactly like Bambu Studio: {bambuQuote.slicer.printer} • {bambuQuote.slicer.profile} • {bambuQuote.slicer.engine} engine{bambuQuote.slicer.cached ? " • cached" : ""}</>
-                      ) : slicerStatus && !slicerStatus.available ? (
-                        <>Estimate mode (free Bambu Studio CLI not installed on server). Same configs, heuristic weight/time.</>
-                      ) : (
-                        <>Slicing exactly like Bambu Studio: P1S · 0.4 nozzle · {selectedLayerHeight.label} {selectedLayerHeight.tag} ({selectedWalls.label} · grid infill · tree-auto supports)…</>
-                      )}
-                    </span>
-                    <span className="summary-delivery-time" style={{ marginTop: 4 }}>
-                      Time slabs: {slabs.map((s) => `${slabLabelFor(s)} ₹${s.rate}/h`).join(" • ")}
-                    </span>
-                  </div>
-                </div>
-
               </div>
             </div>
 
@@ -1413,9 +782,8 @@ export default function Printing() {
                       {summaryModel.dimensions.z} mm
                     </div>
                     <div className="summary-model-tags">
-                      {selectedMaterial.name} • {selectedColor.name} • {selectedInfill.label} Infill • {selectedLayerHeight.label} • {selectedWalls.label}
+                      {selectedMaterial?.name || "—"} • {selectedColor?.name || "Custom"} • Qty: {summaryQuantity}
                     </div>
-                    <div className="summary-model-qty">Qty: {summaryQuantity}</div>
                     <button
                       type="button"
                       className="btn-summary-edit"
@@ -1428,95 +796,7 @@ export default function Printing() {
                   </div>
                 </div>
 
-                {/* Breakdown Items — Final price = Material charge + Printing-time charge */}
-                <div className="summary-breakdown">
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Material ({selectedMaterial.name} • ₹{selectedMaterial.pricePerGram}/g)</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{summaryCalculations.weight}g</span>
-                      <span className="breakdown-price">₹{summaryCalculations.materialCost}</span>
-                    </div>
-                  </div>
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Printing time ({summaryCalculations.timeRateLabel} • ₹{summaryCalculations.timeRate}/h)</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{Number(summaryCalculations.printTimeHours || 0).toFixed(2)}h</span>
-                      <span className="breakdown-price">₹{summaryCalculations.timeCost}</span>
-                    </div>
-                  </div>
-
-                  {summaryCalculations.supportsApplied && (
-                    <div className="breakdown-row">
-                      <span className="breakdown-label">Supports (auto • same material)</span>
-                      <div className="breakdown-value-group">
-                        <span className="breakdown-weight">+{summaryCalculations.supportWeight}g • +{Number(summaryCalculations.supportTimeHours || 0).toFixed(2)}h</span>
-                        <span className="breakdown-price">₹{summaryCalculations.supportCost}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Color</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{selectedColor.name}</span>
-                      <span className="breakdown-price">₹0</span>
-                    </div>
-                  </div>
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Infill Density ({selectedInfill.label})</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{selectedInfill.tag || `${selectedInfill.percentage}%`}</span>
-                      <span className="breakdown-price">₹{summaryCalculations.infillCost}</span>
-                    </div>
-                  </div>
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Layer Height</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{selectedLayerHeight.label} ({selectedLayerHeight.tag})</span>
-                      <span className="breakdown-price">{layerTimeFactor === 1 ? "Base time" : layerTimeFactor > 1 ? `${layerTimeFactor.toFixed(2)}× time` : `${(1 / layerTimeFactor).toFixed(2)}× faster`}</span>
-                    </div>
-                  </div>
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Wall Count</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{selectedWalls.label} ({selectedWalls.tag})</span>
-                      <span className="breakdown-price">{shellMm.toFixed(1)}mm shell</span>
-                    </div>
-                  </div>
-
-                  <div className="breakdown-row">
-                    <span className="breakdown-label">Surface Finish</span>
-                    <div className="breakdown-value-group">
-                      <span className="breakdown-weight">{selectedFinish.name}</span>
-                      <span className="breakdown-price">₹{summaryCalculations.finishCost}</span>
-                    </div>
-                  </div>
-                </div>
-
                 <div className="summary-divider" />
-
-                {/* Subtotal & GST */}
-                <div className="summary-subtotal-row">
-                  <span>Subtotal</span>
-                  <span className="fw-semibold">₹{summaryCalculations.subtotal}</span>
-                </div>
-
-                <div className="summary-subtotal-row">
-                  <span>GST ({Math.round((pricingConfig.siteSettings?.gstRate || 0.18) * 100)}%)</span>
-                  <span className="fw-semibold">₹{summaryCalculations.gstAmount.toFixed(2)}</span>
-                </div>
-
-                <div className="summary-divider" />
-
-                {/* Grand Total */}
-                <div className="summary-total-row">
-                  <span className="summary-total-label">Total</span>
-                  <span className="summary-total-value">₹{summaryCalculations.grandTotal.toFixed(2)}</span>
-                </div>
 
                 {/* Delivery Guarantee Pill */}
                 <div className="summary-delivery-box">
@@ -1524,8 +804,7 @@ export default function Printing() {
                   <div className="summary-delivery-text">
                     <span className="summary-delivery-label">Estimated Delivery</span>
                     <span className="summary-delivery-time">
-                      {pricingConfig.siteSettings?.estimatedDeliveryDays || "3 – 5 Working Days"}{" "}
-                      {pricingConfig.siteSettings?.deliveryRegion || "Across India"}
+                      {deliveryDays} {deliveryRegion}
                     </span>
                   </div>
                 </div>
@@ -1539,32 +818,27 @@ export default function Printing() {
                       {MAX_PRINT_WIDTH_MM === -1 ? "∞" : `${MAX_PRINT_WIDTH_MM}`} ×{" "}
                       {MAX_PRINT_DEPTH_MM === -1 ? "∞" : `${MAX_PRINT_DEPTH_MM}`} ×{" "}
                       {MAX_PRINT_HEIGHT_MM === -1 ? "∞" : `${MAX_PRINT_HEIGHT_MM}`} mm).
-                      Please scale down to place order.
+                      Please scale down to request a quote.
                     </span>
                   </div>
                 )}
 
-                {/* CTA Buttons */}
+                {/* WhatsApp Quote CTA */}
                 <div className="summary-actions" style={{ display: "flex", gap: "10px" }}>
                   <button
                     type="button"
                     className="btn-buy-now"
-                    onClick={handleAddToCart}
-                    disabled={!hasUploadedModel || isOversized || addingToCart || placingPrintOrder}
-                    style={{ flex: 1, background: "#ffffff", color: "#2563eb", border: "1.5px solid #2563eb" }}
-                    title="Add this 3D model configuration to cart"
-                  >
-                    <span>{addingToCart ? "Adding..." : "Add to Cart"}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-buy-now"
-                    onClick={handleBuyNow}
-                    disabled={!hasUploadedModel || isOversized || addingToCart || placingPrintOrder}
+                    onClick={openQuoteModal}
+                    disabled={!hasUploadedModel || isOversized}
                     style={{ flex: 1 }}
+                    title="Send your model + details on WhatsApp for a price quote"
                   >
-                    <span>{placingPrintOrder ? "Placing..." : "Place 3D Print Order"}</span>
+                    <MessageCircle size={18} />
+                    <span>Send a WhatsApp Quote</span>
                   </button>
+                </div>
+                <div className="summary-help-note" style={{ marginTop: 8 }}>
+                  Replies on WhatsApp: {WHATSAPP_DISPLAY_NUMBER}
                 </div>
 
                 <div className="summary-help-note">
@@ -1663,59 +937,130 @@ export default function Printing() {
         </div>
       </section>
 
-
-
       {/* =====================================================
-          "WHAT IS INFILL?" INFO MODAL
+          WHATSAPP QUOTE MODAL
           ===================================================== */}
-      {isInfillModalOpen && (
-        <div className="admin-modal-backdrop" onClick={() => setIsInfillModalOpen(false)}>
+      {isQuoteModalOpen && (
+        <div className="admin-modal-backdrop" onClick={() => !sendingQuote && setIsQuoteModalOpen(false)}>
           <div className="admin-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <span className="admin-modal-title">What is Infill Density?</span>
-              <button
-                type="button"
-                className="admin-modal-close"
-                onClick={() => setIsInfillModalOpen(false)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="admin-modal-body">
-              <p className="text-secondary small mb-3">
-                Infill refers to the internal structure of a 3D print. 3D prints are rarely printed
-                100% solid inside to save weight, material, and printing time.
-              </p>
-              <div className="d-flex flex-column gap-3">
-                <div className="p-3 bg-light rounded-3">
-                  <div className="fw-bold text-dark">10% - 20% (Fast / Lightweight)</div>
-                  <div className="text-muted small">
-                    Ideal for figurines, architectural models, visual prototypes, and display items.
-                  </div>
-                </div>
-                <div className="p-3 bg-light rounded-3">
-                  <div className="fw-bold text-dark">30% - 50% (Standard / Strong)</div>
-                  <div className="text-muted small">
-                    Recommended for functional everyday objects, phone stands, brackets, and enclosures.
-                  </div>
-                </div>
-                <div className="p-3 bg-light rounded-3">
-                  <div className="fw-bold text-dark">100% (Solid Mechanical)</div>
-                  <div className="text-muted small">
-                    Maximum structural rigidity for heavy-duty gears, mechanical tools, and high stress parts.
-                  </div>
+            <form onSubmit={handleQuoteSend}>
+              <div className="admin-modal-header">
+                <span className="admin-modal-title">Get Quote on WhatsApp</span>
+                <button
+                  type="button"
+                  className="admin-modal-close"
+                  onClick={() => !sendingQuote && setIsQuoteModalOpen(false)}
+                  disabled={sendingQuote}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="admin-modal-body">
+                <p className="text-secondary small mb-3">
+                  Share your details and we will open WhatsApp with your quote
+                  request — including your uploaded file ({modelAnalysis.fileName}) —
+                  addressed to {WHATSAPP_DISPLAY_NUMBER}.
+                </p>
+                <div className="quote-form-grid">
+                  <label className="quote-field"><span>Your Name <b>*</b></span>
+                    <input
+                      required
+                      value={quoteForm.name}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Full name"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Phone Number <b>*</b></span>
+                    <input
+                      required
+                      value={quoteForm.phone}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, phone: e.target.value }))}
+                      placeholder="10-digit mobile number"
+                      inputMode="tel"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Email Address</span>
+                    <input
+                      type="email"
+                      value={quoteForm.email}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="you@example.com (optional)"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Country</span>
+                    <input
+                      value={quoteForm.country}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, country: e.target.value }))}
+                      placeholder="India"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Address Line 1 <b>*</b></span>
+                    <input
+                      required
+                      value={quoteForm.address1}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, address1: e.target.value }))}
+                      placeholder="House no., street, area"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Address Line 2</span>
+                    <input
+                      value={quoteForm.address2}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, address2: e.target.value }))}
+                      placeholder="Landmark (optional)"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>City</span>
+                    <input
+                      value={quoteForm.city}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, city: e.target.value }))}
+                      placeholder="City"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>State</span>
+                    <input
+                      value={quoteForm.state}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, state: e.target.value }))}
+                      placeholder="West Bengal"
+                      disabled={sendingQuote}
+                    />
+                  </label>
+                  <label className="quote-field"><span>Pincode</span>
+                    <input
+                      value={quoteForm.pincode}
+                      onChange={(e) => setQuoteForm((f) => ({ ...f, pincode: e.target.value }))}
+                      placeholder="Pincode"
+                      inputMode="numeric"
+                      disabled={sendingQuote}
+                    />
+                  </label>
                 </div>
               </div>
-            </div>
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => setIsInfillModalOpen(false)}
-              >
-                Got It
-              </button>
-            </div>
+              <div className="admin-modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setIsQuoteModalOpen(false)}
+                  disabled={sendingQuote}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={sendingQuote}
+                >
+                  <MessageCircle size={15} style={{ marginRight: 6 }} />
+                  {sendingQuote ? "Sending..." : "Send on WhatsApp"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

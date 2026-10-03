@@ -1,9 +1,12 @@
 const db = require("../config/db");
 const crypto = require("crypto");
 const fs = require("fs");
+const path = require("path");
 const { uploadFile } = require("../utils/cloudinaryUploader");
 const { calculatePrintPrice, calculatePrintPriceFromSlicer } = require("../utils/priceCalculator");
 const { getSlicerStatus, sliceModel, BAMBU_PRINTER_LABEL, DEFAULT_PROCESS_LABEL } = require("../utils/bambuSlicer");
+const { ensurePrintQuotationSchema } = require("../utils/printQuotationSchema");
+const { buildQuoteMessage, buildWhatsAppUrl, WHATSAPP_NUMBER } = require("../utils/quoteWhatsapp");
 const { triggerAutoShipment } = require("../utils/shippingSync");
 const { mailPrintInvoiceByIds } = require("../utils/mailer");
 
@@ -73,6 +76,157 @@ const uploadPrintFile = async (req, res) => {
   } catch (error) {
     console.error("Upload print file error:", error);
     return res.status(500).json({ success: false, message: "File upload failed" });
+  }
+};
+
+/* ===================== WHATSAPP QUOTE REQUEST (public, guests OK) =====================
+ * The storefront no longer prices 3D prints itself. Guests attach their model,
+ * fill name/phone/email/address, and the request is stored as a quotation
+ * (3D Printing → 3D Print Quotations in admin) AND handed to WhatsApp as a
+ * wa.me deep link carrying the customer details + hosted model-file link.
+ * POST /api/printing/quote (multipart: file + customer_* + model fields) */
+const QUOTE_FILE_EXTS = [".stl", ".obj", ".3mf", ".amf", ".ply", ".glb", ".gltf"];
+
+const createPrintQuotation = async (req, res) => {
+  try {
+    await ensurePrintQuotationSchema().catch(() => {});
+
+    const body = req.body || {};
+    const clean = (v) => (v === undefined || v === null ? "" : String(v).trim());
+    const customer_name = clean(body.customer_name);
+    const customer_phone = clean(body.customer_phone).replace(/[^\d+]/g, "");
+    const customer_email = clean(body.customer_email);
+    // Structured address (same fields as the invoice billing form). The
+    // legacy single `customer_address` is still accepted as a fallback.
+    const address1 = clean(body.address1) || clean(body.customer_address1);
+    const address2 = clean(body.address2) || clean(body.customer_address2);
+    const city = clean(body.city) || clean(body.customer_city);
+    const state = clean(body.state) || clean(body.customer_state);
+    const pincode = clean(body.pincode) || clean(body.customer_pincode);
+    const country = clean(body.country) || clean(body.customer_country) || "India";
+    let customer_address = clean(body.customer_address);
+    if (!customer_address) {
+      customer_address = [address1, address2, city, state, pincode, country]
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    if (!customer_name) {
+      return res.status(400).json({ success: false, message: "Please enter your name." });
+    }
+    if (!customer_phone || customer_phone.replace(/\D/g, "").length < 10) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number." });
+    }
+    if (customer_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+    }
+    if (!address1 && customer_address.length < 8) {
+      return res.status(400).json({ success: false, message: "Please enter your address." });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Please attach your 3D model file." });
+    }
+    const ext = path.extname(req.file.originalname || "").toLowerCase();
+    if (!QUOTE_FILE_EXTS.includes(ext)) {
+      return res.status(400).json({ success: false, message: "Only 3D model files are allowed (.STL, .OBJ, .3MF, .AMF, .PLY, .GLB, .GLTF)." });
+    }
+
+    // Host the model so the WhatsApp message + admin panel can link it.
+    let uploaded;
+    try {
+      uploaded = await uploadFile({
+        filePath: req.file.path,
+        folder: "printynozzle/quote-files",
+        resourceType: "raw",
+        publicId: `quote_${Date.now()}_${Math.round(Math.random() * 1e4)}`,
+      });
+    } catch (e) {
+      console.error("Quote file upload error:", e);
+      return res.status(500).json({ success: false, message: "File upload failed. Please try again." });
+    }
+
+    const numOrNull = (v) => {
+      const n = Number(v);
+      return v !== undefined && v !== null && v !== "" && Number.isFinite(n) ? n : null;
+    };
+    const materialIdRaw = clean(body.material_id);
+    const material_id = /^\d+$/.test(materialIdRaw) ? Number(materialIdRaw) : null;
+    let material_name = clean(body.material_name) || null;
+    if (material_id) {
+      try {
+        const [mrows] = await db.query("SELECT name FROM printing_materials WHERE id = ?", [material_id]);
+        if (mrows.length) material_name = mrows[0].name;
+      } catch { /* keep provided name */ }
+    }
+    const colorIdRaw = clean(body.color_id);
+    const color_id = /^\d+$/.test(colorIdRaw) ? Number(colorIdRaw) : null;
+
+    const [result] = await db.query(
+      `INSERT INTO print_quotations
+        (customer_name, customer_phone, customer_email, customer_address,
+         customer_address1, customer_address2, customer_city, customer_state,
+         customer_pincode, customer_country,
+         file_name, file_url, file_public_id, file_size,
+         dimension_x, dimension_y, dimension_z,
+         material_id, material_name, color_id, color_name, custom_color_hex,
+         quantity, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')`,
+      [
+        customer_name,
+        customer_phone,
+        customer_email || null,
+        customer_address,
+        address1 || null,
+        address2 || null,
+        city || null,
+        state || null,
+        pincode || null,
+        country || "India",
+        req.file.originalname,
+        uploaded.url,
+        uploaded.public_id || null,
+        numOrNull((req.file.size / (1024 * 1024)).toFixed(2)),
+        numOrNull(body.dimension_x),
+        numOrNull(body.dimension_y),
+        numOrNull(body.dimension_z),
+        material_id,
+        material_name,
+        color_id,
+        clean(body.color_name) || null,
+        clean(body.custom_color_hex) || null,
+        Math.max(1, Math.min(99, parseInt(body.quantity, 10) || 1)),
+      ]
+    );
+
+    const quotation = {
+      id: result.insertId,
+      customer_name,
+      customer_phone,
+      customer_email: customer_email || null,
+      customer_address,
+      customer_address1: address1 || null,
+      customer_address2: address2 || null,
+      customer_city: city || null,
+      customer_state: state || null,
+      customer_pincode: pincode || null,
+      customer_country: country || "India",
+      file_name: req.file.originalname,
+      file_url: uploaded.url,
+      file_size: numOrNull((req.file.size / (1024 * 1024)).toFixed(2)),
+      dimension_x: numOrNull(body.dimension_x),
+      dimension_y: numOrNull(body.dimension_y),
+      dimension_z: numOrNull(body.dimension_z),
+      material_name,
+      color_name: clean(body.color_name) || null,
+      custom_color_hex: clean(body.custom_color_hex) || null,
+      quantity: Math.max(1, Math.min(99, parseInt(body.quantity, 10) || 1)),
+    };
+    const whatsapp_url = buildWhatsAppUrl(buildQuoteMessage(quotation), WHATSAPP_NUMBER);
+
+    return res.status(201).json({ success: true, quotation, whatsapp_url });
+  } catch (error) {
+    console.error("Create print quotation error:", error);
+    return res.status(500).json({ success: false, message: "Unable to send quote request" });
   }
 };
 
@@ -731,6 +885,7 @@ const getPrintOrderInvoice = async (req, res) => {
 
 module.exports = {
   uploadPrintFile,
+  createPrintQuotation,
   getPrintingConfig,
   getMaterials,
   getColors,

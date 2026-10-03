@@ -6,6 +6,10 @@ const {
   getPrintOrderInvoice,
   updatePrintOrderStatus,
   verifyQrPayment,
+  listPrintQuotations,
+  getPrintQuotation,
+  updatePrintQuotation,
+  deletePrintQuotation,
   getAllMaterials,
   createMaterial,
   updateMaterial,
@@ -27,6 +31,12 @@ router.get("/orders/:id/invoice", getPrintOrderInvoice);
 router.get("/orders/:id", getPrintOrderDetails);
 router.put("/orders/:id/status", updatePrintOrderStatus);
 router.put("/orders/:id/verify-payment", verifyQrPayment);
+
+// WhatsApp quote requests
+router.get("/quotations", listPrintQuotations);
+router.get("/quotations/:id", getPrintQuotation);
+router.put("/quotations/:id", updatePrintQuotation);
+router.delete("/quotations/:id", deletePrintQuotation);
 
 // Materials management
 router.get("/materials", getAllMaterials);

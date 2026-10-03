@@ -1346,6 +1346,64 @@
 }
 
 /* ==========================================================================
+   WHATSAPP QUOTE FORM (storefront modal)
+   ========================================================================== */
+.quote-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.quote-form-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.quote-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.quote-field > span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--pr-dark);
+}
+
+.quote-field > span b {
+  color: #dc2626;
+}
+
+.quote-field input,
+.quote-field textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--pr-gray-200);
+  border-radius: var(--pr-radius-sm);
+  font-size: 0.9rem;
+  color: var(--pr-dark);
+  background: #fff;
+}
+
+.quote-field input:focus,
+.quote-field textarea:focus {
+  outline: none;
+  border-color: #ff7508;
+  box-shadow: 0 0 0 3px rgba(255, 117, 8, 0.12);
+}
+
+.quote-field input:disabled,
+.quote-field textarea:disabled {
+  background: var(--pr-gray-100);
+}
+
+@media (max-width: 575px) {
+  .quote-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
    RESPONSIVE BREAKPOINTS
    ========================================================================== */
 @media (max-width: 991px) {

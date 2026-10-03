@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const { ensurePrintQuotationSchema } = require("../../utils/printQuotationSchema");
 /* ===================== GET ALL 3D PRINT ORDERS ===================== */
 const getAllPrintOrders = async (req, res) => {
   try {
@@ -19,9 +20,11 @@ const getAllPrintOrders = async (req, res) => {
     }
 
     if (search) {
-      whereClauses.push("(po.order_number LIKE ? OR po.file_name LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)");
+      // Guests (WhatsApp quotations) have no user row — also match the
+      // shipping contact stored on the print order itself.
+      whereClauses.push("(po.order_number LIKE ? OR po.file_name LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR po.shipping_name LIKE ? OR po.shipping_phone LIKE ?)");
       const term = `%${search}%`;
-      params.push(term, term, term, term, term);
+      params.push(term, term, term, term, term, term, term);
     }
 
     const whereSql = whereClauses.join(" AND ");
@@ -401,6 +404,91 @@ const verifyQrPayment = async (req, res) => {
   }
 };
 
+/* ===================== 3D PRINT QUOTATIONS (WhatsApp quote requests) =====================
+ * GET    /api/admin/printing/quotations        list (page/limit/search/status)
+ * GET    /api/admin/printing/quotations/:id    detail
+ * PUT    /api/admin/printing/quotations/:id    { status, admin_notes }
+ * DELETE /api/admin/printing/quotations/:id    delete */
+const QUOTATION_STATUSES = ["new", "quoted", "invoiced", "cancelled"];
+
+const listPrintQuotations = async (req, res) => {
+  try {
+    await ensurePrintQuotationSchema().catch(() => {});
+    const { page = 1, limit = 20, status = "", search = "" } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+    const clauses = ["1=1"];
+    const params = [];
+    if (status && QUOTATION_STATUSES.includes(status)) {
+      clauses.push("status = ?");
+      params.push(status);
+    }
+    if (search) {
+      clauses.push("(customer_name LIKE ? OR customer_phone LIKE ? OR customer_email LIKE ? OR file_name LIKE ?)");
+      const term = `%${search}%`;
+      params.push(term, term, term, term);
+    }
+    const where = clauses.join(" AND ");
+    const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM print_quotations WHERE ${where}`, params);
+    const [rows] = await db.query(
+      `SELECT * FROM print_quotations WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...params, Number(limit), Number(offset)]
+    );
+    return res.status(200).json({
+      success: true,
+      data: { quotations: rows, pagination: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / Number(limit)) } },
+    });
+  } catch (error) {
+    console.error("Admin listPrintQuotations error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const getPrintQuotation = async (req, res) => {
+  try {
+    await ensurePrintQuotationSchema().catch(() => {});
+    const [rows] = await db.query("SELECT * FROM print_quotations WHERE id = ?", [req.params.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: "Quotation not found" });
+    return res.status(200).json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error("Admin getPrintQuotation error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const updatePrintQuotation = async (req, res) => {
+  try {
+    await ensurePrintQuotationSchema().catch(() => {});
+    const { status, admin_notes } = req.body || {};
+    const [existing] = await db.query("SELECT id FROM print_quotations WHERE id = ?", [req.params.id]);
+    if (!existing.length) return res.status(404).json({ success: false, message: "Quotation not found" });
+    if (status !== undefined && !QUOTATION_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+    await db.query("UPDATE print_quotations SET status = COALESCE(?, status), admin_notes = COALESCE(?, admin_notes) WHERE id = ?", [
+      status || null,
+      admin_notes !== undefined ? admin_notes : null,
+      req.params.id,
+    ]);
+    const [rows] = await db.query("SELECT * FROM print_quotations WHERE id = ?", [req.params.id]);
+    return res.status(200).json({ success: true, message: "Quotation updated", data: rows[0] });
+  } catch (error) {
+    console.error("Admin updatePrintQuotation error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const deletePrintQuotation = async (req, res) => {
+  try {
+    await ensurePrintQuotationSchema().catch(() => {});
+    const [result] = await db.query("DELETE FROM print_quotations WHERE id = ?", [req.params.id]);
+    if (!result.affectedRows) return res.status(404).json({ success: false, message: "Quotation not found" });
+    return res.status(200).json({ success: true, message: "Quotation deleted" });
+  } catch (error) {
+    console.error("Admin deletePrintQuotation error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 /* ===================== GET PRINT ORDER INVOICE (ADMIN, JSON / PDF) ===================== */
 const getPrintOrderInvoice = async (req, res) => {
   try {
@@ -480,6 +568,10 @@ module.exports = {
   getPrintOrderInvoice,
   updatePrintOrderStatus,
   verifyQrPayment,
+  listPrintQuotations,
+  getPrintQuotation,
+  updatePrintQuotation,
+  deletePrintQuotation,
   getAllMaterials,
   createMaterial,
   updateMaterial,

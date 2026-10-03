@@ -67,6 +67,10 @@ const adminService = {
   verifyPrintPayment: (id, payload) =>
     api.put(`/admin/printing/orders/${id}/verify-payment`, payload),
   getPrintOrderInvoice: (id) => api.get(`/admin/printing/orders/${id}/invoice`),
+  listPrintQuotations: (params = {}) => api.get("/admin/printing/quotations", { params }),
+  getPrintQuotation: (id) => api.get(`/admin/printing/quotations/${id}`),
+  updatePrintQuotation: (id, payload) => api.put(`/admin/printing/quotations/${id}`, payload),
+  deletePrintQuotation: (id) => api.delete(`/admin/printing/quotations/${id}`),
   downloadPrintInvoicePdf: async (id) => {
     const response = await api.get(`/admin/printing/orders/${id}/invoice`, {
       params: { format: "pdf" },
