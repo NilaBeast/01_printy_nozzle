@@ -387,6 +387,30 @@ const SERIES_PRESETS = {
   ],
 };
 
+// Preferred cell models grouped by chemistry family.
+const CELL_MODELS = {
+  NMC: [
+    "18650 DMEGC 2600mAh",
+    "18650 DMEGC 3200mAh",
+    "18650 WINWAY 2600mAh",
+    "18650 Hongli 3000mAh",
+    "18650 Hongli 2400mAh",
+    "21700 DMEGC 4500mAh",
+  ],
+  LFP: [
+    "32650 Huaxing 3C-EV 6000mAh",
+    "32650 Fb Tech 3C-EV 6000mAh",
+    "32140 CNAE 15000mAh",
+    "32140 JiaShiKai 15000mAh",
+  ],
+};
+
+const batteryChemistryGroup = (chemistry) => {
+  if (chemistry === "LiFePO4") return "LFP";
+  if (chemistry === "Li-ion") return "NMC";
+  return "";
+};
+
 const withUnit = (value, unit) => {
   const v = String(value || "").trim();
   if (!v) return "";
@@ -398,16 +422,13 @@ const composeBatteryDescription = (row) => {
     const cells = b("b_cells") + (b("b_parallel") ? `${b("b_parallel")}P` : "");
     const head = ["Custom Battery Pack", cells, b("b_chemistry")].filter(Boolean).join(" ");
     const specs = [
-      b("b_capacity_mah") && withUnit(b("b_capacity_mah"), "mAh"),
+      b("b_capacity_mah") && withUnit(b("b_capacity_mah"), "Ah"),
       b("b_voltage_v") && withUnit(b("b_voltage_v"), "V"),
     ].filter(Boolean).join(" ");
-    const amps = [b("b_cont_amp") && withUnit(b("b_cont_amp"), "A") + " cont.", b("b_peak_amp") && withUnit(b("b_peak_amp"), "A") + " peak"]
-      .filter(Boolean).join(" / ");
     const dims = [b("b_dim_l"), b("b_dim_w"), b("b_dim_h")].some(Boolean)
       ? `${b("b_dim_l") || "-"}×${b("b_dim_w") || "-"}×${b("b_dim_h") || "-"}mm`
       : "";
     const tail = [
-      amps || "",
       b("b_bms") ? `BMS: ${b("b_bms")}` : "",
       b("b_connector"),
       dims,
@@ -1132,14 +1153,16 @@ const composeBatteryDescription = (row) => {
                       <div className="manual-print-fields">
                         <select value={it.b_chemistry} onChange={(e) => {
                           const nextChem = e.target.value;
-                          const group = nextChem === "LiFePO4" ? "LFP" : (nextChem === "Li-ion" || nextChem === "LiPo") ? "NMC" : "";
+                          const group = batteryChemistryGroup(nextChem);
                           const stillValid = group && SERIES_PRESETS[group].some((p) => p.s === it.b_cells);
                           updateRow(it.key, stillValid ? { b_chemistry: nextChem } : { b_chemistry: nextChem, b_cells: "", b_voltage_v: "" }, false, true);
                         }} aria-label="Battery chemistry">
                           <option value="">Chemistry *</option>
                           <option>Li-ion</option>
-                          <option>LiPo</option>
                           <option>LiFePO4</option>
+                          {it.b_chemistry && !["Li-ion", "LiFePO4", ""].includes(it.b_chemistry) && (
+                            <option value={it.b_chemistry}>{it.b_chemistry} (legacy)</option>
+                          )}
                         </select>
                         <select
                           value={(() => {
@@ -1168,16 +1191,22 @@ const composeBatteryDescription = (row) => {
                         <input placeholder="Parallel (P)" value={it.b_parallel || ""} onChange={(e) => updateRow(it.key, { b_parallel: e.target.value }, false, true)} style={{ maxWidth: 110 }} />
                         <select value={it.b_cell_model} onChange={(e) => updateRow(it.key, { b_cell_model: e.target.value }, false, true)} aria-label="Cell model">
                           <option value="">Cell model</option>
-                          <option>18650</option>
-                          <option>21700</option>
-                          <option>26650</option>
-                          <option>32700</option>
-                          <option>Pouch cell</option>
+                          {(it.b_chemistry
+                            ? [[batteryChemistryGroup(it.b_chemistry) || "NMC", CELL_MODELS[batteryChemistryGroup(it.b_chemistry) || "NMC"]]]
+                            : [["NMC", CELL_MODELS.NMC], ["LFP", CELL_MODELS.LFP]]
+                          ).map(([gName, models]) => (
+                            <optgroup key={gName} label={gName}>
+                              {models.map((m) => (
+                                <option key={`${gName}-${m}`} value={m}>{m}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                          {it.b_cell_model && ![...CELL_MODELS.NMC, ...CELL_MODELS.LFP].includes(it.b_cell_model) && (
+                            <option value={it.b_cell_model}>{it.b_cell_model} (legacy)</option>
+                          )}
                         </select>
-                        <input inputMode="numeric" placeholder="Capacity (mAh) *" value={it.b_capacity_mah} onChange={(e) => updateRow(it.key, { b_capacity_mah: e.target.value }, false, true)} />
+                        <input inputMode="decimal" placeholder="Capacity (Ah) *" value={it.b_capacity_mah} onChange={(e) => updateRow(it.key, { b_capacity_mah: e.target.value }, false, true)} />
                         <input placeholder="Voltage (auto)" value={it.b_voltage_v} readOnly disabled title="Set by the series selection" />
-                        <input placeholder="Cont. Amp *" value={it.b_cont_amp} onChange={(e) => updateRow(it.key, { b_cont_amp: e.target.value }, false, true)} />
-                        <input placeholder="Peak Amp *" value={it.b_peak_amp} onChange={(e) => updateRow(it.key, { b_peak_amp: e.target.value }, false, true)} />
                         <select value={it.b_bms} onChange={(e) => updateRow(it.key, { b_bms: e.target.value }, false, true)} aria-label="BMS required">
                           <option value="Yes">BMS: Yes</option>
                           <option value="No">BMS: No</option>
