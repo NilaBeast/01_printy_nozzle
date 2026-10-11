@@ -360,8 +360,26 @@ function AdminPanel() {
 
   const batteryChemistryGroup = (chem) => {
     if (chem === "LiFePO4") return "LFP";
-    if (chem === "Li-ion" || chem === "LiPo") return "NMC";
+    if (chem === "Li-ion") return "NMC";
     return "";
+  };
+
+  // Preferred cell models grouped by chemistry family (same as storefront).
+  const BATTERY_CELL_MODELS = {
+    NMC: [
+      "18650 DMEGC 2600mAh",
+      "18650 DMEGC 3200mAh",
+      "18650 WINWAY 2600mAh",
+      "18650 Hongli 3000mAh",
+      "18650 Hongli 2400mAh",
+      "21700 DMEGC 4500mAh",
+    ],
+    LFP: [
+      "32650 Huaxing 3C-EV 6000mAh",
+      "32650 Fb Tech 3C-EV 6000mAh",
+      "32140 CNAE 15000mAh",
+      "32140 JiaShiKai 15000mAh",
+    ],
   };
 
   const batterySeriesValue = (cells, voltage) => {
@@ -1626,12 +1644,10 @@ function AdminPanel() {
     const cfg = `${t(batteryForm.cells)}${t(batteryForm.parallel) ? ` x ${t(batteryForm.parallel)}P` : ""}`;
     if (t(batteryForm.cells)) specs["Configuration"] = cfg;
     if (t(batteryForm.cell_model)) specs["Cell Model"] = t(batteryForm.cell_model);
-    if (t(batteryForm.capacity_mah)) specs["Capacity"] = `${t(batteryForm.capacity_mah)} mAh`;
+    if (t(batteryForm.capacity_mah)) specs["Capacity"] = `${t(batteryForm.capacity_mah)} Ah`;
     const allPresets = [...BATTERY_SERIES.NMC, ...BATTERY_SERIES.LFP];
     const preset = allPresets.find((p) => p.s === t(batteryForm.cells));
     if (preset) specs["Voltage"] = preset.v;
-    if (t(batteryForm.cont_amp)) specs["Continuous Current"] = `${t(batteryForm.cont_amp)} A`;
-    if (t(batteryForm.peak_amp)) specs["Peak Current"] = `${t(batteryForm.peak_amp)} A`;
     specs["BMS"] = batteryForm.bms || "Yes";
     if (t(batteryForm.connector)) specs["Connector"] = t(batteryForm.connector);
     const dims = [t(batteryForm.dim_l), t(batteryForm.dim_w), t(batteryForm.dim_h)];
@@ -7262,8 +7278,10 @@ function AdminPanel() {
             }} aria-label="Battery chemistry">
               <option value="">Chemistry</option>
               <option>Li-ion</option>
-              <option>LiPo</option>
               <option>LiFePO4</option>
+              {batteryForm.chemistry && !["Li-ion", "LiFePO4", ""].includes(batteryForm.chemistry) && (
+                <option value={batteryForm.chemistry}>{batteryForm.chemistry} (legacy)</option>
+              )}
             </select>
             <select value={batterySeriesValue(batteryForm.cells)} onChange={(e) => {
               const [s] = String(e.target.value || "").split("|");
@@ -7284,16 +7302,22 @@ function AdminPanel() {
             <input placeholder="Parallel (P, e.g. 2)" value={batteryForm.parallel} onChange={(e) => setBatteryForm({ ...batteryForm, parallel: e.target.value })} />
             <select value={batteryForm.cell_model} onChange={(e) => setBatteryForm({ ...batteryForm, cell_model: e.target.value })} aria-label="Cell model">
               <option value="">Cell model</option>
-              <option>18650</option>
-              <option>21700</option>
-              <option>26650</option>
-              <option>32700</option>
-              <option>Pouch cell</option>
+              {(batteryForm.chemistry
+                ? [[batteryChemistryGroup(batteryForm.chemistry) || "NMC", BATTERY_CELL_MODELS[batteryChemistryGroup(batteryForm.chemistry) || "NMC"]]]
+                : [["NMC", BATTERY_CELL_MODELS.NMC], ["LFP", BATTERY_CELL_MODELS.LFP]]
+              ).map(([gName, models]) => (
+                <optgroup key={gName} label={gName}>
+                  {models.map((m) => (
+                    <option key={`${gName}-${m}`} value={m}>{m}</option>
+                  ))}
+                </optgroup>
+              ))}
+              {batteryForm.cell_model && ![...BATTERY_CELL_MODELS.NMC, ...BATTERY_CELL_MODELS.LFP].includes(batteryForm.cell_model) && (
+                <option value={batteryForm.cell_model}>{batteryForm.cell_model} (legacy)</option>
+              )}
             </select>
-            <input placeholder="Capacity (mAh)" value={batteryForm.capacity_mah} onChange={(e) => setBatteryForm({ ...batteryForm, capacity_mah: e.target.value })} />
+            <input placeholder="Capacity (Ah)" value={batteryForm.capacity_mah} onChange={(e) => setBatteryForm({ ...batteryForm, capacity_mah: e.target.value })} />
             <input placeholder="Voltage (auto from series)" value={(() => { const all = [...BATTERY_SERIES.NMC, ...BATTERY_SERIES.LFP]; return (all.find((p) => p.s === batteryForm.cells) || {}).v || ""; })()} disabled readOnly aria-label="Nominal voltage" />
-            <input placeholder="Continuous current (A)" value={batteryForm.cont_amp} onChange={(e) => setBatteryForm({ ...batteryForm, cont_amp: e.target.value })} />
-            <input placeholder="Peak current (A)" value={batteryForm.peak_amp} onChange={(e) => setBatteryForm({ ...batteryForm, peak_amp: e.target.value })} />
             <select value={batteryForm.bms} onChange={(e) => setBatteryForm({ ...batteryForm, bms: e.target.value })} aria-label="BMS required">
               <option value="Yes">BMS: Yes</option>
               <option value="No">BMS: No</option>

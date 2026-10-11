@@ -492,6 +492,19 @@ export default function Home() {
               </svg>
             </button>
 
+            <button
+              type="button"
+              className="home-hero-btn home-hero-btn-secondary"
+              onClick={() => navigate("/batteries")}
+            >
+              <span>Explore Lithium Battery Packs</span>
+
+              <svg viewBox="0 0 24 24">
+                <path d="M5 12h14" />
+                <path d="m13 6 6 6-6 6" />
+              </svg>
+            </button>
+
           </div>
 
         </div>

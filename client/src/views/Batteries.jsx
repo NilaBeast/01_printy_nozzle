@@ -35,8 +35,26 @@ const SERIES_PRESETS = {
 
 const chemistryGroup = (chemistry) => {
   if (chemistry === "LiFePO4") return "LFP";
-  if (chemistry === "Li-ion" || chemistry === "LiPo") return "NMC";
+  if (chemistry === "Li-ion") return "NMC";
   return "";
+};
+
+// Preferred cell models grouped by chemistry family.
+const CELL_MODELS = {
+  NMC: [
+    "18650 DMEGC 2600mAh",
+    "18650 DMEGC 3200mAh",
+    "18650 WINWAY 2600mAh",
+    "18650 Hongli 3000mAh",
+    "18650 Hongli 2400mAh",
+    "21700 DMEGC 4500mAh",
+  ],
+  LFP: [
+    "32650 Huaxing 3C-EV 6000mAh",
+    "32650 Fb Tech 3C-EV 6000mAh",
+    "32140 CNAE 15000mAh",
+    "32140 JiaShiKai 15000mAh",
+  ],
 };
 
 const seriesVoltageFor = (cells) => {
@@ -57,10 +75,8 @@ const blankCustom = () => ({
   cellS: "",
   cellP: "",
   cellModel: "",
-  capacityMah: "",
+  capacityAh: "",
   voltage: "",
-  contAmp: "",
-  peakAmp: "",
   bms: "Yes",
   connector: "",
   dimL: "",
@@ -134,11 +150,9 @@ export default function Batteries() {
     const required = [
       ["chemistry", "Battery chemistry"],
       ["email", "Email id"],
-      ["capacityMah", "Max battery pack capacity"],
+      ["capacityAh", "Max battery pack capacity"],
       ["fullName", "Full name"],
       ["cellS", "Pack configuration (series)"],
-      ["contAmp", "Current consumption (continuous)"],
-      ["peakAmp", "Current consumption (peak)"],
       ["phone", "Contact number"],
     ];
     for (const [key, label] of required) {
@@ -180,10 +194,8 @@ export default function Batteries() {
         "*Battery Requirements*",
         `Chemistry: ${custom.chemistry}`,
         `Configuration: ${custom.cellS || "?"}${custom.cellP ? ` x ${custom.cellP}P` : ""}`,
-        `Capacity: ${custom.capacityMah.trim()} mAh`,
+        `Capacity: ${custom.capacityAh.trim()} Ah`,
         `Nominal Voltage: ${nominalVoltage || "-"}`,
-        `Continuous Current: ${custom.contAmp.trim()} Amp`,
-        `Peak Current: ${custom.peakAmp.trim()} Amp`,
         `BMS Required: ${custom.bms}`,
         `Connector Type: ${custom.connector.trim() || "-"}`,
         `Dimensions (L×W×H mm): ${[custom.dimL, custom.dimW, custom.dimH].map((v) => v.trim() || "-").join(" × ")}`,
@@ -344,15 +356,14 @@ export default function Batteries() {
                   >
                     <option value="">Please select</option>
                     <option>Li-ion</option>
-                    <option>LiPo</option>
                     <option>LiFePO4</option>
                   </select>
                 </label>
                 <label>Email Id*
                   <input type="email" required value={custom.email} onChange={(e) => set({ email: e.target.value })} placeholder="Enter your email id" />
                 </label>
-                <label>Max Pack Capacity (mAh)*
-                  <input required inputMode="numeric" value={custom.capacityMah} onChange={(e) => set({ capacityMah: e.target.value })} placeholder="Enter maximum capacity" />
+                <label>Max Pack Capacity (Ah)*
+                  <input required inputMode="decimal" value={custom.capacityAh} onChange={(e) => set({ capacityAh: e.target.value })} placeholder="Enter maximum capacity in Ah" />
                 </label>
                 <label>Full Name*
                   <input required value={custom.fullName} onChange={(e) => set({ fullName: e.target.value })} placeholder="Enter your full name" />
@@ -379,12 +390,17 @@ export default function Batteries() {
                 <label>Preferred Cell Model
                   <select value={custom.cellModel} onChange={(e) => set({ cellModel: e.target.value })}>
                     <option value="">---Select---</option>
-                    <option>18650</option>
-                    <option>21700</option>
-                    <option>26650</option>
-                    <option>32700</option>
-                    <option>Pouch cell</option>
-                    <option>No preference</option>
+                    {(() => {
+                      const group = chemistryGroup(custom.chemistry);
+                      const groups = group ? [[group, CELL_MODELS[group]]] : [["NMC", CELL_MODELS.NMC], ["LFP", CELL_MODELS.LFP]];
+                      return groups.map(([gName, models]) => (
+                        <optgroup key={gName} label={gName}>
+                          {models.map((m) => (
+                            <option key={`${gName}-${m}`} value={m}>{m}</option>
+                          ))}
+                        </optgroup>
+                      ));
+                    })()}
                   </select>
                 </label>
                 <label>Company Name
@@ -396,14 +412,8 @@ export default function Batteries() {
                 <label>GST Number
                   <input value={custom.gstin} onChange={(e) => set({ gstin: e.target.value.toUpperCase() })} placeholder="ENTER GSTIN (E.G., 27XXXXX0000X1Z5)" maxLength={15} />
                 </label>
-                <label>Current Consumption Continuous (Amp)*
-                  <input required value={custom.contAmp} onChange={(e) => set({ contAmp: e.target.value })} placeholder="Enter continuous current" />
-                </label>
                 <label>Address
                   <input value={custom.address} onChange={(e) => set({ address: e.target.value })} placeholder="Enter your billing address" />
-                </label>
-                <label>Current Consumption Peak (Amp)*
-                  <input required value={custom.peakAmp} onChange={(e) => set({ peakAmp: e.target.value })} placeholder="Enter peak current" />
                 </label>
                 <label>Contact Number*
                   <input required type="tel" value={custom.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="Enter your mobile number" />
