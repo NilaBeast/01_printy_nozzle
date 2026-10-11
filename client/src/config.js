@@ -1,7 +1,7 @@
 
 
-// export const API_URL = "https://server.printynozzle.in/api";
-export const API_URL = "http://localhost:3000/api"; // For local backend dev
+export const API_URL = "https://server.printynozzle.in/api";
+// export const API_URL = "http://localhost:3000/api"; // For local backend dev
 
 // (previous .env value: VITE_API_URL="http://localhost:3000/api")
 
