@@ -1659,6 +1659,147 @@
 
 
 /* =========================================================
+   POPULAR PRODUCTS - AUTO SLIDE MARQUEE
+   ========================================================= */
+
+/* keep the loading skeleton the same width as the marquee */
+.home-products-grid {
+  max-width: none;
+}
+
+.home-products-marquee-wrap {
+  position: relative;
+  width: 100%;
+  margin-top: 22px;
+}
+
+.home-products-marquee {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 4px 0 10px;
+
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 46px,
+    #000 calc(100% - 46px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 46px,
+    #000 calc(100% - 46px),
+    transparent 100%
+  );
+}
+
+.home-products-marquee-track {
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+}
+
+/* One copy of the products. Two copies are rendered so the
+   animation can loop forever without a visible gap. */
+.home-products-marquee-group {
+  display: flex;
+  align-items: stretch;
+  gap: var(--home-marquee-gap, 16px);
+  padding-right: var(--home-marquee-gap, 16px);
+  width: max-content;
+
+  animation: homeMarqueeSlide var(--home-marquee-duration, 32000ms)
+    linear infinite;
+  will-change: transform;
+}
+
+@keyframes homeMarqueeSlide {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+/* Pause the slide while the user is looking / interacting */
+.home-products-marquee:hover .home-products-marquee-group {
+  animation-play-state: paused;
+}
+
+.home-products-marquee-group .home-product-card {
+  flex: 0 0 var(--home-marquee-card-w, 200px);
+  width: var(--home-marquee-card-w, 200px);
+}
+
+.home-products-marquee-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+
+  width: 38px;
+  height: 38px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+  color: #FF7508;
+  background: #fff;
+  border: 1px solid #FFD9B3;
+  border-radius: 50%;
+
+  box-shadow: 0 8px 20px rgba(15, 50, 120, 0.12);
+
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.home-products-marquee-arrow:hover {
+  color: #fff;
+  background: #FF7508;
+  border-color: #FF7508;
+}
+
+.home-products-marquee-arrow:active {
+  transform: translateY(-50%) scale(0.94);
+}
+
+.home-products-marquee-arrow-prev {
+  left: 6px;
+}
+
+.home-products-marquee-arrow-next {
+  right: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-products-marquee {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .home-products-marquee-group {
+    animation: none;
+  }
+
+  .home-products-marquee-group[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+
+/* =========================================================
    RESPONSIVE - LAPTOP & TABLET
    ========================================================= */
 
@@ -1742,6 +1883,36 @@
 
   .home-product-image {
     height: 120px;
+  }
+
+  .home-products-marquee {
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 26px,
+      #000 calc(100% - 26px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 26px,
+      #000 calc(100% - 26px),
+      transparent 100%
+    );
+  }
+
+  .home-products-marquee-arrow {
+    width: 32px;
+    height: 32px;
+  }
+
+  .home-products-marquee-arrow-prev {
+    left: 2px;
+  }
+
+  .home-products-marquee-arrow-next {
+    right: 2px;
   }
 }
 

@@ -1,7 +1,8 @@
 // pages/Home.jsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import "../../public/css/home.css";
 
 import catalogService, { normalizeProduct } from "../services/catalog.service";
@@ -125,7 +126,7 @@ export default function Home() {
         setError("");
         const [homeRes, productsRes] = await Promise.all([
           catalogService.getHome(),
-          catalogService.getProducts({ limit: 6 }),
+          catalogService.getProducts({ limit: 12 }),
         ]);
 
         if (!active) return;
@@ -243,6 +244,170 @@ export default function Home() {
 
   const getProductId = (product, index) => {
     return product?.id ?? product?._id ?? index;
+  };
+
+  /* =====================================================
+     POPULAR PRODUCTS - AUTO SLIDE MARQUEE
+  ===================================================== */
+
+  /* Time (ms) for one complete right-to-left cycle of the
+     marquee. Kept in sync with the CSS via a custom property. */
+  const MARQUEE_DURATION = 32000;
+
+  const marqueeRef = useRef(null);
+  const trackRef = useRef(null);
+  const marqueeAnimsRef = useRef([]);
+
+  /* Size the cards so that a whole number of them always fits
+     inside the marquee viewport (keeps the loop seamless) */
+  useEffect(() => {
+    const el = marqueeRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const width = el.clientWidth;
+      if (!width) return;
+
+      const gap = width >= 1080 ? 16 : width >= 700 ? 14 : 12;
+
+      let perView = 6;
+      if (width < 520) perView = 2;
+      else if (width < 760) perView = 3;
+      else if (width < 1020) perView = 4;
+      else if (width < 1280) perView = 5;
+
+      const visible = Math.max(
+        1,
+        Math.min(perView, featured.length || perView)
+      );
+
+      const cardWidth = Math.max(
+        150,
+        (width - gap * (visible - 1)) / visible
+      );
+
+      el.style.setProperty("--home-marquee-gap", `${gap}px`);
+      el.style.setProperty(
+        "--home-marquee-card-w",
+        `${Math.round(cardWidth)}px`
+      );
+    };
+
+    update();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [featured.length]);
+
+  /* Grab the running marquee animation so the arrows can move it */
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const frame = requestAnimationFrame(() => {
+      const animations = Array.from(track.children)
+        .map((group) =>
+          typeof group.getAnimations === "function"
+            ? group.getAnimations()[0]
+            : null
+        )
+        .filter(Boolean);
+
+      marqueeAnimsRef.current = animations;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [featured.length]);
+
+  /* Move the marquee by one product (the slide always runs
+     right to left, so +1 moves the row leftwards) */
+  const nudgeMarquee = (step) => {
+    const animations = marqueeAnimsRef.current;
+    if (!animations.length) return;
+
+    const cardStep = MARQUEE_DURATION / Math.max(1, featured.length);
+
+    animations.forEach((animation) => {
+      const current =
+        typeof animation.currentTime === "number"
+          ? animation.currentTime
+          : 0;
+
+      animation.currentTime = current + step * cardStep;
+    });
+  };
+
+  /* One popular product card (rendered twice for the loop) */
+  const renderPopularCard = (product, index, copy) => {
+    const productId = getProductId(product, index);
+    const productName = getProductName(product);
+    const productImage = getProductImage(product);
+    const productPrice = getProductPrice(product);
+
+    return (
+      <article
+        className="home-product-card"
+        key={`${copy}-${productId}`}
+      >
+
+        <button
+          type="button"
+          className="home-product-image"
+          onClick={() =>
+            navigate(`/products/${productId}`)
+          }
+        >
+
+          <img
+            src={productImage}
+            alt={productName}
+            loading="lazy"
+          />
+
+        </button>
+
+
+        <div className="home-product-info">
+
+          <button
+            type="button"
+            className="home-product-name"
+            onClick={() =>
+              navigate(`/products/${productId}`)
+            }
+          >
+            {productName}
+          </button>
+
+          <div className="home-product-bottom">
+
+            <strong>
+              ₹{productPrice.toLocaleString("en-IN")}
+            </strong>
+
+            <button
+              type="button"
+              className="home-product-cart"
+              onClick={() =>
+                navigate(`/products/${productId}`)
+              }
+              aria-label={`View ${productName}`}
+            >
+              <CartIcon />
+            </button>
+
+          </div>
+
+        </div>
+
+      </article>
+    );
   };
 
   /* =====================================================
@@ -844,74 +1009,54 @@ export default function Home() {
 
         ) : (
 
-          <div className="home-products-grid">
+          <div className="home-products-marquee-wrap">
 
-            {featured.map((product, index) => {
+            <div
+              className="home-products-marquee"
+              ref={marqueeRef}
+              style={{
+                "--home-marquee-duration": `${MARQUEE_DURATION}ms`,
+              }}
+            >
 
-              const productId = getProductId(product, index);
-              const productName = getProductName(product);
-              const productImage = getProductImage(product);
-              const productPrice = getProductPrice(product);
+              <div
+                className="home-products-marquee-track"
+                ref={trackRef}
+              >
 
-              return (
-                <article
-                  className="home-product-card"
-                  key={productId}
-                >
-
-                  <button
-                    type="button"
-                    className="home-product-image"
-                    onClick={() =>
-                      navigate(`/products/${productId}`)
-                    }
+                {[0, 1].map((copy) => (
+                  <div
+                    className="home-products-marquee-group"
+                    key={`marquee-group-${copy}`}
+                    aria-hidden={copy === 1 ? "true" : undefined}
                   >
-
-                    <img
-                      src={productImage}
-                      alt={productName}
-                      loading="lazy"
-                    />
-
-                  </button>
-
-
-                  <div className="home-product-info">
-
-                    <button
-                      type="button"
-                      className="home-product-name"
-                      onClick={() =>
-                        navigate(`/products/${productId}`)
-                      }
-                    >
-                      {productName}
-                    </button>
-
-                    <div className="home-product-bottom">
-
-                      <strong>
-                        ₹{productPrice.toLocaleString("en-IN")}
-                      </strong>
-
-                      <button
-                        type="button"
-                        className="home-product-cart"
-                        onClick={() =>
-                          navigate(`/products/${productId}`)
-                        }
-                        aria-label={`View ${productName}`}
-                      >
-                        <CartIcon />
-                      </button>
-
-                    </div>
-
+                    {featured.map((product, index) =>
+                      renderPopularCard(product, index, copy)
+                    )}
                   </div>
+                ))}
 
-                </article>
-              );
-            })}
+              </div>
+
+            </div>
+
+            <button
+              type="button"
+              className="home-products-marquee-arrow home-products-marquee-arrow-prev"
+              onClick={() => nudgeMarquee(-1)}
+              aria-label="Show previous products"
+            >
+              <ChevronLeft size={20} strokeWidth={2.2} />
+            </button>
+
+            <button
+              type="button"
+              className="home-products-marquee-arrow home-products-marquee-arrow-next"
+              onClick={() => nudgeMarquee(1)}
+              aria-label="Show next products"
+            >
+              <ChevronRight size={20} strokeWidth={2.2} />
+            </button>
 
           </div>
 
