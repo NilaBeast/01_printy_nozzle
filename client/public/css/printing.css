@@ -838,6 +838,57 @@
   color: var(--pr-primary);
 }
 
+.material-rate {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 2px 8px;
+  display: inline-block;
+}
+
+.guide-material-rate {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f766e;
+  margin-bottom: 4px;
+}
+
+/* QR price breakdown (3D printing QR payment modal) */
+.qr-price-breakdown {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.qr-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  color: #475569;
+  padding: 3px 0;
+}
+
+.qr-price-row.qr-price-total {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.qr-price-status {
+  color: #64748b;
+  font-size: 0.86rem;
+  padding: 5px 0 8px;
+}
+
 /* Color Palette Swatches */
 .color-swatches-box {
   background: var(--pr-white);
@@ -1182,6 +1233,72 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.summary-price-breakdown {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 14px 0;
+}
+
+.summary-price-title {
+  color: var(--pr-dark);
+  font-size: 0.92rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.summary-price-status {
+  color: var(--pr-gray-500);
+  font-size: 0.8rem;
+  padding: 6px 0;
+}
+
+.summary-price-status.is-error,
+.qr-price-status.is-error {
+  color: #b91c1c;
+}
+
+.summary-weight-note,
+.qr-price-weight {
+  color: #64748b;
+  font-size: 0.76rem;
+  margin-bottom: 7px;
+}
+
+.summary-price-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  padding: 3px 0;
+}
+
+.summary-price-row strong {
+  color: #1e293b;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.summary-price-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px dashed #cbd5e1;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin-top: 7px;
+  padding-top: 9px;
+}
+
+.summary-price-total strong {
+  white-space: nowrap;
 }
 
 .breakdown-row {

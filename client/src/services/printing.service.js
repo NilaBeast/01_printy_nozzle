@@ -50,6 +50,15 @@ const printingService = {
     });
   },
   createOrder: (payload) => api.post("/printing/order", payload),
+  // Guest QR-payment order: model file + payment screenshot + customer details.
+  // Server creates a guest printing_order, emails the invoice, and queues it
+  // for admin payment verification.
+  createQrOrder: (formData) => {
+    return api.post("/printing/qr-order", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 300000,
+    });
+  },
   getUserPrintOrders: (params = {}) => api.get("/printing/orders", { params }),
   getPrintOrderById: (id) => api.get(`/printing/orders/${id}`),
   getPrintInvoice: (id) => api.get(`/printing/orders/${id}/invoice`),

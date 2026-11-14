@@ -386,7 +386,7 @@ const sliceQuote = async (req, res) => {
 /* ===================== GET PRINTING CONFIG ===================== */
 const getPrintPricingSettings = async (connOrDb) => {
   const [settings] = await (connOrDb || db).query(
-    "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('gst_rate', 'smooth_finish_per_gram', 'free_shipping_threshold', 'printing_delivery_days', 'printing_delivery_region', 'print_hours_per_gram', 'print_time_slabs', 'print_rate_0_5', 'print_rate_5_10', 'print_rate_10_20', 'print_rate_20_plus')"
+    "SELECT setting_key, setting_value FROM site_settings WHERE setting_key IN ('gst_rate', 'smooth_finish_per_gram', 'free_shipping_threshold', 'printing_delivery_days', 'printing_delivery_region', 'print_hours_per_gram', 'print_time_slabs', 'print_rate_0_5', 'print_rate_5_10', 'print_rate_10_20', 'print_rate_20_plus', 'qr_upi_id', 'qr_payee_name', 'qr_image_url')"
   );
   const map = {};
   (settings || []).forEach((s) => (map[s.setting_key] = s.setting_value));
@@ -402,6 +402,9 @@ const getPrintPricingSettings = async (connOrDb) => {
     print_rate_5_10: map.print_rate_5_10 !== undefined ? Number(map.print_rate_5_10) : 45,
     print_rate_10_20: map.print_rate_10_20 !== undefined ? Number(map.print_rate_10_20) : 40,
     print_rate_20_plus: map.print_rate_20_plus !== undefined ? Number(map.print_rate_20_plus) : 35,
+    qr_upi_id: map.qr_upi_id || "",
+    qr_payee_name: map.qr_payee_name || "Printynozzle",
+    qr_image_url: map.qr_image_url || "",
   };
 };
 
@@ -720,6 +723,213 @@ const createPrintOrder = async (req, res) => {
   }
 };
 
+/* ===================== CREATE QR PRINT ORDER (guest, public) =====================
+ * The 3D printing page "Pay with QR" flow. Guests fill their details, scan the
+ * merchant QR, attach the payment screenshot, and submit. The order is created
+ * as a guest (user_id = NULL) with payment_method = 'qr' and the screenshot
+ * stored on the row. An invoice is emailed to the customer immediately. The
+ * admin verifies the screenshot under 3D Printing → 3D Print Orders.
+ * POST /api/printing/qr-order (multipart: file + screenshot + customer_* + model fields) */
+const createQrOrder = async (req, res) => {
+  try {
+    const files = req.files || {};
+    const modelFile = files.file ? files.file[0] : null;
+    const screenshotFile = files.screenshot ? files.screenshot[0] : null;
+
+    const body = req.body || {};
+    const clean = (v) => (v === undefined || v === null ? "" : String(v).trim());
+    const customer_name = clean(body.customer_name);
+    const customer_phone = clean(body.customer_phone).replace(/[^\d+]/g, "");
+    const customer_email = clean(body.customer_email);
+    const address1 = clean(body.address1) || clean(body.shipping_address1);
+    const address2 = clean(body.address2) || clean(body.shipping_address2);
+    const city = clean(body.city) || clean(body.shipping_city);
+    const state = clean(body.state) || clean(body.shipping_state);
+    const pincode = clean(body.pincode) || clean(body.shipping_pincode);
+    const country = clean(body.country) || clean(body.shipping_country) || "India";
+
+    if (!customer_name) return res.status(400).json({ success: false, message: "Please enter your name." });
+    if (!customer_phone || customer_phone.replace(/\D/g, "").length < 10)
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number." });
+    if (customer_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer_email))
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+    if (!address1) return res.status(400).json({ success: false, message: "Please enter your address." });
+    if (!modelFile) return res.status(400).json({ success: false, message: "Please attach your 3D model file." });
+    if (!screenshotFile) return res.status(400).json({ success: false, message: "Please attach your payment screenshot." });
+
+    const numOrNull = (v) => {
+      const n = Number(v);
+      return v !== undefined && v !== null && v !== "" && Number.isFinite(n) ? n : null;
+    };
+    const materialIdRaw = clean(body.material_id);
+    const material_id = /^\d+$/.test(materialIdRaw) ? Number(materialIdRaw) : null;
+    if (!material_id) return res.status(400).json({ success: false, message: "Please select a material." });
+
+    // Get material (authoritative density + price per gram)
+    const [materials] = await db.query("SELECT * FROM printing_materials WHERE id = ? AND is_active = 1", [material_id]);
+    if (materials.length === 0) return res.status(404).json({ success: false, message: "Material not found" });
+
+    // Color adjustment
+    const colorIdRaw = clean(body.color_id);
+    const color_id = /^\d+$/.test(colorIdRaw) ? Number(colorIdRaw) : null;
+    let colorAdjustment = 0;
+    if (color_id) {
+      const [colors] = await db.query("SELECT price_adjustment FROM printing_colors WHERE id = ?", [color_id]);
+      if (colors.length > 0) colorAdjustment = Number(colors[0].price_adjustment) || 0;
+    }
+
+    // Upload model file to Cloudinary
+    let modelUploaded;
+    try {
+      modelUploaded = await uploadFile({
+        filePath: modelFile.path,
+        folder: "printynozzle/print-orders",
+        resourceType: "raw",
+        publicId: `printorder_${Date.now()}_${Math.round(Math.random() * 1e4)}`,
+      });
+    } catch (e) {
+      console.error("QR order model upload error:", e);
+      return res.status(500).json({ success: false, message: "File upload failed. Please try again." });
+    }
+
+    // Upload payment screenshot to Cloudinary
+    let screenshotUploaded;
+    try {
+      screenshotUploaded = await uploadFile({
+        filePath: screenshotFile.path,
+        folder: "printynozzle/payments",
+        resourceType: "image",
+        publicId: `qrpay_${Date.now()}_${Math.round(Math.random() * 1e4)}`,
+      });
+    } catch (e) {
+      console.error("QR order screenshot upload error:", e);
+      return res.status(500).json({ success: false, message: "Screenshot upload failed. Please try again." });
+    }
+
+    // Pricing (Final = Material charge + Printing-time charge + GST)
+    const pricingSettings = await getPrintPricingSettings();
+    const estimatedWeight = numOrNull(body.estimated_weight) || numOrNull(body.weight_grams) || 0;
+    const infillDensity = parseInt(body.infill_density, 10) || 50;
+    const layerHeight = parseFloat(body.layer_height) || 0.2;
+    const wallLoops = [2, 3, 4].includes(Number(body.wall_loops)) ? Number(body.wall_loops) : 2;
+    const surfaceFinish = clean(body.surface_finish) || "standard";
+    const quantity = Math.max(1, Math.min(99, parseInt(body.quantity, 10) || 1));
+
+    const pricing = calculatePrintPrice({
+      estimatedWeight,
+      pricePerGram: parseFloat(materials[0].price_per_gram),
+      infillDensity,
+      layerHeightMm: layerHeight,
+      wallLoops,
+      surfaceFinish,
+      smoothFinishPerGram: parseFloat(pricingSettings.smooth_finish_per_gram) || 3,
+      colorAdjustment,
+      quantity,
+      gstRate: parseFloat(pricingSettings.gst_rate) || 18,
+      hoursPerGram: pricingSettings.print_hours_per_gram || 0.15,
+      timeSlabs: pricingSettings.print_time_slabs || undefined,
+      timeRates: toTimeRates(pricingSettings),
+      density: parseFloat(materials[0].density_g_cm3) || 1.24,
+      surfaceAreaCm2: body.surface_area_cm2 !== undefined ? parseFloat(body.surface_area_cm2) : undefined,
+      supportVolumeCm3: body.support_volume_cm3 !== undefined ? Math.max(0, parseFloat(body.support_volume_cm3) || 0) : undefined,
+    });
+
+    // Generate order number
+    const orderNumber = "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
+
+    // Insert guest order (user_id = NULL — supported by printQuotationSchema self-heal)
+    let result;
+    try {
+      [result] = await db.query(
+        `INSERT INTO printing_orders (
+          user_id, order_number, status,
+          file_name, file_url, file_public_id, file_size,
+          dimension_x, dimension_y, dimension_z,
+          material_id, color_id, custom_color_hex,
+          infill_density, layer_height, wall_loops, surface_finish, quantity,
+          estimated_weight, print_time_hours, material_cost, time_cost, color_cost, finish_cost,
+          subtotal, tax_amount, total_amount,
+          shipping_name, shipping_phone, shipping_email,
+          shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
+          payment_method, payment_status, payment_screenshot_url, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          null, orderNumber, "confirmed",
+          modelFile.originalname,
+          modelUploaded.url,
+          modelUploaded.public_id || null,
+          numOrNull((modelFile.size / (1024 * 1024)).toFixed(2)),
+          numOrNull(body.dimension_x),
+          numOrNull(body.dimension_y),
+          numOrNull(body.dimension_z),
+          material_id,
+          color_id || null,
+          clean(body.custom_color_hex) || null,
+          infillDensity, layerHeight, wallLoops, surfaceFinish, quantity,
+          pricing.effectiveWeight, pricing.printTimeHours, pricing.materialCost, pricing.timeCost, pricing.colorCost, pricing.finishCost,
+          pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
+          customer_name, customer_phone, customer_email || null,
+          address1 || null, address2 || null, city || null, state || null, pincode || null, country || "India",
+          "qr", "pending", screenshotUploaded.url,
+          clean(body.notes) || null,
+        ]
+      );
+    } catch (insertErr) {
+      // Fallback for older DBs without the newer columns
+      if (insertErr && (insertErr.code === "ER_BAD_FIELD_ERROR" || /Unknown column/i.test(insertErr.message || ""))) {
+        [result] = await db.query(
+          `INSERT INTO printing_orders (
+            user_id, order_number, status,
+            file_name, file_url, file_public_id, file_size,
+            dimension_x, dimension_y, dimension_z,
+            material_id, color_id, custom_color_hex,
+            infill_density, surface_finish, quantity,
+            estimated_weight, material_cost, color_cost, finish_cost,
+            subtotal, tax_amount, total_amount,
+            shipping_name, shipping_phone, shipping_address1,
+            shipping_city, shipping_state, shipping_pincode,
+            payment_method, payment_status, payment_screenshot_url, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            null, orderNumber, "confirmed",
+            modelFile.originalname, modelUploaded.url, modelUploaded.public_id || null,
+            numOrNull((modelFile.size / (1024 * 1024)).toFixed(2)),
+            numOrNull(body.dimension_x), numOrNull(body.dimension_y), numOrNull(body.dimension_z),
+            material_id, color_id || null, clean(body.custom_color_hex) || null,
+            infillDensity, surfaceFinish, quantity,
+            pricing.effectiveWeight, pricing.materialCost, pricing.colorCost, pricing.finishCost,
+            pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
+            customer_name, customer_phone, address1 || null,
+            city || null, state || null, pincode || null,
+            "qr", "pending", screenshotUploaded.url,
+            clean(body.notes) || null,
+          ]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
+    // Email the GST invoice to the customer immediately (guest orders use the
+    // shipping fields stored on the row, so the mailer must LEFT JOIN users).
+    mailPrintInvoiceByIds([result.insertId]).catch((e) => console.error("QR order invoice mail failed:", e.message));
+
+    return res.status(201).json({
+      success: true,
+      message: "Order placed! Your invoice has been emailed. Our team will verify your payment shortly.",
+      order: {
+        id: result.insertId,
+        order_number: orderNumber,
+        total_amount: pricing.totalAmount,
+        estimated_delivery: pricingSettings.printing_delivery_days || "3-5 Working Days",
+      },
+    });
+  } catch (error) {
+    console.error("Create QR print order error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 /* ===================== GET USER PRINT ORDERS ===================== */
 const getUserPrintOrders = async (req, res) => {
   try {
@@ -891,6 +1101,7 @@ module.exports = {
   getColors,
   calculatePrice,
   createPrintOrder,
+  createQrOrder,
   getUserPrintOrders,
   getPrintOrderById,
   getPrintOrderInvoice,

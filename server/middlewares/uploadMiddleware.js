@@ -127,10 +127,43 @@ const sliceFileUpload = multer({
   },
 });
 
+/* ============ QR Order Upload (model file + payment screenshot) ============
+ * Accepts both a 3D model (`file`) and a UPI payment screenshot (`screenshot`)
+ * in a single multipart request. Used by the 3D printing "Pay with QR" flow. */
+const printQrUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, file.fieldname === "screenshot" ? "uploads/payments/" : "uploads/prints/");
+    },
+    filename: (req, file, cb) => {
+      const uniqueName = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueName + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB (model dominates)
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === "screenshot") {
+      const allowedTypes = /jpeg|jpg|png|gif|webp/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype);
+      if (extname && mimetype) return cb(null, true);
+      return cb(new Error("Payment screenshot must be an image (jpeg, jpg, png, gif, webp)"));
+    }
+    const allowedExtensions = [".stl", ".obj", ".3mf", ".amf", ".ply", ".glb", ".gltf"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext)) return cb(null, true);
+    cb(new Error("Only 3D model files are allowed (.STL, .OBJ, .3MF, .AMF, .PLY, .GLB, .GLTF)"));
+  },
+}).fields([
+  { name: "file", maxCount: 1 },
+  { name: "screenshot", maxCount: 1 },
+]);
+
 module.exports = {
   productImageUpload,
   bannerImageUpload,
   printFileUpload,
   paymentScreenshotUpload,
   sliceFileUpload,
+  printQrUpload,
 };

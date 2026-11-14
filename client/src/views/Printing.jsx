@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import defaultPricingData from "../data/materialPrices.json";
+import { QRCodeSVG } from "qrcode.react";
 import ModelViewer3D, {
   SUPPORTED_MODEL_ACCEPT,
   SUPPORTED_MODEL_EXTS,
@@ -45,6 +46,12 @@ const blankQuoteForm = () => ({
   state: "",
   pincode: "",
 });
+
+const formatRupees = (amount) =>
+  `₹${Number(amount || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 export default function Printing() {
   const fileInputRef = useRef(null);
@@ -121,6 +128,39 @@ export default function Printing() {
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [quoteForm, setQuoteForm] = useState(blankQuoteForm);
   const [sendingQuote, setSendingQuote] = useState(false);
+  // 'whatsapp' → opens WhatsApp after submit; 'qr' → opens the QR payment modal.
+  const [quoteModalMode, setQuoteModalMode] = useState("whatsapp");
+
+  /* =========================================================
+     QR PAYMENT MODAL STATE
+     ========================================================= */
+  const [isQrPaymentOpen, setIsQrPaymentOpen] = useState(false);
+  const [qrScreenshot, setQrScreenshot] = useState(null);
+  const [qrPreview, setQrPreview] = useState("");
+  const [qrSubmitting, setQrSubmitting] = useState(false);
+  const [qrConfig, setQrConfig] = useState({ upi_id: "", payee_name: "Printynozzle", image_url: "" });
+  // Price breakdown fetched from the server for the QR payment modal.
+  const [qrPricing, setQrPricing] = useState(null);
+  const [qrPricingLoading, setQrPricingLoading] = useState(false);
+  const [qrPricingError, setQrPricingError] = useState(false);
+  const [modelPricing, setModelPricing] = useState(null);
+  const [modelPricingLoading, setModelPricingLoading] = useState(false);
+  const [modelPricingError, setModelPricingError] = useState(false);
+
+  // Dynamic UPI QR — scan opens any UPI app with payee + exact total pre-filled.
+  const qrGrandTotal = qrPricing?.totalAmount || 0;
+  const upiPayUrl = useMemo(() => {
+    const pa = String(qrConfig.upi_id || "").trim();
+    if (!pa || !(Number(qrGrandTotal) > 0)) return "";
+    const params = [
+      `pa=${encodeURIComponent(pa)}`,
+      `pn=${encodeURIComponent(String(qrConfig.payee_name || "Printynozzle").trim() || "Printynozzle")}`,
+      `am=${Number(qrGrandTotal).toFixed(2)}`,
+      "cu=INR",
+      `tn=${encodeURIComponent("Printynozzle 3D Print order payment")}`,
+    ];
+    return `upi://pay?${params.join("&")}`;
+  }, [qrConfig.upi_id, qrConfig.payee_name, qrGrandTotal]);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +179,11 @@ export default function Printing() {
         setServerSiteSettings({
           estimatedDeliveryDays: serverConfig.printing_delivery_days || undefined,
           deliveryRegion: serverConfig.printing_delivery_region || undefined,
+        });
+        setQrConfig({
+          upi_id: serverConfig.qr_upi_id || "",
+          payee_name: serverConfig.qr_payee_name || "Printynozzle",
+          image_url: serverConfig.qr_image_url || "",
         });
 
         const mappedMaterials = (materialsResponse.data.materials || []).map((material) => ({
@@ -229,6 +274,55 @@ export default function Printing() {
       };
   const summaryQuantity = hasUploadedModel ? quantity : 0;
 
+  const pricingPayload = useMemo(() => {
+    if (!selectedMaterial || !modelAnalysis || (modelAnalysis.weightGrams || 0) <= 0) return null;
+    const payload = {
+      estimated_weight: modelAnalysis.weightGrams,
+      material_id: selectedMaterial.id,
+      infill_density: 50,
+      layer_height: 0.2,
+      wall_loops: 2,
+      surface_finish: "standard",
+      quantity,
+      surface_area_cm2: modelAnalysis.surfaceAreaCm2,
+      support_volume_cm3: modelAnalysis.supportVolumeCm3,
+    };
+    if (selectedColor?.id !== "custom" && selectedColor?.id) {
+      payload.color_id = selectedColor.id;
+    }
+    return payload;
+  }, [selectedMaterial, selectedColor, modelAnalysis, quantity]);
+
+  useEffect(() => {
+    if (!hasUploadedModel || !pricingPayload) {
+      setModelPricing(null);
+      setModelPricingLoading(false);
+      setModelPricingError(false);
+      return undefined;
+    }
+
+    let active = true;
+    setModelPricing(null);
+    setModelPricingLoading(true);
+    setModelPricingError(false);
+    printingService.calculatePrice(pricingPayload)
+      .then((res) => {
+        if (active && res.data?.success) setModelPricing(res.data.pricing);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setModelPricingError(true);
+        console.error("Model pricing calc failed:", error?.response?.data?.message || error.message);
+      })
+      .finally(() => {
+        if (active) setModelPricingLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasUploadedModel, pricingPayload]);
+
   /* =========================================================
      FILE UPLOAD HANDLERS
      ========================================================= */
@@ -249,6 +343,7 @@ export default function Printing() {
     }
     // New File object identity + cleared thumbnail forces the viewer to drop
     // the previous mesh and render THIS file's exact geometry.
+    resetAnalysis();
     setUploadedFile(file);
     setUseSample(false);
     setModelThumb(null);
@@ -331,9 +426,13 @@ export default function Printing() {
      WHATSAPP QUOTE — modal → server stores quotation → WhatsApp opens
      with the customer details + hosted model-file link.
      ========================================================= */
-  const openQuoteModal = () => {
+  const openQuoteModal = (mode = "whatsapp") => {
     if (!hasUploadedModel || !modelAnalysis || (modelAnalysis?.weightGrams || 0) <= 0) {
       toast.warning("Please upload a 3D model first.");
+      return;
+    }
+    if (mode === "qr" && !String(qrConfig.upi_id || "").trim()) {
+      toast.error("UPI payments are not configured yet. Please contact us for a quote.");
       return;
     }
     if (isOversized) {
@@ -346,8 +445,130 @@ export default function Printing() {
       toast.warning("Options are still loading. Please wait a moment and try again.");
       return;
     }
+    setQuoteModalMode(mode);
     setQuoteForm(blankQuoteForm());
     setIsQuoteModalOpen(true);
+  };
+
+  /* =========================================================
+     QR PAYMENT HELPERS
+     ========================================================= */
+  const loadQrPricing = useCallback(async () => {
+    if (!pricingPayload) return null;
+    setQrPricingLoading(true);
+    setQrPricingError(false);
+    try {
+      const res = await printingService.calculatePrice(pricingPayload);
+      if (res.data?.success) {
+        setQrPricing(res.data.pricing);
+        return res.data.pricing;
+      }
+      setQrPricingError(true);
+    } catch (e) {
+      setQrPricingError(true);
+      console.error("QR pricing calc failed:", e?.response?.data?.message || e.message);
+    } finally {
+      setQrPricingLoading(false);
+    }
+    return null;
+  }, [pricingPayload]);
+
+  const handleQrScreenshotSelect = (file) => {
+    if (!file) return;
+    const allowed = /\.(jpe?g|png|gif|webp)$/i.test(file.name) || /^image\//.test(file.type);
+    if (!allowed) {
+      toast.error("Please upload an image file (JPG, PNG, GIF, or WebP).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Screenshot must be under 5MB.");
+      return;
+    }
+    if (qrPreview) URL.revokeObjectURL(qrPreview);
+    setQrScreenshot(file);
+    setQrPreview(URL.createObjectURL(file));
+  };
+
+  const clearQrScreenshot = () => {
+    if (qrPreview) URL.revokeObjectURL(qrPreview);
+    setQrScreenshot(null);
+    setQrPreview("");
+  };
+
+  const copyUpiId = async () => {
+    if (!qrConfig.upi_id) return;
+    try {
+      await navigator.clipboard.writeText(qrConfig.upi_id);
+      toast.success("UPI ID copied to clipboard.");
+    } catch {
+      toast.info(`UPI ID: ${qrConfig.upi_id}`);
+    }
+  };
+
+  const closeQrPayment = (force = false) => {
+    if (qrSubmitting && force !== true) return;
+    setIsQrPaymentOpen(false);
+    clearQrScreenshot();
+    setQrPricing(null);
+  };
+
+  const handleQrDone = async (e) => {
+    e?.preventDefault?.();
+    if (qrSubmitting) return;
+    if (!qrScreenshot) {
+      toast.error("Please attach your payment screenshot.");
+      return;
+    }
+    if (!uploadedFile) {
+      toast.error("3D model file is missing. Please try again.");
+      return;
+    }
+    setQrSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      formData.append("screenshot", qrScreenshot);
+      formData.append("customer_name", quoteForm.name.trim());
+      formData.append("customer_phone", quoteForm.phone.trim());
+      formData.append("customer_email", quoteForm.email.trim());
+      formData.append("address1", quoteForm.address1.trim());
+      formData.append("address2", quoteForm.address2.trim());
+      formData.append("city", quoteForm.city.trim());
+      formData.append("state", quoteForm.state.trim());
+      formData.append("pincode", quoteForm.pincode.trim());
+      formData.append("country", (quoteForm.country || "India").trim());
+      formData.append("material_id", selectedMaterial?.id ?? "");
+      formData.append("material_name", selectedMaterial?.name ?? "");
+      if (selectedColor?.id !== "custom") formData.append("color_id", selectedColor?.id ?? "");
+      formData.append("color_name", selectedColor?.name ?? "");
+      if (selectedColor?.id === "custom") formData.append("custom_color_hex", selectedColorHex);
+      formData.append("quantity", String(quantity));
+      formData.append("infill_density", "50");
+      formData.append("layer_height", "0.2");
+      formData.append("wall_loops", "2");
+      formData.append("surface_finish", "standard");
+      formData.append("estimated_weight", modelAnalysis.weightGrams);
+      formData.append("surface_area_cm2", modelAnalysis.surfaceAreaCm2 ?? "");
+      formData.append("support_volume_cm3", modelAnalysis.supportVolumeCm3 ?? "");
+      formData.append("dimension_x", modelAnalysis.dimensions?.x ?? "");
+      formData.append("dimension_y", modelAnalysis.dimensions?.y ?? "");
+      formData.append("dimension_z", modelAnalysis.dimensions?.z ?? "");
+
+      const res = await printingService.createQrOrder(formData);
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || "Unable to place order");
+      }
+      const orderNo = res.data?.order?.order_number;
+      toast.success(
+        `Order placed${orderNo ? ` (${orderNo})` : ""}! Your invoice has been emailed. We'll verify your payment shortly.`
+      );
+      closeQrPayment(true);
+      setIsQuoteModalOpen(false);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "Unable to place order");
+    } finally {
+      setQrSubmitting(false);
+    }
   };
 
   const handleQuoteSend = async (e) => {
@@ -382,6 +603,19 @@ export default function Printing() {
       toast.error("Please attach your 3D model file first.");
       return;
     }
+
+    // QR mode: customer details are captured here, then the QR payment modal
+    // opens so the user can scan, attach the screenshot, and place the order.
+    if (quoteModalMode === "qr") {
+      setIsQuoteModalOpen(false);
+      setQrPricing(null);
+      setQrPricingError(false);
+      clearQrScreenshot();
+      setIsQrPaymentOpen(true);
+      loadQrPricing();
+      return;
+    }
+
     setSendingQuote(true);
     try {
       const formData = new FormData();
@@ -676,6 +910,9 @@ export default function Printing() {
                             {mat.description && (
                               <div className="material-price">{mat.description}</div>
                             )}
+                            {mat.pricePerGram > 0 && (
+                              <div className="material-rate">₹{Number(mat.pricePerGram).toFixed(2)}/g</div>
+                            )}
                           </div>
                         );
                       }) : <div className="text-muted py-2">No materials available</div>}
@@ -792,6 +1029,56 @@ export default function Printing() {
 
                 <div className="summary-divider" />
 
+                {hasUploadedModel && (
+                  <div className="summary-price-breakdown">
+                    <div className="summary-price-title">Price Breakdown</div>
+                    {modelPricingLoading && (
+                      <div className="summary-price-status">Calculating weight and GST-inclusive price...</div>
+                    )}
+                    {modelPricingError && !modelPricingLoading && (
+                      <div className="summary-price-status is-error">Unable to calculate the price. Please try again.</div>
+                    )}
+                    {modelPricing && (
+                      <>
+                        <div className="summary-weight-note">
+                          Estimated filament: {Number(modelPricing.effectiveWeight || 0).toFixed(2)} g per piece
+                          {quantity > 1 ? ` × ${quantity} pieces` : ""}
+                        </div>
+                        <div className="summary-price-row">
+                          <span>Material ({Number(modelPricing.effectiveWeight || 0).toFixed(2)} g × ₹{Number(modelPricing.price_per_gram || 0).toFixed(2)}/g)</span>
+                          <strong>{formatRupees(Number(modelPricing.materialCost || 0) * quantity)}</strong>
+                        </div>
+                        <div className="summary-price-row">
+                          <span>Printing time ({Number(modelPricing.printTimeHours || 0).toFixed(2)} h × ₹{Number(modelPricing.timeRate || 0).toFixed(2)}/h)</span>
+                          <strong>{formatRupees(Number(modelPricing.timeCost || 0) * quantity)}</strong>
+                        </div>
+                        <div className="summary-price-row">
+                          <span>Color</span>
+                          <strong>{formatRupees(Number(modelPricing.colorCost || 0) * quantity)}</strong>
+                        </div>
+                        <div className="summary-price-row">
+                          <span>Finish</span>
+                          <strong>{formatRupees(Number(modelPricing.finishCost || 0) * quantity)}</strong>
+                        </div>
+                        <div className="summary-price-row">
+                          <span>Subtotal ({quantity} {quantity === 1 ? "piece" : "pieces"})</span>
+                          <strong>{formatRupees(modelPricing.subtotal)}</strong>
+                        </div>
+                        <div className="summary-price-row">
+                          <span>GST ({Number(modelPricing.gstRate || 0)}%)</span>
+                          <strong>{formatRupees(modelPricing.taxAmount)}</strong>
+                        </div>
+                        <div className="summary-price-total">
+                          <span>Total including GST</span>
+                          <strong>{formatRupees(modelPricing.totalAmount)}</strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {hasUploadedModel && <div className="summary-divider" />}
+
                 {/* Delivery Guarantee Pill */}
                 <div className="summary-delivery-box">
                   <Truck size={22} className="summary-delivery-icon" />
@@ -817,18 +1104,28 @@ export default function Printing() {
                   </div>
                 )}
 
-                {/* WhatsApp Quote CTA */}
-                <div className="summary-actions" style={{ display: "flex", gap: "10px" }}>
+                {/* Payment CTAs */}
+                <div className="summary-actions" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <button
                     type="button"
                     className="btn-buy-now"
-                    onClick={openQuoteModal}
+                    onClick={() => openQuoteModal("whatsapp")}
                     disabled={!hasUploadedModel || isOversized}
-                    style={{ flex: 1 }}
                     title="Send your model + details on WhatsApp for a price quote"
                   >
                     <MessageCircle size={18} />
                     <span>Send a WhatsApp Quote</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-buy-now"
+                    onClick={() => openQuoteModal("qr")}
+                    disabled={!hasUploadedModel || isOversized}
+                    style={{ backgroundColor: "#0f766e", borderColor: "#0f766e" }}
+                    title="Pay instantly via UPI QR and get your invoice emailed"
+                  >
+                    <ShieldCheck size={18} />
+                    <span>Pay with QR</span>
                   </button>
                 </div>
                 <div className="summary-help-note" style={{ marginTop: 8 }}>
@@ -921,6 +1218,9 @@ export default function Printing() {
                   />
                 </div>
                 <div className="guide-material-title">{mat.name}</div>
+                {mat.pricePerGram > 0 && (
+                  <div className="guide-material-rate">₹{Number(mat.pricePerGram).toFixed(2)}/g</div>
+                )}
                 <div className="guide-material-desc">{mat.description}</div>
                 <div className="guide-material-best">
                   <span>Best for:</span> {mat.bestFor}
@@ -939,7 +1239,9 @@ export default function Printing() {
           <div className="admin-modal-dialog" onClick={(e) => e.stopPropagation()}>
             <form onSubmit={handleQuoteSend}>
               <div className="admin-modal-header">
-                <span className="admin-modal-title">Get Quote on WhatsApp</span>
+                <span className="admin-modal-title">
+                  {quoteModalMode === "qr" ? "Your Details" : "Get Quote on WhatsApp"}
+                </span>
                 <button
                   type="button"
                   className="admin-modal-close"
@@ -951,9 +1253,9 @@ export default function Printing() {
               </div>
               <div className="admin-modal-body">
                 <p className="text-secondary small mb-3">
-                  Share your details and we will open WhatsApp with your quote
-                  request — including your uploaded file ({modelAnalysis.fileName}) —
-                  addressed to {WHATSAPP_DISPLAY_NUMBER}.
+                  {quoteModalMode === "qr"
+                    ? "Enter your details. On submit you'll see the price + a UPI QR to pay, then attach your payment screenshot to place the order and receive the invoice by email."
+                    : `Share your details and we will open WhatsApp with your quote request — including your uploaded file (${modelAnalysis.fileName}) — addressed to ${WHATSAPP_DISPLAY_NUMBER}.`}
                 </p>
                 <div className="quote-form-grid">
                   <label className="quote-field"><span>Your Name <b>*</b></span>
@@ -1050,8 +1352,179 @@ export default function Printing() {
                   className="btn btn-primary btn-sm"
                   disabled={sendingQuote}
                 >
-                  <MessageCircle size={15} style={{ marginRight: 6 }} />
-                  {sendingQuote ? "Sending..." : "Send on WhatsApp"}
+                  {quoteModalMode === "qr" ? (
+                    <>
+                      <ShieldCheck size={15} style={{ marginRight: 6 }} />
+                      Continue to Payment
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle size={15} style={{ marginRight: 6 }} />
+                      {sendingQuote ? "Sending..." : "Send on WhatsApp"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          QR PAYMENT MODAL
+          ===================================================== */}
+      {isQrPaymentOpen && (
+        <div className="admin-modal-backdrop" onClick={closeQrPayment}>
+          <div className="admin-modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <form onSubmit={handleQrDone}>
+              <div className="admin-modal-header">
+                <span className="admin-modal-title">Pay with UPI QR</span>
+                <button
+                  type="button"
+                  className="admin-modal-close"
+                  onClick={closeQrPayment}
+                  disabled={qrSubmitting}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="admin-modal-body">
+                {/* Price breakdown */}
+                <div className="qr-price-breakdown">
+                  {qrPricingLoading && <div className="qr-price-status">Calculating your final price...</div>}
+                  {qrPricingError && !qrPricingLoading && (
+                    <div className="qr-price-status is-error">Price calculation failed. Close this window and try again.</div>
+                  )}
+                  {qrPricing && (
+                    <>
+                      <div className="qr-price-weight">
+                        Estimated filament: {Number(qrPricing.effectiveWeight || 0).toFixed(2)} g per piece
+                        {quantity > 1 ? ` × ${quantity} pieces` : ""}
+                      </div>
+                      <div className="qr-price-row">
+                        <span>Material ({Number(qrPricing.effectiveWeight || 0).toFixed(2)} g × ₹{Number(qrPricing.price_per_gram || 0).toFixed(2)}/g)</span>
+                        <span>{formatRupees(Number(qrPricing.materialCost || 0) * quantity)}</span>
+                      </div>
+                      <div className="qr-price-row">
+                        <span>Printing time ({Number(qrPricing.printTimeHours || 0).toFixed(2)} h × ₹{Number(qrPricing.timeRate || 0).toFixed(2)}/h)</span>
+                        <span>{formatRupees(Number(qrPricing.timeCost || 0) * quantity)}</span>
+                      </div>
+                      <div className="qr-price-row">
+                        <span>Color</span>
+                        <span>{formatRupees(Number(qrPricing.colorCost || 0) * quantity)}</span>
+                      </div>
+                      <div className="qr-price-row">
+                        <span>Finish</span>
+                        <span>{formatRupees(Number(qrPricing.finishCost || 0) * quantity)}</span>
+                      </div>
+                      <div className="qr-price-row">
+                        <span>Subtotal ({quantity} {quantity === 1 ? "piece" : "pieces"})</span>
+                        <span>{formatRupees(qrPricing.subtotal)}</span>
+                      </div>
+                      <div className="qr-price-row">
+                        <span>GST ({Number(qrPricing.gstRate || 0)}%)</span>
+                        <span>{formatRupees(qrPricing.taxAmount)}</span>
+                      </div>
+                      <div className="qr-price-row qr-price-total">
+                        <span>Total including GST</span>
+                        <span>{formatRupees(qrGrandTotal)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Step 1 — Scan & pay */}
+                <div className="qr-pay-steps" style={{ marginTop: 12 }}>
+                  {qrPricing ? `Step 1 — Scan and pay ${formatRupees(qrGrandTotal)}` : "Step 1 — Preparing your payment amount"}
+                </div>
+                <div className="qr-pay-qr-wrap" style={{ textAlign: "center", margin: "12px 0" }}>
+                  {upiPayUrl ? (
+                    <div className="qr-pay-dynamic">
+                      <QRCodeSVG value={upiPayUrl} size={200} level="M" className="qr-pay-img" />
+                      <span className="qr-pay-amount-note">
+                        Scan with a UPI app — the exact amount is pre-filled
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="qr-pay-noimg" style={{ padding: 24, border: "1px dashed #cbd5e1", borderRadius: 8 }}>
+                      <span>
+                        {qrPricingLoading
+                          ? "The payment QR will appear when the final amount is ready."
+                          : qrPricingError
+                            ? "Unable to prepare the payment QR. Please try again."
+                            : "Payment QR unavailable. Please contact us for help."}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {(qrConfig.upi_id || qrConfig.payee_name) && (
+                  <div className="qr-pay-upi-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div className="qr-pay-upi-meta">
+                      <span className="qr-pay-payee" style={{ fontWeight: 600 }}>{qrConfig.payee_name || "Printynozzle"}</span>
+                      {qrConfig.upi_id && <span className="upi-id-badge" style={{ marginLeft: 8, fontSize: 13 }}>UPI ID: {qrConfig.upi_id}</span>}
+                    </div>
+                    {qrConfig.upi_id && (
+                      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={copyUpiId}>
+                        Copy ID
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 2 — Attach screenshot */}
+                <div className="qr-pay-steps">Step 2 — Attach your payment screenshot, then click Done</div>
+                <label className="qr-pay-upload" style={{ display: "block", marginTop: 8 }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleQrScreenshotSelect(e.target.files[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                  <span className="qr-pay-upload-btn" style={{ display: "inline-block", padding: "8px 14px", border: "1px solid #0f766e", color: "#0f766e", borderRadius: 6, cursor: "pointer" }}>
+                    Choose Screenshot
+                  </span>
+                  <span className="qr-pay-upload-hint" style={{ marginLeft: 10, fontSize: 13, color: "#64748b" }}>
+                    JPG, PNG or WebP • Max 5MB
+                  </span>
+                </label>
+                {qrPreview && (
+                  <div className="qr-pay-preview-row" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                    <img src={qrPreview} alt="Payment screenshot preview" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger btn-sm"
+                      onClick={clearQrScreenshot}
+                      disabled={qrSubmitting}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+
+                <div className="razorpay-only-note" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 14, fontSize: 13, color: "#475569" }}>
+                  <ShieldCheck size={15} />
+                  <span>Your order is placed only after the screenshot is attached. Our team verifies the payment and confirms your order.</span>
+                </div>
+              </div>
+              <div className="admin-modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={closeQrPayment}
+                  disabled={qrSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={qrSubmitting || !qrScreenshot || !qrPricing || !upiPayUrl}
+                >
+                  {qrSubmitting ? "Placing order..." : "Done — Place Order"}
                 </button>
               </div>
             </form>
