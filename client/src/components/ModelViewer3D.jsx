@@ -811,7 +811,7 @@ export default function ModelViewer3D({
     if (!baseModelDataRef.current) return;
     const { fileName, fileSizeMB, dimensions, volumeCm3, surfaceAreaCm2, supportVolumeCm3, overhangAreaCm2, isSample } = baseModelDataRef.current;
 
-    const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * density));
+    const calculatedWeight = isSample ? 20 : Math.max(0.01, Math.round(volumeCm3 * density * 100) / 100);
 
     const updatedStats = {
       fileName,
@@ -914,13 +914,13 @@ export default function ModelViewer3D({
       if (rawVolumeMm3 <= 0 || !Number.isFinite(rawVolumeMm3)) {
         rawVolumeMm3 = rawSize.x * rawSize.y * rawSize.z * 0.35;
       }
-      const volumeCm3 = +(rawVolumeMm3 / 1000).toFixed(1);
+      const volumeCm3 = rawVolumeMm3 / 1000;
       const volumeCm3Display = +(rawVolumeMm3 / 1000).toFixed(2);
 
       // Exact surface area in cm^2 of the unscaled model — slicers derive
       // the solid shell (walls + top/bottom skins) from this + the volume.
       const rawAreaMm2 = calculateMeshArea(geometry);
-      const surfaceAreaCm2 = +(rawAreaMm2 / 100).toFixed(1);
+      const surfaceAreaCm2 = Math.round((rawAreaMm2 / 100) * 1000) / 1000;
 
       // Bambu-style support analysis on the unscaled model: overhang faces
       // get sparse support columns from the build plate + dense interface.
@@ -958,7 +958,9 @@ export default function ModelViewer3D({
       geometry.computeBoundingBox();
 
       // Solid weight = volume × density (infill applied later by pricing engine)
-      const calculatedWeight = isSample ? 20 : Math.max(2, Math.round(volumeCm3 * densityRef.current));
+      const calculatedWeight = isSample
+        ? 20
+        : Math.max(0.01, Math.round(volumeCm3 * densityRef.current * 100) / 100);
 
       const material = new THREE.MeshStandardMaterial({
         color: new THREE.Color(colorRef.current),

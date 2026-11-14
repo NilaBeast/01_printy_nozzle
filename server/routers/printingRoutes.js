@@ -8,6 +8,7 @@ const {
   getColors,
   calculatePrice,
   createPrintOrder,
+  createQrOrder,
   getUserPrintOrders,
   getPrintOrderById,
   getPrintOrderInvoice,
@@ -15,7 +16,7 @@ const {
   sliceQuote,
 } = require("../controllers/printingControllers");
 const { protect } = require("../middlewares/authMiddlewares");
-const { printFileUpload, sliceFileUpload } = require("../middlewares/uploadMiddleware");
+const { printFileUpload, sliceFileUpload, printQrUpload } = require("../middlewares/uploadMiddleware");
 
 // Public endpoints
 router.get("/materials", getMaterials);
@@ -28,6 +29,8 @@ router.post("/upload", printFileUpload.single("file"), uploadPrintFile);
 router.post("/slice-quote", sliceFileUpload.single("file"), sliceQuote);
 // Guest WhatsApp quote request (details + model file stored as quotation).
 router.post("/quote", printFileUpload.single("file"), createPrintQuotation);
+// Guest QR-payment order (model file + payment screenshot → order + invoice email).
+router.post("/qr-order", printQrUpload, createQrOrder);
 
 // Authenticated print order endpoints
 router.post("/order", protect, createPrintOrder);

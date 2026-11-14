@@ -346,7 +346,7 @@ const mailPrintInvoiceByIds = async (printIds, { shippingCost = 0, deliveryOptio
        FROM printing_orders po
        LEFT JOIN printing_materials pm ON po.material_id = pm.id
        LEFT JOIN printing_colors pc ON po.color_id = pc.id
-       JOIN users u ON po.user_id = u.id
+       LEFT JOIN users u ON po.user_id = u.id
        WHERE po.id IN (${ids.map(() => "?").join(",")})`,
       ids
     );

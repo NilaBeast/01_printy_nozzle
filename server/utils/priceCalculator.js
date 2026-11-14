@@ -294,6 +294,7 @@ const calculatePrintPrice = ({
     finishCost,
     perUnitCost,
     subtotal,
+    gstRate: Number(gstRate) || 0,
     taxAmount,
     totalAmount,
     quantity,
