@@ -7,6 +7,7 @@ import {
   Plus,
   Minus,
   Truck,
+  Store,
   ShieldCheck,
   Headphones,
   Box,
@@ -25,6 +26,7 @@ import ModelViewer3D, {
 } from "../components/ModelViewer3D";
 import printingService from "../services/printing.service";
 import catalogService from "../services/catalog.service";
+import shippingService from "../services/shipping.service";
 import {
   MAX_PRINT_WIDTH_MM,
   MAX_PRINT_DEPTH_MM,
@@ -34,6 +36,19 @@ import {
 import "../../public/css/printing.css";
 
 const WHATSAPP_DISPLAY_NUMBER = "+91 98366 09063";
+
+// Print quality → slicer layer height (mm). Finer layers take longer to print.
+const QUALITY_OPTIONS = [
+  { value: "standard", label: "Standard", hint: "0.20 mm layers", layerHeight: 0.2 },
+  { value: "draft", label: "Draft", hint: "0.28 mm layers", layerHeight: 0.28 },
+  { value: "high", label: "High", hint: "0.12 mm layers", layerHeight: 0.12 },
+];
+
+// Infill density (%) — interior fill of the print.
+const INFILL_OPTIONS = [15, 20, 25, 30, 40, 50];
+
+const layerHeightForQuality = (quality) =>
+  QUALITY_OPTIONS.find((q) => q.value === quality)?.layerHeight ?? 0.2;
 
 const blankQuoteForm = () => ({
   name: "",
@@ -121,6 +136,12 @@ export default function Printing() {
   const [selectedColorHex, setSelectedColorHex] = useState("#1E88E5");
   const [customHexInput, setCustomHexInput] = useState("");
   const [quantity, setQuantity] = useState(1);
+  // Print quality (layer height) + infill density — affect the live price estimate.
+  const [printQuality, setPrintQuality] = useState("standard");
+  const [infillDensity, setInfillDensity] = useState(20);
+  // Delivery method: 'delivery' (Delhivery charges apply) or 'pickup' (local, none).
+  const [deliveryMethod, setDeliveryMethod] = useState("delivery");
+  const layerHeightMm = layerHeightForQuality(printQuality);
 
   /* =========================================================
      WHATSAPP QUOTE MODAL STATE
@@ -143,12 +164,19 @@ export default function Printing() {
   const [qrPricing, setQrPricing] = useState(null);
   const [qrPricingLoading, setQrPricingLoading] = useState(false);
   const [qrPricingError, setQrPricingError] = useState(false);
+  // Live Delhivery delivery charge for the QR order (0 for Self Pickup).
+  const [qrDeliveryCharge, setQrDeliveryCharge] = useState(0);
+  const [qrDeliveryLoading, setQrDeliveryLoading] = useState(false);
+  const [qrDeliveryNote, setQrDeliveryNote] = useState("");
   const [modelPricing, setModelPricing] = useState(null);
   const [modelPricingLoading, setModelPricingLoading] = useState(false);
   const [modelPricingError, setModelPricingError] = useState(false);
 
   // Dynamic UPI QR — scan opens any UPI app with payee + exact total pre-filled.
-  const qrGrandTotal = qrPricing?.totalAmount || 0;
+  // The payable amount includes the live delivery charge (unless Self Pickup).
+  const qrItemsTotal = qrPricing?.totalAmount || 0;
+  const qrDeliveryApplied = deliveryMethod === "pickup" ? 0 : Number(qrDeliveryCharge || 0);
+  const qrGrandTotal = Math.round((qrItemsTotal + qrDeliveryApplied) * 100) / 100;
   const upiPayUrl = useMemo(() => {
     const pa = String(qrConfig.upi_id || "").trim();
     if (!pa || !(Number(qrGrandTotal) > 0)) return "";
@@ -279,8 +307,8 @@ export default function Printing() {
     const payload = {
       estimated_weight: modelAnalysis.weightGrams,
       material_id: selectedMaterial.id,
-      infill_density: 50,
-      layer_height: 0.2,
+      infill_density: infillDensity,
+      layer_height: layerHeightMm,
       wall_loops: 2,
       surface_finish: "standard",
       quantity,
@@ -291,7 +319,7 @@ export default function Printing() {
       payload.color_id = selectedColor.id;
     }
     return payload;
-  }, [selectedMaterial, selectedColor, modelAnalysis, quantity]);
+  }, [selectedMaterial, selectedColor, modelAnalysis, quantity, infillDensity, layerHeightMm]);
 
   useEffect(() => {
     if (!hasUploadedModel || !pricingPayload) {
@@ -473,6 +501,44 @@ export default function Printing() {
     return null;
   }, [pricingPayload]);
 
+  // Live Delhivery delivery charge for the destination pincode.
+  // Self Pickup never incurs a delivery charge.
+  const loadDeliveryCharge = useCallback(
+    async (pincode) => {
+      if (deliveryMethod === "pickup") {
+        setQrDeliveryCharge(0);
+        setQrDeliveryNote("");
+        setQrDeliveryLoading(false);
+        return;
+      }
+      const pin = String(pincode || "").trim();
+      if (!/^\d{6}$/.test(pin)) {
+        setQrDeliveryCharge(0);
+        setQrDeliveryNote("Enter a valid 6-digit pincode to include delivery charges.");
+        return;
+      }
+      setQrDeliveryLoading(true);
+      setQrDeliveryNote("");
+      try {
+        // Delhivery bills the shipment weight — model weight × quantity (min 500 g slab).
+        const weightG = Math.max(500, Math.round((modelAnalysis?.weightGrams || 0) * quantity));
+        const res = await shippingService.getCharges({ d_pin: pin, weight_g: weightG, mode: "standard" });
+        const amount = Number(res.data?.amount || 0);
+        setQrDeliveryCharge(amount > 0 ? amount : 0);
+        if (!(amount > 0)) {
+          setQrDeliveryNote("Live delivery rate unavailable — our team will confirm delivery charges.");
+        }
+      } catch (e) {
+        setQrDeliveryCharge(0);
+        setQrDeliveryNote("Live delivery rate unavailable — our team will confirm delivery charges.");
+        console.error("Delivery charge calc failed:", e?.response?.data?.message || e.message);
+      } finally {
+        setQrDeliveryLoading(false);
+      }
+    },
+    [deliveryMethod, modelAnalysis, quantity]
+  );
+
   const handleQrScreenshotSelect = (file) => {
     if (!file) return;
     const allowed = /\.(jpe?g|png|gif|webp)$/i.test(file.name) || /^image\//.test(file.type);
@@ -510,6 +576,8 @@ export default function Printing() {
     setIsQrPaymentOpen(false);
     clearQrScreenshot();
     setQrPricing(null);
+    setQrDeliveryCharge(0);
+    setQrDeliveryNote("");
   };
 
   const handleQrDone = async (e) => {
@@ -543,10 +611,12 @@ export default function Printing() {
       formData.append("color_name", selectedColor?.name ?? "");
       if (selectedColor?.id === "custom") formData.append("custom_color_hex", selectedColorHex);
       formData.append("quantity", String(quantity));
-      formData.append("infill_density", "50");
-      formData.append("layer_height", "0.2");
+      formData.append("infill_density", String(infillDensity));
+      formData.append("layer_height", String(layerHeightMm));
       formData.append("wall_loops", "2");
       formData.append("surface_finish", "standard");
+      formData.append("delivery_option", deliveryMethod === "pickup" ? "pickup" : "delivery");
+      formData.append("shipping_cost", String(deliveryMethod === "pickup" ? 0 : qrDeliveryCharge));
       formData.append("estimated_weight", modelAnalysis.weightGrams);
       formData.append("surface_area_cm2", modelAnalysis.surfaceAreaCm2 ?? "");
       formData.append("support_volume_cm3", modelAnalysis.supportVolumeCm3 ?? "");
@@ -613,6 +683,7 @@ export default function Printing() {
       clearQrScreenshot();
       setIsQrPaymentOpen(true);
       loadQrPricing();
+      loadDeliveryCharge(pincode);
       return;
     }
 
@@ -897,26 +968,32 @@ export default function Printing() {
                   {/* Material */}
                   <div>
                     <div className="option-group-label">Material</div>
-                    <div className="material-cards-grid">
-                      {materials.length ? materials.map((mat) => {
-                        const isSelected = mat.id === selectedMaterialId;
-                        return (
-                          <div
-                            key={mat.id}
-                            className={`material-card ${isSelected ? "active" : ""}`}
-                            onClick={() => setSelectedMaterialId(mat.id)}
-                          >
-                            <div className="material-name">{mat.name}</div>
-                            {mat.description && (
-                              <div className="material-price">{mat.description}</div>
-                            )}
-                            {mat.pricePerGram > 0 && (
-                              <div className="material-rate">₹{Number(mat.pricePerGram).toFixed(2)}/g</div>
-                            )}
-                          </div>
-                        );
-                      }) : <div className="text-muted py-2">No materials available</div>}
-                    </div>
+                    <select
+                      className="material-select"
+                      value={selectedMaterialId ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const match = materials.find((m) => String(m.id) === raw);
+                        setSelectedMaterialId(match ? match.id : raw);
+                      }}
+                      disabled={!materials.length}
+                    >
+                      {materials.length ? (
+                        materials.map((mat) => (
+                          <option key={mat.id} value={mat.id}>
+                            {mat.name}
+                            {mat.pricePerGram > 0
+                              ? ` — ₹${Number(mat.pricePerGram).toFixed(2)}/g (incl. GST)`
+                              : ""}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">No materials available</option>
+                      )}
+                    </select>
+                    {selectedMaterial?.description && (
+                      <div className="material-select-hint">{selectedMaterial.description}</div>
+                    )}
                   </div>
 
                   {/* Color Swatches */}
@@ -989,6 +1066,41 @@ export default function Printing() {
                     </button>
                   </div>
                 </div>
+
+                {/* Print Quality & Infill Density */}
+                <div className="options-row-flex">
+                  <div>
+                    <div className="option-group-label">Print Quality</div>
+                    <div className="option-pills">
+                      {QUALITY_OPTIONS.map((q) => (
+                        <button
+                          key={q.value}
+                          type="button"
+                          className={`option-pill ${printQuality === q.value ? "active" : ""}`}
+                          onClick={() => setPrintQuality(q.value)}
+                        >
+                          <span className="option-pill-label">{q.label}</span>
+                          <span className="option-pill-hint">{q.hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="option-group-label">Infill Density</div>
+                    <div className="option-pills">
+                      {INFILL_OPTIONS.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`option-pill compact ${Number(infillDensity) === p ? "active" : ""}`}
+                          onClick={() => setInfillDensity(p)}
+                        >
+                          <span className="option-pill-label">{p}%</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1049,10 +1161,6 @@ export default function Printing() {
                           <strong>{formatRupees(Number(modelPricing.materialCost || 0) * quantity)}</strong>
                         </div>
                         <div className="summary-price-row">
-                          <span>Printing time ({Number(modelPricing.printTimeHours || 0).toFixed(2)} h × ₹{Number(modelPricing.timeRate || 0).toFixed(2)}/h)</span>
-                          <strong>{formatRupees(Number(modelPricing.timeCost || 0) * quantity)}</strong>
-                        </div>
-                        <div className="summary-price-row">
                           <span>Color</span>
                           <strong>{formatRupees(Number(modelPricing.colorCost || 0) * quantity)}</strong>
                         </div>
@@ -1103,6 +1211,34 @@ export default function Printing() {
                     </span>
                   </div>
                 )}
+
+                {/* Delivery method — Self Pickup skips delivery charges */}
+                <div className="delivery-method-box">
+                  <div className="option-group-label">Delivery Method</div>
+                  <div className="delivery-method-options">
+                    <button
+                      type="button"
+                      className={`delivery-method-btn ${deliveryMethod === "delivery" ? "active" : ""}`}
+                      onClick={() => setDeliveryMethod("delivery")}
+                    >
+                      <Truck size={16} />
+                      <span>Home Delivery</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`delivery-method-btn ${deliveryMethod === "pickup" ? "active" : ""}`}
+                      onClick={() => setDeliveryMethod("pickup")}
+                    >
+                      <Store size={16} />
+                      <span>Self Pickup (Local Customers)</span>
+                    </button>
+                  </div>
+                  <div className="delivery-method-note">
+                    {deliveryMethod === "pickup"
+                      ? "No delivery charges — collect your print from our studio."
+                      : "Delivery charges are calculated from your pincode at payment."}
+                  </div>
+                </div>
 
                 {/* Payment CTAs */}
                 <div className="summary-actions" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1406,10 +1542,6 @@ export default function Printing() {
                         <span>{formatRupees(Number(qrPricing.materialCost || 0) * quantity)}</span>
                       </div>
                       <div className="qr-price-row">
-                        <span>Printing time ({Number(qrPricing.printTimeHours || 0).toFixed(2)} h × ₹{Number(qrPricing.timeRate || 0).toFixed(2)}/h)</span>
-                        <span>{formatRupees(Number(qrPricing.timeCost || 0) * quantity)}</span>
-                      </div>
-                      <div className="qr-price-row">
                         <span>Color</span>
                         <span>{formatRupees(Number(qrPricing.colorCost || 0) * quantity)}</span>
                       </div>
@@ -1427,8 +1559,26 @@ export default function Printing() {
                       </div>
                       <div className="qr-price-row qr-price-total">
                         <span>Total including GST</span>
+                        <span>{formatRupees(qrItemsTotal)}</span>
+                      </div>
+                      {deliveryMethod === "pickup" ? (
+                        <div className="qr-price-row">
+                          <span>Self Pickup</span>
+                          <span>Free</span>
+                        </div>
+                      ) : (
+                        <div className="qr-price-row">
+                          <span>Delivery charge</span>
+                          <span>{qrDeliveryLoading ? "Calculating..." : formatRupees(qrDeliveryApplied)}</span>
+                        </div>
+                      )}
+                      <div className="qr-price-row qr-price-grand">
+                        <span>Amount Payable</span>
                         <span>{formatRupees(qrGrandTotal)}</span>
                       </div>
+                      {deliveryMethod !== "pickup" && qrDeliveryNote && (
+                        <div className="qr-price-status">{qrDeliveryNote}</div>
+                      )}
                     </>
                   )}
                 </div>
@@ -1522,7 +1672,7 @@ export default function Printing() {
                 <button
                   type="submit"
                   className="btn btn-primary btn-sm"
-                  disabled={qrSubmitting || !qrScreenshot || !qrPricing || !upiPayUrl}
+                  disabled={qrSubmitting || !qrScreenshot || !qrPricing || !upiPayUrl || qrDeliveryLoading}
                 >
                   {qrSubmitting ? "Placing order..." : "Done — Place Order"}
                 </button>
