@@ -857,6 +857,136 @@
   margin-bottom: 4px;
 }
 
+/* Material dropdown (replaces the old material cards) */
+.material-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--pr-gray-200);
+  border-radius: var(--pr-radius-md);
+  background: var(--pr-white);
+  color: var(--pr-dark);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+
+.material-select:focus {
+  outline: none;
+  border-color: var(--pr-primary);
+  box-shadow: 0 0 0 3px var(--pr-primary-light);
+}
+
+.material-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.material-select-hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--pr-gray-600, #64748b);
+  line-height: 1.4;
+}
+
+/* Option pills (print quality / infill density) */
+.option-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.option-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 84px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--pr-gray-200);
+  border-radius: var(--pr-radius-md);
+  background: var(--pr-white);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.option-pill.compact {
+  min-width: 58px;
+}
+
+.option-pill:hover {
+  border-color: var(--pr-primary-border);
+  background: var(--pr-primary-light);
+}
+
+.option-pill.active {
+  border-color: var(--pr-primary);
+  background: #FFF4EA;
+  box-shadow: 0 0 0 1px var(--pr-primary);
+}
+
+.option-pill-label {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--pr-dark);
+}
+
+.option-pill-hint {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--pr-gray-600, #64748b);
+}
+
+/* Delivery method toggle (Home Delivery / Self Pickup) */
+.delivery-method-box {
+  margin-top: 14px;
+}
+
+.delivery-method-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delivery-method-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--pr-gray-200);
+  border-radius: var(--pr-radius-md);
+  background: var(--pr-white);
+  color: var(--pr-dark);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delivery-method-btn:hover {
+  border-color: var(--pr-primary-border);
+  background: var(--pr-primary-light);
+}
+
+.delivery-method-btn.active {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  box-shadow: 0 0 0 1px #0f766e;
+}
+
+.delivery-method-note {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--pr-gray-600, #64748b);
+  line-height: 1.4;
+}
+
 /* QR price breakdown (3D printing QR payment modal) */
 .qr-price-breakdown {
   background: #f8fafc;
@@ -881,6 +1011,16 @@
   font-size: 1rem;
   font-weight: 700;
   color: #0f172a;
+}
+
+/* Final payable amount (items + delivery) */
+.qr-price-row.qr-price-grand {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #cbd5e1;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f766e;
 }
 
 .qr-price-status {

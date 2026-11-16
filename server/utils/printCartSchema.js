@@ -137,6 +137,8 @@ const ensurePrintOrdersTable = async (conn) => {
           subtotal DECIMAL(10,2) NOT NULL,
           tax_amount DECIMAL(10,2) DEFAULT 0.00,
           total_amount DECIMAL(10,2) NOT NULL,
+          shipping_cost DECIMAL(10,2) DEFAULT 0.00,
+          delivery_option VARCHAR(20) DEFAULT 'delivery',
           shipping_name VARCHAR(200) DEFAULT NULL,
           shipping_phone VARCHAR(20) DEFAULT NULL,
           shipping_address1 VARCHAR(500) DEFAULT NULL,
@@ -184,6 +186,13 @@ const ensurePrintOrdersTable = async (conn) => {
         }
         if (!(await columnExists(conn, "printing_orders", "wall_loops"))) {
           await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `wall_loops` INT DEFAULT 2 AFTER `layer_height`");
+        }
+        // Delivery charge + delivery method (Self Pickup skips the charge).
+        if (!(await columnExists(conn, "printing_orders", "shipping_cost"))) {
+          await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `shipping_cost` DECIMAL(10,2) DEFAULT 0.00 AFTER `total_amount`");
+        }
+        if (!(await columnExists(conn, "printing_orders", "delivery_option"))) {
+          await conn.query("ALTER TABLE `printing_orders` ADD COLUMN `delivery_option` VARCHAR(20) DEFAULT 'delivery' AFTER `shipping_cost`");
         }
       } catch (e) {
         if (!warned) console.warn("⚠️ Could not add printing_orders time columns:", e.message);

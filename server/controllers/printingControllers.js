@@ -834,6 +834,14 @@ const createQrOrder = async (req, res) => {
       supportVolumeCm3: body.support_volume_cm3 !== undefined ? Math.max(0, parseFloat(body.support_volume_cm3) || 0) : undefined,
     });
 
+    // Delivery charge (live Delhivery quote sent by the client). Self Pickup
+    // never incurs a delivery charge, so it is forced to 0 server-side.
+    const requestedShipping = Math.max(0, Number(clean(body.shipping_cost)) || 0);
+    const deliveryOption = clean(body.delivery_option) === "pickup" ? "pickup" : "delivery";
+    const shippingCost = deliveryOption === "pickup" ? 0 : Math.round(requestedShipping * 100) / 100;
+    // Final order amount = items (subtotal + GST) + delivery charge.
+    const orderTotal = Math.round((pricing.totalAmount + shippingCost) * 100) / 100;
+
     // Generate order number
     const orderNumber = "3D" + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString("hex").toUpperCase();
 
@@ -848,11 +856,11 @@ const createQrOrder = async (req, res) => {
           material_id, color_id, custom_color_hex,
           infill_density, layer_height, wall_loops, surface_finish, quantity,
           estimated_weight, print_time_hours, material_cost, time_cost, color_cost, finish_cost,
-          subtotal, tax_amount, total_amount,
+          subtotal, tax_amount, total_amount, shipping_cost, delivery_option,
           shipping_name, shipping_phone, shipping_email,
           shipping_address1, shipping_address2, shipping_city, shipping_state, shipping_pincode, shipping_country,
           payment_method, payment_status, payment_screenshot_url, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           null, orderNumber, "confirmed",
           modelFile.originalname,
@@ -867,7 +875,7 @@ const createQrOrder = async (req, res) => {
           clean(body.custom_color_hex) || null,
           infillDensity, layerHeight, wallLoops, surfaceFinish, quantity,
           pricing.effectiveWeight, pricing.printTimeHours, pricing.materialCost, pricing.timeCost, pricing.colorCost, pricing.finishCost,
-          pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
+          pricing.subtotal, pricing.taxAmount, orderTotal, shippingCost, deliveryOption,
           customer_name, customer_phone, customer_email || null,
           address1 || null, address2 || null, city || null, state || null, pincode || null, country || "India",
           "qr", "pending", screenshotUploaded.url,
@@ -898,7 +906,7 @@ const createQrOrder = async (req, res) => {
             material_id, color_id || null, clean(body.custom_color_hex) || null,
             infillDensity, surfaceFinish, quantity,
             pricing.effectiveWeight, pricing.materialCost, pricing.colorCost, pricing.finishCost,
-            pricing.subtotal, pricing.taxAmount, pricing.totalAmount,
+            pricing.subtotal, pricing.taxAmount, orderTotal,
             customer_name, customer_phone, address1 || null,
             city || null, state || null, pincode || null,
             "qr", "pending", screenshotUploaded.url,
@@ -912,7 +920,10 @@ const createQrOrder = async (req, res) => {
 
     // Email the GST invoice to the customer immediately (guest orders use the
     // shipping fields stored on the row, so the mailer must LEFT JOIN users).
-    mailPrintInvoiceByIds([result.insertId]).catch((e) => console.error("QR order invoice mail failed:", e.message));
+    // The delivery charge is added as a separate invoice line.
+    mailPrintInvoiceByIds([result.insertId], { shippingCost, deliveryOption }).catch((e) =>
+      console.error("QR order invoice mail failed:", e.message)
+    );
 
     return res.status(201).json({
       success: true,
@@ -920,7 +931,9 @@ const createQrOrder = async (req, res) => {
       order: {
         id: result.insertId,
         order_number: orderNumber,
-        total_amount: pricing.totalAmount,
+        total_amount: orderTotal,
+        shipping_cost: shippingCost,
+        delivery_option: deliveryOption,
         estimated_delivery: pricingSettings.printing_delivery_days || "3-5 Working Days",
       },
     });
@@ -1050,7 +1063,12 @@ const getPrintOrderInvoice = async (req, res) => {
       invoiceFileName,
     } = require("../utils/invoice");
     const settings = await getInvoiceSettings();
-    const data = buildPrintInvoiceData({ prints: rows, settings });
+    const data = buildPrintInvoiceData({
+      prints: rows,
+      settings,
+      shippingCost: rows[0].shipping_cost,
+      deliveryOption: rows[0].delivery_option,
+    });
 
     // ?format=pdf → download the GST invoice PDF.
     if (String(req.query.format || "").toLowerCase() === "pdf") {

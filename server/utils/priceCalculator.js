@@ -1,7 +1,8 @@
 /**
  * 3D Print Price Calculator — Printynozzle Selling Rate Chart
  *
- * Final price = Material charge + Printing-time charge (+ color/finish, then GST)
+ * Final price = Material charge (GST-inclusive selling rate) + Printing-time
+ * charge (+ color/finish) with GST added on the non-material charges only.
  *
  * Weight model mirrors slicer software (Cura / PrusaSlicer / Bambu Studio):
  * every print has a 100%-dense SHELL (walls + top/bottom skins, ~1mm) and
@@ -11,7 +12,8 @@
  *   filamentVol = (shellVol + (solidVol − shellVol) × infill/100) × WASTE_FACTOR
  *   effectiveWeight = filamentVol × density
  *
- * - Material charge = effective_weight (grams) × price_per_gram (₹/g, admin editable per material)
+ * - Material charge = effective_weight (grams) × price_per_gram
+ *   (₹/g, admin editable per material — GST-INCLUSIVE selling rate)
  * - solidVol comes from the exact STL mesh volume × density (before infill)
  * - Print time (hours) = effective_weight × hours_per_gram (admin editable, default 0.15)
  * - Printing-time charge = print_time_hours × slab rate (admin editable)
@@ -231,8 +233,16 @@ const calculatePrintPrice = ({
     ? Math.round(slicerFilament * 100) / 100
     : Math.round((modelWeight + supportWeight) * 100) / 100;
 
-  // Material charge = effective weight × selling rate (₹/g)
-  const materialCost = Math.round(effectiveWeight * pricePerGram * 100) / 100;
+  const gstPercent = Number(gstRate) > 0 ? Number(gstRate) : 0;
+
+  // Material charge = effective weight × selling rate (₹/g).
+  // The admin per-gram selling rate is GST-INCLUSIVE, so the full material
+  // amount is what the customer pays for filament; the GST portion is carved
+  // OUT of it (not added on top) and still shown separately on the bill.
+  const materialCost = Math.round(effectiveWeight * pricePerGram * 100) / 100; // incl. GST
+  const materialTax =
+    gstPercent > 0 ? Math.round(((materialCost * gstPercent) / (100 + gstPercent)) * 100) / 100 : 0;
+  const materialBase = Math.round((materialCost - materialTax) * 100) / 100;
 
   // Estimated print time: exact Bambu G-code time when sliced, else the
   // calibrated weight × hours-per-gram factor scaled by layer height.
@@ -265,16 +275,21 @@ const calculatePrintPrice = ({
     finishCost = Math.round(effectiveWeight * (smoothFinishPerGram || 3) * 100) / 100;
   }
 
-  // Per unit total — Final price = Material charge + Printing-time charge (+ extras)
-  const perUnitCost = Math.round((materialCost + timeCost + colorCost + finishCost) * 100) / 100;
+  // Non-material charges (printing time, colour, finish) are quoted BEFORE GST,
+  // so GST is added on top of them. The material charge already includes GST.
+  const otherCharges = Math.round((timeCost + colorCost + finishCost) * 100) / 100;
 
-  // Subtotal
+  // Taxable (pre-GST) value per unit — final price = Material (incl. GST) + time/compliments (+ GST on top).
+  const perUnitCost = Math.round((materialBase + otherCharges) * 100) / 100;
+
+  // Subtotal (taxable value)
   const subtotal = Math.round(perUnitCost * quantity * 100) / 100;
 
-  // Tax
-  const taxAmount = Math.round(subtotal * (gstRate / 100) * 100) / 100;
+  // Tax = GST already inside the material + GST on the printing-time/colour/finish charges
+  const perUnitTax = Math.round((materialTax + otherCharges * (gstPercent / 100)) * 100) / 100;
+  const taxAmount = Math.round(perUnitTax * quantity * 100) / 100;
 
-  // Grand total
+  // Grand total = taxable value + GST
   const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
 
   return {

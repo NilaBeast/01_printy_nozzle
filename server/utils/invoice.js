@@ -320,7 +320,6 @@ const buildPrintInvoiceData = ({ prints = [], settings, shippingCost = 0, delive
     // Print specs from the order row — appended once (never duplicated).
     const specBits = [];
     if (p.estimated_weight != null && p.estimated_weight !== "") specBits.push(`${p.estimated_weight}g`);
-    if (p.print_time_hours != null && p.print_time_hours !== "") specBits.push(`${p.print_time_hours}h`);
     const specs = [spec, specBits.length ? specBits.join(" • ") : ""].filter(Boolean).join(" • ");
     return {
       sno: idx + 1,
